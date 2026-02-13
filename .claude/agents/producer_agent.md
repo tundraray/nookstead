@@ -528,8 +528,8 @@ RED (Critical)
 # Create project structure
 create_project() {
   PROJECT_NAME=$1
-  mkdir -p "projects/$PROJECT_NAME"/{documentation,source,resources,qa}
-  mkdir -p "projects/$PROJECT_NAME"/documentation/{design,art,technical,production}
+  mkdir -p "docs/$PROJECT_NAME"/{documentation,source,resources,qa}
+  mkdir -p "docs/$PROJECT_NAME"/documentation/{design,art,technical,production}
   echo "Project $PROJECT_NAME initialized"
 }
 ```

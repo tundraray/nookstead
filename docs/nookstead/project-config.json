@@ -1,0 +1,371 @@
+{
+  "project": {
+    "name": "Nookstead",
+    "concept": "A cozy browser MMO where players build homesteads outside a living town populated by LLM-powered NPCs with memory, reflection, and autonomous planning.",
+    "genre": "2D Pixel Art MMO / Life Sim / Farming RPG",
+    "platform": "Web (Browser - Desktop and Mobile)",
+    "audience": "Core (18-35, fans of Stardew Valley, Animal Crossing, Palia)",
+    "timeline": "Long (14 months total; Phase 0 Prototype = 2 months)",
+    "engine": "Phaser.js 3 (rendering) + Next.js (web shell) + Colyseus (multiplayer server)",
+    "engine_version": "Phaser 3.80+, Next.js 16, Colyseus 0.15+",
+    "mode": "prototype",
+    "competitors": [
+      "Stardew Valley",
+      "Animal Crossing: New Horizons",
+      "Palia",
+      "Cozy Grove",
+      "Sun Haven"
+    ],
+    "unique_selling_point": "First MMO where NPCs are full generative AI agents with memory, reflection, and autonomous planning -- not scripted characters but personalities that form opinions about each player and each other.",
+    "version": "0.1.0",
+    "created": "2026-02-13T00:00:00Z",
+    "phase": "Phase 0 - Prototype",
+    "status": "active"
+  },
+  "market_intelligence": {
+    "analyst": "market_analyst",
+    "market_size": {
+      "tam": "$8.2B global cozy/life sim gaming market (2025)",
+      "sam": "$1.4B browser-accessible life sim and farming RPG segment",
+      "som": "$2.8M achievable first-year revenue (0.2% of SAM)"
+    },
+    "target_audience_size": "Estimated 45M players globally interested in cozy life sim games",
+    "competitive_analysis": {
+      "direct_competitors": [
+        "Palia (F2P MMO life sim, closest competitor)",
+        "Stardew Valley (single/co-op farming RPG, genre benchmark)",
+        "Animal Crossing: New Horizons (life sim, console-exclusive)"
+      ],
+      "indirect_competitors": [
+        "The Sims 4 (life simulation, single-player focus)",
+        "Cozy Grove (mobile-first, single-player)",
+        "Sun Haven (farming RPG with multiplayer)"
+      ],
+      "market_gaps": [
+        "No browser-native MMO life sim exists -- the entire genre is app/console-locked",
+        "No life sim has AI NPCs with genuine memory and personality -- all use scripted dialogue trees",
+        "Palia is the only MMO life sim, and it has no AI-driven NPCs",
+        "No game combines farming RPG + persistent AI agents in a shared world"
+      ],
+      "differentiation": "Generative AI NPCs with memory and reflection create emergent, unique stories per server -- a fundamentally new category of social experience."
+    },
+    "monetization": {
+      "model": "Free-to-Play with cosmetic shop + seasonal battle pass",
+      "revenue_projections": {
+        "year_1_conservative": "$1.2M",
+        "year_1_optimistic": "$4.5M",
+        "arppu_target": "$8-12/month",
+        "conversion_rate_target": "3-5%"
+      },
+      "pricing_strategy": "Free base game; $5/season battle pass; $1-10 cosmetic items; $3-8 QoL expansions (extra inventory, land)"
+    },
+    "go_no_go_decision": "GO - Strong market gap with no browser-native AI-driven life sim MMO. USP is defensible and technically novel.",
+    "market_risks": [
+      "LLM API costs may be prohibitive at scale without aggressive optimization",
+      "Palia or a major studio could add AI NPCs, reducing differentiation",
+      "Browser gaming perception as 'lesser' may limit adoption among core gamers",
+      "Generative AI regulatory landscape is evolving and uncertain"
+    ],
+    "recommendations": [
+      "Prioritize AI NPC quality in prototype -- this IS the USP, it must be compelling",
+      "Build for mobile-first web to maximize addressable audience",
+      "Establish cost-per-player benchmarks early in Phase 0",
+      "Consider influencer/streamer strategy -- AI NPCs create unique, shareable moments"
+    ]
+  },
+  "analytics_framework": {
+    "data_scientist": "data_scientist",
+    "core_metrics": {
+      "engagement": {
+        "session_length_target": "25-40 minutes (1-2 in-game days)",
+        "retention_targets": {
+          "day_1": "50%",
+          "day_7": "25%",
+          "day_30": "15%"
+        },
+        "key_actions": [
+          "npc_dialogue_started",
+          "crop_planted",
+          "crop_harvested",
+          "item_sold_at_market",
+          "quest_completed",
+          "homestead_item_placed",
+          "transport_used",
+          "player_trade_initiated"
+        ]
+      },
+      "performance": {
+        "target_fps": "60 FPS desktop, 30 FPS mobile",
+        "max_load_time": "5 seconds mobile, 3 seconds desktop",
+        "crash_rate_threshold": "< 1%",
+        "npc_dialogue_latency": "< 3 seconds (LLM response + network)"
+      },
+      "business": {
+        "dau_mau_target": "30%",
+        "download_targets": "50,000 MAU by end of Year 1",
+        "revenue_targets": "$1.2M - $4.5M Year 1",
+        "user_acquisition_cost": "$1-3 per user (organic + paid)",
+        "ai_cost_per_player_hour": "< $0.03"
+      }
+    },
+    "telemetry_events": [
+      {
+        "event_name": "session_start",
+        "description": "Player connects to game server",
+        "parameters": ["session_id", "player_id", "platform", "server_name"]
+      },
+      {
+        "event_name": "npc_dialogue",
+        "description": "Player initiates or completes dialogue with NPC",
+        "parameters": ["npc_id", "player_id", "turn_count", "llm_latency_ms", "llm_model", "llm_cost_usd", "dialogue_type"]
+      },
+      {
+        "event_name": "farming_action",
+        "description": "Player performs farming activity",
+        "parameters": ["action_type", "crop_type", "tile_position", "tool_used", "season"]
+      },
+      {
+        "event_name": "market_transaction",
+        "description": "Player buys or sells at market",
+        "parameters": ["item_id", "quantity", "price", "transaction_type", "npc_vendor_id"]
+      },
+      {
+        "event_name": "player_movement",
+        "description": "Sampled player position for heatmap analysis",
+        "parameters": ["position_x", "position_y", "zone_id", "transport_type"]
+      },
+      {
+        "event_name": "npc_reflection",
+        "description": "NPC generates daily reflections (system event)",
+        "parameters": ["npc_id", "reflection_count", "llm_cost_usd", "processing_time_ms"]
+      }
+    ],
+    "ab_testing_framework": {
+      "test_categories": [
+        "NPC Dialogue Quality (prompt variations)",
+        "UI/UX (dialogue window layouts, input methods)",
+        "Onboarding flow (tutorial pacing)",
+        "Economy balance (crop prices, growth times)"
+      ],
+      "statistical_significance": "95%",
+      "minimum_sample_size": "500 users per variant (prototype); 1000 at scale"
+    }
+  },
+  "team": {
+    "orchestrator": "master_orchestrator",
+    "lead_agent": "producer_agent",
+    "active_agents": [
+      "producer_agent",
+      "market_analyst",
+      "sr_game_designer",
+      "mechanics_developer",
+      "qa_agent",
+      "data_scientist"
+    ],
+    "full_development_agents": [
+      "producer_agent",
+      "market_analyst",
+      "data_scientist",
+      "sr_game_designer",
+      "mid_game_designer",
+      "mechanics_developer",
+      "game_feel_developer",
+      "qa_agent",
+      "sr_game_artist",
+      "technical_artist",
+      "ui_ux_agent"
+    ],
+    "agent_assignments": {
+      "producer_agent": ["project_management", "milestone_tracking", "resource_allocation"],
+      "market_analyst": ["competitive_analysis", "market_validation", "monetization_strategy"],
+      "sr_game_designer": ["core_loop_design", "npc_agent_architecture", "world_design"],
+      "mechanics_developer": ["phaser_integration", "colyseus_server", "tilemap_system", "pathfinding"],
+      "qa_agent": ["test_plans", "prototype_validation", "performance_testing"],
+      "data_scientist": ["telemetry_design", "llm_cost_monitoring", "retention_analysis"]
+    }
+  },
+  "engine_configuration": {
+    "engine": "Custom Stack: Phaser.js 3 + Next.js 16 + Colyseus",
+    "version": "Phaser 3.80+, Next.js 16.x, Colyseus 0.15.x",
+    "target_platforms": ["Web (Desktop Chrome/Firefox/Safari)", "Web (Mobile Chrome/Safari)"],
+    "performance_targets": {
+      "fps_desktop": "60 FPS",
+      "fps_mobile": "30 FPS",
+      "memory_limit_desktop": "512 MB",
+      "memory_limit_mobile": "256 MB",
+      "initial_load_desktop": "< 3 seconds",
+      "initial_load_mobile": "< 5 seconds",
+      "websocket_latency": "< 150 ms",
+      "npc_response_latency": "< 3 seconds"
+    },
+    "rendering": {
+      "resolution": "480x270 base, scaled 3x-4x",
+      "tile_size": "16x16 pixels",
+      "renderer": "WebGL (Phaser.js AUTO mode with Canvas fallback)",
+      "tilemap_format": "Tiled JSON export"
+    },
+    "networking": {
+      "protocol": "WebSocket via Colyseus",
+      "tick_rate": "10 ticks/sec",
+      "max_players_per_room": 100,
+      "npc_agents_per_room": "25-50"
+    },
+    "persistence": {
+      "primary_db": "PostgreSQL",
+      "cache": "Redis",
+      "npc_storage": "JSON documents in PostgreSQL",
+      "cdn": "CloudFlare for static assets"
+    }
+  },
+  "milestones": [
+    {
+      "name": "M0.1 - Walking on Tiles",
+      "target_date": "2026-02-27",
+      "deliverables": [
+        "Phaser.js integrated into Next.js app",
+        "Tiled map loaded and rendered (single town zone)",
+        "Player sprite moves with keyboard/touch input",
+        "Camera follows player with smooth scrolling",
+        "Collision detection with buildings and objects"
+      ],
+      "success_criteria": [
+        "Player can walk freely on a 64x64 tile map",
+        "Collisions prevent walking through walls/objects",
+        "60 FPS on desktop, 30 FPS on mobile",
+        "Map loads in < 3 seconds"
+      ],
+      "responsible_agents": ["mechanics_developer", "sr_game_designer"],
+      "status": "pending"
+    },
+    {
+      "name": "M0.2 - Multiplayer Sync",
+      "target_date": "2026-03-13",
+      "deliverables": [
+        "Colyseus server running with game room",
+        "Player positions synchronized across clients",
+        "Player join/leave visible to all clients",
+        "Basic NPC entities moving on server-defined paths",
+        "Server-authoritative movement validation"
+      ],
+      "success_criteria": [
+        "2+ players see each other moving in real-time",
+        "NPC positions are server-authoritative",
+        "Latency < 150ms for position updates",
+        "Server handles 10 concurrent players without degradation"
+      ],
+      "responsible_agents": ["mechanics_developer", "qa_agent"],
+      "status": "pending"
+    },
+    {
+      "name": "M0.3 - NPC Talks",
+      "target_date": "2026-03-27",
+      "deliverables": [
+        "Dialogue UI window (portrait + text + input)",
+        "Claude API integration for NPC responses",
+        "Seed persona system (JSON-based NPC identity)",
+        "One fully configured NPC (Marko the baker)",
+        "Hybrid input: quick replies + free text"
+      ],
+      "success_criteria": [
+        "Player can approach NPC and start conversation",
+        "NPC responds in character with < 3 second latency",
+        "Dialogue limited to 10 turns (5 per side)",
+        "NPC personality is consistent across conversations"
+      ],
+      "responsible_agents": ["mechanics_developer", "sr_game_designer", "data_scientist"],
+      "status": "pending"
+    },
+    {
+      "name": "M0.4 - NPC Remembers",
+      "target_date": "2026-04-10",
+      "deliverables": [
+        "Memory stream storage (PostgreSQL)",
+        "Memory retrieval (recency + importance + relevance)",
+        "Importance scoring via LLM",
+        "Conversation context includes retrieved memories",
+        "Basic reflection system (daily summaries)"
+      ],
+      "success_criteria": [
+        "NPC references previous conversations naturally",
+        "Memory retrieval returns relevant context",
+        "Daily reflections generate higher-level insights",
+        "LLM cost per dialogue < $0.03",
+        "End-to-end prototype demonstrates core USP"
+      ],
+      "responsible_agents": ["mechanics_developer", "sr_game_designer", "data_scientist", "qa_agent"],
+      "status": "pending"
+    }
+  ],
+  "metrics": {
+    "velocity_target": "2-3 milestone deliverables per week",
+    "bug_threshold": "0 critical, < 5 minor per milestone",
+    "performance_target": "60 FPS desktop, 30 FPS mobile, < 3s NPC response",
+    "quality_gates": {
+      "code_review": true,
+      "testing_required": true,
+      "performance_validation": true,
+      "market_validation": true,
+      "llm_cost_validation": true
+    }
+  },
+  "risks": [
+    {
+      "risk": "LLM API costs exceed $0.03/player-hour budget at scale",
+      "probability": "High",
+      "impact": "High",
+      "mitigation": "Aggressive caching, agent tiering (Full/Simplified/Background), dialogue limits (10 turns), batched reflections, Claude Haiku for routine tasks",
+      "owner": "data_scientist",
+      "status": "identified"
+    },
+    {
+      "risk": "NPC response quality degrades (hallucinations, breaking character)",
+      "probability": "Medium",
+      "impact": "High",
+      "mitigation": "Strict system prompts with seed persona, post-processing filters, A/B testing of prompts, moderation of player free-text input",
+      "owner": "sr_game_designer",
+      "status": "identified"
+    },
+    {
+      "risk": "WebSocket performance issues with 100 concurrent players",
+      "probability": "Medium",
+      "impact": "Medium",
+      "mitigation": "Server-authoritative architecture, 10 tick/sec rate, LOD for distant entities, lazy zone loading (chunks), load testing in Phase 0",
+      "owner": "mechanics_developer",
+      "status": "identified"
+    },
+    {
+      "risk": "Phaser.js + Next.js integration creates performance or build issues",
+      "probability": "Medium",
+      "impact": "Medium",
+      "mitigation": "Dynamic import of Phaser (no SSR), dedicated canvas component, early integration testing in M0.1",
+      "owner": "mechanics_developer",
+      "status": "identified"
+    },
+    {
+      "risk": "Player toxicity in free-text NPC dialogue",
+      "probability": "High",
+      "impact": "Medium",
+      "mitigation": "Input moderation filter before LLM, NPC agents ignore toxic content, player report system, auto-ban for repeated violations",
+      "owner": "qa_agent",
+      "status": "identified"
+    },
+    {
+      "risk": "Browser gaming perception limits adoption among core gamers",
+      "probability": "Medium",
+      "impact": "Low",
+      "mitigation": "Focus on quality and unique AI experience; plan Electron wrapper for desktop distribution post-launch",
+      "owner": "market_analyst",
+      "status": "identified"
+    }
+  ],
+  "project_notes": {
+    "created_by": "Game Studio Sub-Agents v1.0 - Master Orchestrator",
+    "configuration_template_version": "1.0",
+    "last_updated": "2026-02-13T00:00:00Z",
+    "gdd_location": "docs/nookstead-gdd.md",
+    "gdd_language": "Russian",
+    "asset_pack": "LimeZu - Modern Interiors, Modern Exteriors, Modern Farm, Modern User Interface",
+    "domain": "nookstead.land",
+    "notes": "Phase 0 focuses on proving the core USP: a player walks through a town and talks to an AI NPC who remembers previous conversations. All other systems (farming, economy, quests) are deferred to Phase 1."
+  }
+}

@@ -105,7 +105,7 @@ Please provide the following information:
 Based on user inputs, create the following folder structure:
 
 ```
-projects/
+docs/
 └── [project-name]/
     ├── documentation/
     │   ├── design/
