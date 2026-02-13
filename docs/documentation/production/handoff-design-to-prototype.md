@@ -13,19 +13,19 @@
 ## Deliverables Transferred
 
 ### Primary Deliverables
-- [x] **Project Configuration**: `docs/nookstead/project-config.json` -- Full project config with milestones, team, risks
-- [x] **Market Analysis**: `docs/nookstead/resources/market-research/market-analysis.md` -- GO decision with rationale
-- [x] **Engine Setup**: `docs/nookstead/documentation/technical/engine-setup.md` -- Full architecture, code patterns, DB schema
-- [x] **Analytics Setup**: `docs/nookstead/documentation/technical/analytics-setup.md` -- Telemetry events, dashboards, compliance
+- [x] **Project Configuration**: `docs/project-config.json` -- Full project config with milestones, team, risks
+- [x] **Market Analysis**: `docs/resources/market-research/market-analysis.md` -- GO decision with rationale
+- [x] **Engine Setup**: `docs/documentation/technical/engine-setup.md` -- Full architecture, code patterns, DB schema
+- [x] **Analytics Setup**: `docs/documentation/technical/analytics-setup.md` -- Telemetry events, dashboards, compliance
 
 ### Feature Specifications (Phase 0)
-- [x] **M0.1 Walking on Tiles**: `docs/nookstead/documentation/design/mechanics/feature-spec-m01-walking-on-tiles.md`
-- [x] **M0.2 Multiplayer Sync**: `docs/nookstead/documentation/design/mechanics/feature-spec-m02-multiplayer-sync.md`
-- [x] **M0.3 NPC Talks**: `docs/nookstead/documentation/design/mechanics/feature-spec-m03-npc-talks.md`
-- [x] **M0.4 NPC Remembers**: `docs/nookstead/documentation/design/mechanics/feature-spec-m04-npc-remembers.md`
+- [x] **M0.1 Walking on Tiles**: `docs/documentation/design/mechanics/feature-spec-m01-walking-on-tiles.md`
+- [x] **M0.2 Multiplayer Sync**: `docs/documentation/design/mechanics/feature-spec-m02-multiplayer-sync.md`
+- [x] **M0.3 NPC Talks**: `docs/documentation/design/mechanics/feature-spec-m03-npc-talks.md`
+- [x] **M0.4 NPC Remembers**: `docs/documentation/design/mechanics/feature-spec-m04-npc-remembers.md`
 
 ### Supporting Documentation
-- [x] **Production Timeline**: `docs/nookstead/documentation/production/timeline.md` -- Week-by-week plan
+- [x] **Production Timeline**: `docs/documentation/production/timeline.md` -- Week-by-week plan
 - [x] **Game Design Document**: `docs/nookstead-gdd.md` -- Full GDD (Russian language, 620 lines)
 - [x] **CLAUDE.md**: Project conventions, Nx commands, architecture notes
 

@@ -4,14 +4,14 @@
 - GDD v1: `docs/nookstead-gdd.md` (Russian, 620 lines - original)
 - GDD v2: `docs/nookstead-gdd-v2.md` (Russian, 1708 lines - comprehensive)
 - GDD v3: `docs/nookstead-gdd-v3.md` (English, ~1750 lines - DEFINITIVE, real-time clock)
-- Project config: `docs/nookstead/project-config.json`
+- Project config: `docs/project-config.json`
 - Current phase: Phase 0 (Prototype)
 - Branch: `add-game-studio-agents`
 - Domain: nookstead.land
 - Market Decision: GO (2026-02-14)
 
 ## Documentation Structure (Generated 2026-02-14)
-All project docs under `docs/nookstead/`:
+All project docs under `docs/`:
 - `project-config.json` - Full project config with milestones, team, risks
 - `resources/market-research/market-analysis.md` - Market analysis report (GO)
 - `documentation/technical/engine-setup.md` - Architecture, code patterns, DB schema
