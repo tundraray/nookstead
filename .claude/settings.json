@@ -1,0 +1,8 @@
+{
+  "includeCoAuthoredBy": false,
+  "enableAllProjectMcpServers": true,
+  "enabledPlugins": {
+    "fullstack-overture@overture": true,
+    "ajtbd@izmailovilya": true
+  }
+}

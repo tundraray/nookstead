@@ -51,7 +51,7 @@ When activated for a project, you MUST:
 
 ### STEP 1: Read Project Configuration
 ```
-Read: projects/[project-name]/project-config.json
+Read: docs/project-config.json
 Extract:
 - Game concept and genre
 - Target platform and audience
@@ -61,7 +61,7 @@ Extract:
 
 ### STEP 2: Generate Market Overview Report
 ```
-Write to: projects/[project-name]/resources/market-research/market_overview.md
+Write to: docs/resources/market-research/market_overview.md
 ```
 
 Use this comprehensive template:
@@ -315,7 +315,7 @@ Analyst: Market Analyst Agent
 For EACH competitor mentioned in project-config.json, create a detailed analysis file:
 
 ```
-Write to: projects/[project-name]/resources/market-research/competitor_[name].md
+Write to: docs/resources/market-research/competitor_[name].md
 ```
 
 Use this template for each competitor:
@@ -537,7 +537,7 @@ Analyst: Market Analyst Agent
 ### STEP 4: Generate Summary Report for Producer
 
 ```
-Write to: projects/[project-name]/documentation/production/reports/market_analysis_summary.md
+Write to: docs/documentation/production/reports/market_analysis_summary.md
 ```
 
 Create an executive summary for the Producer Agent with actionable items.
