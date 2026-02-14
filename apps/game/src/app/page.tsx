@@ -1,7 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { LoginButton } from '@/components/auth/LoginButton';
-import styles from './page.module.css';
 
 export default async function LandingPage() {
   const session = await auth();
@@ -11,13 +10,13 @@ export default async function LandingPage() {
   }
 
   return (
-    <main className={styles.page}>
+    <main className="landing-page">
       {/* Animated stars background */}
-      <div className={styles.stars} aria-hidden="true">
+      <div className="landing-page__stars" aria-hidden="true">
         {Array.from({ length: 30 }, (_, i) => (
           <span
             key={i}
-            className={styles.star}
+            className="landing-page__star"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
@@ -28,35 +27,35 @@ export default async function LandingPage() {
         ))}
       </div>
 
-      <div className={styles.content}>
+      <div className="landing-page__content">
         {/* Pixel art logo */}
-        <div className={styles.logoWrapper}>
-          <h1 className={styles.logo}>NOOKSTEAD</h1>
-          <div className={styles.logoShadow} aria-hidden="true">
+        <div className="landing-page__logo-wrapper">
+          <h1 className="landing-page__logo">NOOKSTEAD</h1>
+          <div className="landing-page__logo-shadow" aria-hidden="true">
             NOOKSTEAD
           </div>
         </div>
 
         {/* Tagline */}
-        <p className={styles.tagline}>
+        <p className="landing-page__tagline">
           Build your homestead in a living world
         </p>
 
         {/* Decorative pixel divider */}
-        <div className={styles.divider} aria-hidden="true">
+        <div className="landing-page__divider" aria-hidden="true">
           <span />
           <span />
           <span />
         </div>
 
         {/* Login buttons */}
-        <div className={styles.buttons}>
+        <div className="landing-page__buttons">
           <LoginButton provider="google" />
           {/* <LoginButton provider="discord" /> */}
         </div>
 
         {/* Footer hint */}
-        <p className={styles.hint}>
+        <p className="landing-page__hint">
           Sign in to start your adventure
         </p>
       </div>

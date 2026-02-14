@@ -10,7 +10,6 @@ import { Hotbar } from './Hotbar';
 import { MenuButton } from './MenuButton';
 import { DEFAULT_HUD_STATE } from './types';
 import type { HUDState, Season } from './types';
-import styles from './HUD.module.css';
 
 const pixelFont = Press_Start_2P({
   weight: '400',
@@ -72,7 +71,7 @@ export function HUD() {
 
   return (
     <div
-      className={`${styles.hud} ${pixelFont.variable}`}
+      className={`hud ${pixelFont.variable}`}
       style={{ '--ui-scale': uiScale } as React.CSSProperties}
       role="region"
       aria-label="Game heads-up display"

@@ -4,7 +4,6 @@ import { NineSlicePanel } from './NineSlicePanel';
 import { spriteCSSStyle } from './sprite';
 import { SPRITES } from './sprites';
 import type { Season } from './types';
-import styles from './ClockPanel.module.css';
 
 interface ClockPanelProps {
   day: number;
@@ -24,21 +23,21 @@ export function ClockPanel({ day, time, season }: ClockPanelProps) {
 
   return (
     <div
-      className={styles.wrapper}
+      className="clock-panel"
       role="status"
       aria-live="polite"
       aria-label={`Day ${day}, ${time}, ${season}`}
     >
       <NineSlicePanel>
-        <div className={styles.content}>
+        <div className="clock-panel__content">
           <div
-            className={styles.seasonIcon}
+            className="clock-panel__season-icon"
             style={spriteCSSStyle(...seasonSprite)}
             aria-hidden="true"
           />
-          <div className={styles.text}>
-            <span className={styles.line}>Day {day}</span>
-            <span className={`${styles.line} ${styles.time}`}>{time}</span>
+          <div className="clock-panel__text">
+            <span className="clock-panel__line">Day {day}</span>
+            <span className="clock-panel__line clock-panel__time">{time}</span>
           </div>
         </div>
       </NineSlicePanel>

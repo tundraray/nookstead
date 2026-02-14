@@ -1,4 +1,7 @@
-/* === Reset === */
+/* ==========================================================================
+   Section 1: CSS Reset
+   ========================================================================== */
+
 *,
 *::before,
 *::after {
@@ -49,7 +52,10 @@ button {
   color: inherit;
 }
 
-/* === Pixel Art Keyframes === */
+/* ==========================================================================
+   Section 2: Pixel Art Keyframes
+   ========================================================================== */
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
@@ -68,4 +74,598 @@ button {
 @keyframes pixel-fade-in {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* ==========================================================================
+   Section 3: Landing Page
+   ========================================================================== */
+
+.landing-page {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(
+    180deg,
+    #0a0a1a 0%,
+    #0d1117 40%,
+    #101828 100%
+  );
+  overflow: hidden;
+
+  & .landing-page__stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  & .landing-page__star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background-color: #fff;
+    animation: twinkle ease-in-out infinite;
+  }
+
+  & .landing-page__content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    padding: 48px 24px;
+    animation: pixel-fade-in 0.8s ease-out;
+  }
+
+  & .landing-page__logo-wrapper {
+    position: relative;
+    animation: float 4s ease-in-out infinite;
+  }
+
+  & .landing-page__logo {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 2.5rem;
+    color: #48c7aa;
+    letter-spacing: 4px;
+    animation: glow-pulse 3s ease-in-out infinite;
+    user-select: none;
+  }
+
+  & .landing-page__logo-shadow {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 2.5rem;
+    color: #1a3a2e;
+    letter-spacing: 4px;
+    z-index: -1;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  & .landing-page__tagline {
+    font-size: 0.7rem;
+    color: #8a8aaa;
+    text-align: center;
+    letter-spacing: 1px;
+    max-width: 400px;
+  }
+
+  & .landing-page__divider {
+    display: flex;
+    gap: 8px;
+
+    & span {
+      display: block;
+      width: 6px;
+      height: 6px;
+      background-color: #2a2a4a;
+    }
+
+    & span:nth-child(2) {
+      background-color: #48c7aa;
+    }
+  }
+
+  & .landing-page__buttons {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+  }
+
+  & .landing-page__hint {
+    font-size: 0.5rem;
+    color: #4a4a6a;
+    letter-spacing: 0.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .landing-page {
+    & .landing-page__logo {
+      font-size: 1.5rem;
+      letter-spacing: 2px;
+    }
+
+    & .landing-page__logo-shadow {
+      font-size: 1.5rem;
+      letter-spacing: 2px;
+      top: 3px;
+      left: 3px;
+    }
+
+    & .landing-page__tagline {
+      font-size: 0.6rem;
+    }
+
+    & .landing-page__content {
+      gap: 24px;
+      padding: 32px 16px;
+    }
+  }
+}
+
+@media (min-width: 768px) {
+  .landing-page {
+    & .landing-page__logo {
+      font-size: 3.5rem;
+      letter-spacing: 6px;
+    }
+
+    & .landing-page__logo-shadow {
+      font-size: 3.5rem;
+      letter-spacing: 6px;
+      top: 5px;
+      left: 5px;
+    }
+
+    & .landing-page__tagline {
+      font-size: 0.8rem;
+    }
+
+    & .landing-page__content {
+      gap: 40px;
+    }
+  }
+}
+
+/* ==========================================================================
+   Section 4: Game App Wrapper
+   Full-viewport container for the Phaser canvas and React HUD overlay.
+   ========================================================================== */
+
+.game-app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #1a1a2e;
+}
+
+/* ==========================================================================
+   Section 5: Loading Screen
+   Full-screen overlay shown while Phaser assets load.
+   ========================================================================== */
+
+.loading-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    180deg,
+    #0a0a1a 0%,
+    #0d1117 40%,
+    #101828 100%
+  );
+  z-index: 20;
+  transition: opacity 0.4s ease-out;
+  overflow: hidden;
+
+  & .loading-screen__stars {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  & .loading-screen__star {
+    position: absolute;
+    width: 2px;
+    height: 2px;
+    background-color: #fff;
+    animation: twinkle ease-in-out infinite;
+  }
+
+  & .loading-screen__content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    animation: pixel-fade-in 0.8s ease-out;
+  }
+
+  & .loading-screen__logo-wrapper {
+    position: relative;
+    animation: float 4s ease-in-out infinite;
+  }
+
+  & .loading-screen__logo {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 2rem;
+    color: #48c7aa;
+    letter-spacing: 4px;
+    animation: glow-pulse 3s ease-in-out infinite;
+    user-select: none;
+    margin: 0;
+  }
+
+  & .loading-screen__logo-shadow {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 2rem;
+    color: #1a3a2e;
+    letter-spacing: 4px;
+    z-index: -1;
+    user-select: none;
+    pointer-events: none;
+  }
+
+  & .loading-screen__divider {
+    display: flex;
+    gap: 8px;
+
+    & span {
+      display: block;
+      width: 6px;
+      height: 6px;
+      background-color: #2a2a4a;
+    }
+
+    & span:nth-child(2) {
+      background-color: #48c7aa;
+    }
+  }
+
+  & .loading-screen__bar-outer {
+    width: 240px;
+    height: 6px;
+    background: rgba(72, 199, 170, 0.15);
+    overflow: hidden;
+  }
+
+  & .loading-screen__bar-inner {
+    height: 100%;
+    width: 40%;
+    background: #48c7aa;
+    animation: loading 1.5s ease-in-out infinite;
+  }
+
+  & .loading-screen__text {
+    font-size: 0.55rem;
+    color: #8a8aaa;
+    letter-spacing: 1px;
+    margin: 0;
+  }
+}
+
+/* ==========================================================================
+   Section 6: HUD System
+   Pixel-art heads-up display overlay. All HUD components use --ui-scale
+   custom property for responsive sizing (set dynamically by HUD.tsx).
+   ========================================================================== */
+
+/* --- HUD Container --- */
+
+.hud {
+  --ui-scale: 3;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-family: var(--font-pixel);
+  color: #3b2819;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+
+  & button,
+  & [data-interactive='true'] {
+    pointer-events: auto;
+    cursor: pointer;
+  }
+
+  & * {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+}
+
+/* --- Nine-Slice Panel --- */
+
+.nine-slice {
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  grid-template-rows: 32px 1fr 32px;
+  position: relative;
+  filter: drop-shadow(1px 1px 0 rgba(44, 26, 14, 0.5));
+
+  & .nine-slice__cell {
+    overflow: hidden;
+  }
+
+  & .nine-slice__edge {
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  & .nine-slice__content {
+    grid-column: 2;
+    grid-row: 2;
+    position: relative;
+    z-index: 1;
+  }
+}
+
+/* --- Clock Panel --- */
+
+.clock-panel {
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  left: calc(4px * var(--ui-scale));
+  opacity: 0.9;
+
+  & .clock-panel__content {
+    display: flex;
+    align-items: center;
+    gap: calc(2px * var(--ui-scale));
+    padding: calc(2px * var(--ui-scale));
+    white-space: nowrap;
+  }
+
+  & .clock-panel__season-icon {
+    flex-shrink: 0;
+  }
+
+  & .clock-panel__text {
+    display: flex;
+    flex-direction: column;
+    gap: calc(1px * var(--ui-scale));
+  }
+
+  & .clock-panel__line {
+    font-size: calc(5px * var(--ui-scale));
+    line-height: 1;
+    color: #3b2819;
+  }
+
+  & .clock-panel__time {
+    color: #6b4226;
+  }
+}
+
+/* --- Currency Display --- */
+
+.currency-display {
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  right: calc(4px * var(--ui-scale));
+  opacity: 0.9;
+
+  & .currency-display__content {
+    display: flex;
+    align-items: center;
+    gap: calc(2px * var(--ui-scale));
+    padding: calc(2px * var(--ui-scale));
+    white-space: nowrap;
+  }
+
+  & .currency-display__icon {
+    flex-shrink: 0;
+  }
+
+  & .currency-display__amount {
+    font-size: calc(5px * var(--ui-scale));
+    line-height: 1;
+    color: #daa520;
+    font-family: var(--font-pixel);
+  }
+}
+
+/* --- Menu Button --- */
+
+.menu-button {
+  position: absolute;
+  bottom: calc(4px * var(--ui-scale));
+  right: calc(4px * var(--ui-scale));
+  border: none;
+  padding: 0;
+  background-color: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+
+  &:focus-visible {
+    outline: calc(2px * var(--ui-scale)) solid #ffdd57;
+    outline-offset: calc(1px * var(--ui-scale));
+  }
+
+  &:hover .menu-button__sprite-normal {
+    display: none;
+  }
+
+  &:hover .menu-button__sprite-hover {
+    display: block;
+  }
+
+  &:active .menu-button__sprite-normal,
+  &:active .menu-button__sprite-hover {
+    transform: translate(
+      calc(1px * var(--ui-scale)),
+      calc(1px * var(--ui-scale))
+    );
+  }
+}
+
+.menu-button__sprite-hover {
+  display: none;
+}
+
+/* --- Energy Bar --- */
+
+.energy-bar {
+  position: absolute;
+  right: calc(4px * var(--ui-scale));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  opacity: 0.9;
+
+  & .energy-bar__frame {
+    position: relative;
+  }
+
+  & .energy-bar__track {
+    position: absolute;
+    top: calc(1px * var(--ui-scale));
+    left: calc(1px * var(--ui-scale));
+    width: calc(3px * var(--ui-scale));
+    height: calc(30px * var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+  }
+
+  & .energy-bar__fill {
+    width: 100%;
+    transition: height 0.3s ease-out, background-color 0.3s ease-out;
+  }
+
+  & .energy-bar__label {
+    font-family: var(--font-pixel);
+    font-size: calc(3px * var(--ui-scale));
+    color: #3b2819;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .energy-bar__fill {
+    transition: none;
+  }
+}
+
+/* --- Hotbar --- */
+
+.hotbar {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  & .hotbar__slots {
+    display: flex;
+    gap: 1px;
+  }
+}
+
+/* --- Hotbar Slot --- */
+
+.hotbar-slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+
+  & .hotbar-slot__key-hint {
+    font-family: var(--font-pixel);
+    font-size: 7px;
+    color: rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+    margin-bottom: 2px;
+  }
+
+  & .hotbar-slot__button {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    padding: 16px;
+    box-sizing: content-box;
+    flex-shrink: 0;
+    border: none;
+    background-color: transparent;
+    outline: none;
+    overflow: hidden;
+    -webkit-tap-highlight-color: transparent;
+
+    &:focus-visible {
+      outline: 2px solid #ffdd57;
+      outline-offset: 1px;
+    }
+  }
+
+  & .hotbar-slot__background {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 96px;
+    height: 96px;
+  }
+
+  & .hotbar-slot__content {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  & .hotbar-slot__item-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  & .hotbar-slot__quantity {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    font-family: var(--font-pixel);
+    font-size: 8px;
+    color: #fff;
+    text-shadow:
+      1px 0 0 #000,
+      -1px 0 0 #000,
+      0 1px 0 #000,
+      0 -1px 0 #000;
+  }
 }

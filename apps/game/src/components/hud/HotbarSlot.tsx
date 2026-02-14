@@ -4,7 +4,6 @@ import { spriteCSSStyle } from './sprite';
 import { SLOT_NORMAL, SLOT_SELECTED } from './sprites';
 import { NineSlicePanel } from './NineSlicePanel';
 import type { HotbarItem } from './types';
-import styles from './HotbarSlot.module.css';
 
 interface HotbarSlotProps {
   item: HotbarItem | null;
@@ -22,12 +21,12 @@ export function HotbarSlot({
   const keyLabel = index === 9 ? '0' : String(index + 1);
 
   return (
-    <div className={styles.wrapper}>
-      <span className={styles.keyHint} aria-hidden="true">
+    <div className="hotbar-slot">
+      <span className="hotbar-slot__key-hint" aria-hidden="true">
         {keyLabel}
       </span>
       <button
-        className={styles.slot}
+        className="hotbar-slot__button"
         onClick={onClick}
         aria-label={`Slot ${keyLabel}${item ? `: ${item.id}` : ': empty'}`}
         aria-pressed={isSelected}
@@ -35,18 +34,18 @@ export function HotbarSlot({
       >
         <NineSlicePanel
           slices={isSelected ? SLOT_SELECTED : SLOT_NORMAL}
-          className={styles.background}
+          className="hotbar-slot__background"
         >
-          <div className={styles.content}>
+          <div className="hotbar-slot__content">
             {item && (
               <div
-                className={styles.itemIcon}
+                className="hotbar-slot__item-icon"
                 style={spriteCSSStyle(...item.spriteRect)}
                 aria-hidden="true"
               />
             )}
             {item && item.quantity > 1 && (
-              <span className={styles.quantity}>
+              <span className="hotbar-slot__quantity">
                 {item.quantity > 99 ? '99+' : item.quantity}
               </span>
             )}

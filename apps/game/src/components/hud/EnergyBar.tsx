@@ -2,7 +2,6 @@
 
 import { spriteCSSStyle } from './sprite';
 import { SPRITES } from './sprites';
-import styles from './EnergyBar.module.css';
 
 interface EnergyBarProps {
   energy: number;
@@ -21,26 +20,26 @@ export function EnergyBar({ energy, maxEnergy }: EnergyBarProps) {
 
   return (
     <div
-      className={styles.wrapper}
+      className="energy-bar"
       role="progressbar"
       aria-valuenow={energy}
       aria-valuemin={0}
       aria-valuemax={maxEnergy}
       aria-label={`Energy: ${energy} of ${maxEnergy}`}
     >
-      <div className={styles.frame}>
+      <div className="energy-bar__frame">
         <div
           style={spriteCSSStyle(...SPRITES.energyFrame)}
           aria-hidden="true"
         />
-        <div className={styles.track}>
+        <div className="energy-bar__track">
           <div
-            className={styles.fill}
+            className="energy-bar__fill"
             style={{ height: `${pct}%`, backgroundColor: fillColor }}
           />
         </div>
       </div>
-      <span className={styles.label} aria-hidden="true">
+      <span className="energy-bar__label" aria-hidden="true">
         {energy}
       </span>
     </div>
