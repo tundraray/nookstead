@@ -8,6 +8,9 @@
     },
     {
       "path": "./apps/game"
+    },
+    {
+      "path": "./packages/db"
     }
   ]
 }
