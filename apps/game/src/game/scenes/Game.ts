@@ -1,199 +1,183 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { TILE_SIZE } from '../constants';
-import { TERRAINS, TerrainType } from '../terrain';
-import { FRAME_NAMES } from '../autotile';
+import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT } from '../constants';
+import { MapGenerator, IslandPass, ConnectivityPass, WaterBorderPass, AutotilePass } from '../mapgen';
+import { EMPTY_FRAME } from '../autotile';
+import type { GeneratedMap } from '../mapgen/types';
 
-const AUTOTILE_COLS = 12;
-const AUTOTILE_ROWS = 4;
+/** Per-layer info emitted on tile click. */
+export interface TileLayerInfo {
+  name: string;
+  terrainKey: string;
+  frame: number;
+}
+
+/** Payload emitted via EventBus on 'tile-click'. */
+export interface TileClickEvent {
+  tileX: number;
+  tileY: number;
+  terrain: string;
+  elevation: number;
+  seed: number;
+  layers: TileLayerInfo[];
+}
+
+/** Payload received via EventBus on 'tile-replace'. */
+export interface TileReplaceEvent {
+  tileX: number;
+  tileY: number;
+  layerName: string;
+  newFrame: number;
+}
 
 export class Game extends Scene {
-  private bgTiles: Phaser.GameObjects.Image[] = [];
-  private selectedTerrain: TerrainType = TERRAINS[0];
-  private widgetHighlight!: Phaser.GameObjects.Rectangle;
-  private selectedFrame: number = TERRAINS[0].solidFrame;
+  private mapData!: GeneratedMap;
+  private rt!: Phaser.GameObjects.RenderTexture;
 
   constructor() {
     super('Game');
   }
 
   create() {
-    this.cameras.main.setBackgroundColor(0x1a1a2e);
-    this.buildScene();
+    // Generate island using the pipeline
+    const generator = new MapGenerator(MAP_WIDTH, MAP_HEIGHT)
+      .addPass(new IslandPass())
+      .addPass(new ConnectivityPass())
+      .addPass(new WaterBorderPass())
+      .setLayerPass(new AutotilePass());
 
-    this.scale.on('resize', () => {
-      this.bgTiles = [];
-      this.children.removeAll(true);
-      this.buildScene();
-    });
-  }
+    // Read seed from URL query string (?seed=12345)
+    const urlSeed = new URLSearchParams(window.location.search).get('seed');
+    const seed = urlSeed ? Number(urlSeed) : undefined;
 
-  private buildScene() {
-    const w = this.scale.width;
-    const h = this.scale.height;
+    this.mapData = generator.generate(seed);
 
-    // Background tiles
-    const cols = Math.ceil(w / TILE_SIZE);
-    const rows = Math.ceil(h / TILE_SIZE);
-    const initial = this.selectedTerrain;
+    // Update URL with actual seed so the map is shareable
+    const url = new URL(window.location.href);
+    url.searchParams.set('seed', String(this.mapData.seed));
+    window.history.replaceState(null, '', url.toString());
 
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const tile = this.add.image(
-          c * TILE_SIZE + TILE_SIZE / 2,
-          r * TILE_SIZE + TILE_SIZE / 2,
-          initial.key,
-          this.selectedFrame
-        );
-        this.bgTiles.push(tile);
+    const mapPixelW = MAP_WIDTH * TILE_SIZE;
+    const mapPixelH = MAP_HEIGHT * TILE_SIZE;
+
+    // Render all layers to a single RenderTexture at native resolution.
+    // This eliminates sub-pixel seam artifacts at fractional zoom levels.
+    // Create a 1-tile white texture used for erasing individual tiles
+    const eraseGfx = this.add.graphics();
+    eraseGfx.fillStyle(0xffffff, 1);
+    eraseGfx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    eraseGfx.generateTexture('__erase_tile', TILE_SIZE, TILE_SIZE);
+    eraseGfx.destroy();
+
+    this.rt = this.add.renderTexture(0, 0, mapPixelW, mapPixelH);
+    const rt = this.rt;
+    rt.setOrigin(0, 0);
+
+    for (const layerData of this.mapData.layers) {
+      for (let y = 0; y < MAP_HEIGHT; y++) {
+        for (let x = 0; x < MAP_WIDTH; x++) {
+          const frame = layerData.frames[y][x];
+          if (frame === EMPTY_FRAME) continue;
+
+          rt.drawFrame(
+            layerData.terrainKey,
+            frame,
+            x * TILE_SIZE,
+            y * TILE_SIZE,
+          );
+        }
       }
     }
 
-    // --- Tileset widget (left panel) ---
-    this.buildWidget(w, h);
+    // Camera: center map in viewport
+    const cam = this.cameras.main;
+    cam.setBackgroundColor(0x1a1a2e);
 
-    // --- Terrain palette (bottom bar) ---
-    this.buildPalette(w, h);
+    const zoomX = this.scale.width / mapPixelW;
+    const zoomY = this.scale.height / mapPixelH;
+    cam.setZoom(Math.min(zoomX, zoomY));
+    cam.centerOn(mapPixelW / 2, mapPixelH / 2);
+
+    // Track drag distance to distinguish click from drag
+    let dragDist = 0;
+
+    // Drag-scroll
+    this.input.on('pointerdown', () => {
+      dragDist = 0;
+    });
+
+    this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
+      if (pointer.isDown) {
+        const dx = pointer.x - pointer.prevPosition.x;
+        const dy = pointer.y - pointer.prevPosition.y;
+        dragDist += Math.abs(dx) + Math.abs(dy);
+        cam.scrollX -= dx / cam.zoom;
+        cam.scrollY -= dy / cam.zoom;
+      }
+    });
+
+    // Tile click (only if not dragging)
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (dragDist > 5) return; // was a drag, not a click
+
+      const worldX = pointer.worldX;
+      const worldY = pointer.worldY;
+      const tileX = Math.floor(worldX / TILE_SIZE);
+      const tileY = Math.floor(worldY / TILE_SIZE);
+
+      if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
+
+      const cell = this.mapData.grid[tileY][tileX];
+      const layers: TileLayerInfo[] = this.mapData.layers
+        .map((l) => ({ name: l.name, terrainKey: l.terrainKey, frame: l.frames[tileY][tileX] }))
+        .filter((l) => l.frame !== EMPTY_FRAME);
+
+      EventBus.emit('tile-click', {
+        tileX,
+        tileY,
+        terrain: cell.terrain,
+        elevation: cell.elevation,
+        seed: this.mapData.seed,
+        layers,
+      } satisfies TileClickEvent);
+    });
+
+    // Mouse wheel zoom
+    this.input.on(
+      'wheel',
+      (
+        _pointer: Phaser.Input.Pointer,
+        _gameObjects: Phaser.GameObjects.GameObject[],
+        _deltaX: number,
+        deltaY: number,
+      ) => {
+        cam.zoom = Phaser.Math.Clamp(cam.zoom - deltaY * 0.001, 0.25, 4);
+      },
+    );
+
+    // Listen for tile replacement from the UI
+    EventBus.on('tile-replace', (ev: TileReplaceEvent) => {
+      const { tileX, tileY, layerName, newFrame } = ev;
+      if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
+
+      const layer = this.mapData.layers.find((l) => l.name === layerName);
+      if (!layer) return;
+
+      // Update the stored frame data
+      layer.frames[tileY][tileX] = newFrame;
+
+      // Redraw the entire tile stack at this position
+      const px = tileX * TILE_SIZE;
+      const py = tileY * TILE_SIZE;
+      this.rt.erase('__erase_tile', px, py);
+
+      for (const l of this.mapData.layers) {
+        const frame = l.frames[tileY][tileX];
+        if (frame === EMPTY_FRAME) continue;
+        this.rt.drawFrame(l.terrainKey, frame, px, py);
+      }
+    });
 
     EventBus.emit('current-scene-ready', this);
-  }
-
-  private buildWidget(_w: number, _h: number) {
-    const gap = 1;
-    const labelH = 14;
-    const cellW = TILE_SIZE + gap;
-    const cellH = TILE_SIZE + labelH + gap;
-    const widgetW = AUTOTILE_COLS * cellW + gap + 16;
-    const widgetH = AUTOTILE_ROWS * cellH + gap + 32;
-    const wx = 8;
-    const wy = 8;
-
-    // Backdrop
-    this.add
-      .rectangle(wx + widgetW / 2, wy + widgetH / 2, widgetW, widgetH, 0x000000, 0.8)
-      .setOrigin(0.5);
-
-    // Title
-    this.add.text(wx + 8, wy + 6, this.selectedTerrain.name, {
-      fontFamily: 'Arial',
-      fontSize: 10,
-      color: '#e8d5b7',
-    });
-
-    // Highlight rect
-    this.widgetHighlight = this.add
-      .rectangle(0, 0, TILE_SIZE + 2, TILE_SIZE + 2)
-      .setStrokeStyle(2, 0xffcc00)
-      .setOrigin(0.5)
-      .setVisible(false);
-
-    const gridTop = wy + 22;
-    const gridLeft = wx + 8;
-
-    for (let row = 0; row < AUTOTILE_ROWS; row++) {
-      for (let col = 0; col < AUTOTILE_COLS; col++) {
-        const frame = row * AUTOTILE_COLS + col;
-        const x = gridLeft + col * cellW + TILE_SIZE / 2;
-        const y = gridTop + row * cellH + TILE_SIZE / 2;
-
-        const img = this.add
-          .image(x, y, this.selectedTerrain.key, frame)
-          .setInteractive({ useHandCursor: true });
-
-        img.on('pointerdown', () => {
-          this.selectedFrame = frame;
-          this.widgetHighlight.setPosition(x, y).setVisible(true);
-          for (const tile of this.bgTiles) {
-            tile.setTexture(this.selectedTerrain.key, frame);
-          }
-        });
-
-        // Grid cell border
-        this.add
-          .rectangle(x, y, TILE_SIZE, TILE_SIZE)
-          .setStrokeStyle(1, 0x444444)
-          .setOrigin(0.5);
-
-        // Frame number (top-left corner)
-        this.add.text(x - TILE_SIZE / 2 + 2, y - TILE_SIZE / 2 + 1, String(frame), {
-          fontFamily: 'Arial',
-          fontSize: 8,
-          color: '#ffffff',
-          stroke: '#000000',
-          strokeThickness: 2,
-        });
-
-        // Value label under tile
-        const label = FRAME_NAMES[frame] ?? String(frame);
-        this.add
-          .text(x, y + TILE_SIZE / 2 + 2, label, {
-            fontFamily: 'Arial',
-            fontSize: 10,
-            color: '#cccccc',
-            align: 'center',
-          })
-          .setOrigin(0.5, 0);
-      }
-    }
-
-    // Show initial highlight on solid frame
-    const sCol = this.selectedFrame % AUTOTILE_COLS;
-    const sRow = Math.floor(this.selectedFrame / AUTOTILE_COLS);
-    this.widgetHighlight
-      .setPosition(
-        gridLeft + sCol * cellW + TILE_SIZE / 2,
-        gridTop + sRow * cellH + TILE_SIZE / 2
-      )
-      .setVisible(true);
-  }
-
-  private buildPalette(w: number, h: number) {
-    const gap = 2;
-    const labelH = 14;
-    const cellW = TILE_SIZE + gap;
-    const cellH = TILE_SIZE + labelH + gap;
-    const perRow = Math.floor(w / cellW);
-    const totalRows = Math.ceil(TERRAINS.length / perRow);
-    const paletteH = totalRows * cellH + 28;
-    const offsetX = (w - perRow * cellW + gap) / 2 + TILE_SIZE / 2;
-    const paletteY = h - paletteH;
-
-    this.add
-      .rectangle(w / 2, paletteY + paletteH / 2, w, paletteH, 0x000000, 0.7)
-      .setOrigin(0.5);
-
-    this.add.text(8, paletteY + 6, 'Terrain — click to select', {
-      fontFamily: 'Arial',
-      fontSize: 11,
-      color: '#e8d5b7',
-    });
-
-    TERRAINS.forEach((terrain, i) => {
-      const row = Math.floor(i / perRow);
-      const col = i % perRow;
-      const x = offsetX + col * cellW;
-      const y = paletteY + 24 + row * cellH + TILE_SIZE / 2;
-
-      const img = this.add
-        .image(x, y, terrain.key, terrain.solidFrame)
-        .setInteractive({ useHandCursor: true });
-
-      img.on('pointerdown', () => {
-        this.selectedTerrain = terrain;
-        this.selectedFrame = terrain.solidFrame;
-        this.bgTiles = [];
-        this.children.removeAll(true);
-        this.buildScene();
-      });
-
-      this.add
-        .text(x, y + TILE_SIZE / 2 + 2, terrain.name, {
-          fontFamily: 'Arial',
-          fontSize: 7,
-          color: '#aaaaaa',
-          align: 'center',
-        })
-        .setOrigin(0.5, 0);
-    });
   }
 }

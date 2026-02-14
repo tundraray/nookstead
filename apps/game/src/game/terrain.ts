@@ -1,8 +1,19 @@
+/** Describes how a tileset relates to terrain types and other tilesets. */
+export interface TilesetRelationship {
+  /** The terrain type this tileset draws (the "subject"). */
+  from: string;
+  /** The terrain type visible where this tileset is absent (the "background"). */
+  to: string;
+  /** Key of the inverse tileset (same transition, swapped subject/background). */
+  inverseOf?: string;
+}
+
 export interface TerrainType {
   key: string;
   file: string;
   name: string;
   solidFrame: number;
+  relationship?: TilesetRelationship;
 }
 
 const TERRAIN_NAMES = [
@@ -45,6 +56,66 @@ export const TERRAINS: TerrainType[] = TERRAIN_NAMES.map((name, i) => {
     solidFrame: SOLID_FRAME,
   };
 });
+
+// Set relationships for terrain types that have them
+function setRelationship(terrainNum: number, rel: TilesetRelationship) {
+  TERRAINS[terrainNum - 1].relationship = rel;
+}
+
+// Water/grass pair (inverses)
+setRelationship(3, { from: 'water', to: 'grass', inverseOf: 'terrain-15' });
+setRelationship(15, { from: 'grass', to: 'water', inverseOf: 'terrain-03' });
+
+// Deep water/water
+setRelationship(16, { from: 'deep_water', to: 'water' });
+
+// Dirt/grass
+setRelationship(1, { from: 'dirt', to: 'grass' });
+
+// Orange grass (and its inverse)
+setRelationship(2, { from: 'orange_grass', to: 'grass' });
+setRelationship(12, { from: 'grass', to: 'orange_grass', inverseOf: 'terrain-02' });
+
+// Sand pairs
+setRelationship(7, { from: 'light_sand', to: 'grass' });
+setRelationship(8, { from: 'light_sand', to: 'water' });
+setRelationship(9, { from: 'orange_sand', to: 'light_sand' });
+setRelationship(10, { from: 'sand', to: 'alpha' });
+
+// Forest
+setRelationship(4, { from: 'pale_sage', to: 'grass' });
+setRelationship(5, { from: 'forest', to: 'grass' });
+setRelationship(6, { from: 'lush_green', to: 'grass' });
+
+// Grass variants
+setRelationship(13, { from: 'grass', to: 'alpha' });
+setRelationship(14, { from: 'grass', to: 'fenced' });
+
+/** Get a terrain type by its key (e.g., 'terrain-03'). */
+export function getTerrainByKey(key: string): TerrainType | undefined {
+  return TERRAINS.find((t) => t.key === key);
+}
+
+/** Get the inverse tileset for a given terrain key. */
+export function getInverseTileset(key: string): TerrainType | undefined {
+  const terrain = getTerrainByKey(key);
+  if (!terrain?.relationship?.inverseOf) return undefined;
+  return getTerrainByKey(terrain.relationship.inverseOf);
+}
+
+/** Check if two tilesets can be layered (top over bottom). */
+export function canLayerTogether(topKey: string, bottomKey: string): boolean {
+  const top = getTerrainByKey(topKey);
+  const bottom = getTerrainByKey(bottomKey);
+  if (!top?.relationship || !bottom?.relationship) return false;
+  // Top's background must match bottom's subject
+  return top.relationship.to === bottom.relationship.from;
+}
+
+/** Get all tilesets that transition FROM a given terrain type. */
+export function getTilesetsForTerrain(terrainType: string): TerrainType[] {
+  return TERRAINS.filter((t) => t.relationship?.from === terrainType);
+}
 
 /** Helper: get terrain by 1-based number. */
 function t(n: number) { return TERRAINS[n - 1]; }
