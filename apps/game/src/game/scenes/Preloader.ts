@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { TILE_SIZE } from '../constants';
+import { FRAME_SIZE } from '../constants';
 import { TERRAINS } from '../terrain';
 
 export class Preloader extends Scene {
@@ -26,14 +26,14 @@ export class Preloader extends Scene {
 
     for (const terrain of TERRAINS) {
       this.load.spritesheet(terrain.key, `tilesets/${terrain.file}`, {
-        frameWidth: TILE_SIZE,
-        frameHeight: TILE_SIZE,
+        frameWidth: FRAME_SIZE,
+        frameHeight: FRAME_SIZE,
       });
     }
 
     this.load.spritesheet('ui-elements', 'ui/hud.png', {
-      frameWidth: TILE_SIZE,
-      frameHeight: TILE_SIZE,
+      frameWidth: FRAME_SIZE,
+      frameHeight: FRAME_SIZE,
     });
   }
 

@@ -1,3 +1,4 @@
+export const FRAME_SIZE = 48;   // actual pixel size in spritesheet PNGs
 export const TILE_SIZE = 48;
 export const SPRITE_SIZE = 48;
 

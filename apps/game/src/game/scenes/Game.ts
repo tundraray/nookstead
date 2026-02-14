@@ -1,6 +1,6 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { TILE_SIZE, MAP_WIDTH, MAP_HEIGHT } from '../constants';
+import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT } from '../constants';
 import { MapGenerator, IslandPass, ConnectivityPass, WaterBorderPass, AutotilePass } from '../mapgen';
 import { EMPTY_FRAME } from '../autotile';
 import type { GeneratedMap } from '../mapgen/types';
@@ -8,6 +8,7 @@ import type { GeneratedMap } from '../mapgen/types';
 export class Game extends Scene {
   private mapData!: GeneratedMap;
   private rt!: Phaser.GameObjects.RenderTexture;
+  private hover!: Phaser.GameObjects.Graphics;
 
   constructor() {
     super('Game');
@@ -35,11 +36,14 @@ export class Game extends Scene {
     const mapPixelW = MAP_WIDTH * TILE_SIZE;
     const mapPixelH = MAP_HEIGHT * TILE_SIZE;
 
-    // Render all layers to a single RenderTexture at native resolution.
-    // This eliminates sub-pixel seam artifacts at fractional zoom levels.
+    // Render all layers to a single RenderTexture.
+    // A stamp sprite scales 48px frames down to 32px tiles.
     this.rt = this.add.renderTexture(0, 0, mapPixelW, mapPixelH);
     const rt = this.rt;
     rt.setOrigin(0, 0);
+
+    const tileScale = TILE_SIZE / FRAME_SIZE;
+    const stamp = this.add.sprite(0, 0, '').setScale(tileScale).setOrigin(0, 0).setVisible(false);
 
     for (const layerData of this.mapData.layers) {
       for (let y = 0; y < MAP_HEIGHT; y++) {
@@ -47,15 +51,12 @@ export class Game extends Scene {
           const frame = layerData.frames[y][x];
           if (frame === EMPTY_FRAME) continue;
 
-          rt.drawFrame(
-            layerData.terrainKey,
-            frame,
-            x * TILE_SIZE,
-            y * TILE_SIZE,
-          );
+          stamp.setTexture(layerData.terrainKey, frame);
+          rt.draw(stamp, x * TILE_SIZE, y * TILE_SIZE);
         }
       }
     }
+    stamp.destroy();
 
     // Camera: center map in viewport
     const cam = this.cameras.main;
@@ -66,12 +67,37 @@ export class Game extends Scene {
     cam.setZoom(Math.min(zoomX, zoomY));
     cam.centerOn(mapPixelW / 2, mapPixelH / 2);
 
-    // Drag-scroll
+    // Tile hover highlight
+    this.hover = this.add.graphics();
+    this.hover.setDepth(1);
+    let prevTileX = -1;
+    let prevTileY = -1;
+
+    // Drag-scroll + hover
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
       if (pointer.isDown) {
         cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom;
         cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom;
+        this.hover.clear();
+        prevTileX = -1;
+        prevTileY = -1;
+        return;
       }
+
+      const tileX = Math.floor(pointer.worldX / TILE_SIZE);
+      const tileY = Math.floor(pointer.worldY / TILE_SIZE);
+
+      if (tileX === prevTileX && tileY === prevTileY) return;
+      prevTileX = tileX;
+      prevTileY = tileY;
+
+      this.hover.clear();
+      if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
+
+      this.hover.lineStyle(1, 0xffffff, 0.6);
+      this.hover.fillStyle(0xffffff, 0.12);
+      this.hover.fillRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      this.hover.strokeRect(tileX * TILE_SIZE, tileY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
     });
 
     // Mouse wheel zoom
