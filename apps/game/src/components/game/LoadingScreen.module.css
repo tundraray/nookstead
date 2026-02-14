@@ -1,0 +1,50 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a2e;
+  z-index: 20;
+  transition: opacity 0.4s ease-out;
+}
+
+.container {
+  text-align: center;
+}
+
+.title {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 3rem;
+  color: #e8d5b7;
+  margin: 0 0 2rem;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.barOuter {
+  width: 300px;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 0 auto;
+}
+
+.barInner {
+  height: 100%;
+  width: 40%;
+  background: #e8d5b7;
+  border-radius: 4px;
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+.text {
+  color: #a0a0b0;
+  font-size: 0.875rem;
+  margin-top: 1rem;
+}
+
+@keyframes loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}

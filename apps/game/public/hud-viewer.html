@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HUD Viewer</title>
+</head>
+<body style="background: #333; color: white;">
+    <h1>HUD Sprite Viewer</h1>
+    <div id="info">Loading...</div>
+    <div style="position: relative; display: inline-block;">
+        <img id="hud" src="/assets/ui/hud.png" onload="init()" style="opacity: 0.5;">
+        <canvas id="c" style="position: absolute; left: 0; top: 0;"></canvas>
+    </div>
+    <script>
+    function init() {
+        const img = document.getElementById('hud');
+        const c = document.getElementById('c');
+        const info = document.getElementById('info');
+        
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const ctx = c.getContext('2d');
+        
+        const TILE = 48;
+        const cols = img.naturalWidth / TILE;
+        const rows = img.naturalHeight / TILE;
+        
+        ctx.strokeStyle = '#00FF00';
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.lineWidth = 1;
+        
+        let idx = 0;
+        let mapping = [];
+        
+        for (let y = 0; y < img.naturalHeight; y += TILE) {
+            for (let x = 0; x < img.naturalWidth; x += TILE) {
+                ctx.strokeRect(x, y, TILE, TILE);
+                ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                ctx.fillRect(x, y, 25, 15);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillText(idx, x + 2, y + 12);
+                mapping.push({index: idx, x, y});
+                idx++;
+            }
+        }
+        
+        info.innerHTML = `Size: ${img.naturalWidth}x${img.naturalHeight} <br> Columns: ${cols}, Rows: ${rows} <br> Total Frames: ${idx}`;
+        console.log("HUD Mapping Info:", { width: img.naturalWidth, height: img.naturalHeight, cols, rows, total: idx });
+    }
+    </script>
+</body>
+</html>
