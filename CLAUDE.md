@@ -10,7 +10,7 @@ Nookstead is a 2D pixel art MMO / life sim / farming RPG with generative AI agen
 
 ## Nx Monorepo
 
-**Nx version:** 22.5.0. Config in `nx.json`. Uses npm workspaces (`"workspaces": ["apps/*"]` in root `package.json`).
+**Nx version:** 22.5.0. Config in `nx.json`. Uses pnpm workspaces (`pnpm-workspace.yaml`).
 
 ### Projects
 
@@ -55,45 +55,45 @@ Connected to Nx Cloud (ID: `698f7db0be3518f0d42a6547`). Default comparison base:
 
 ## Commands
 
-All commands use `npx nx` from the workspace root. Projects can be referenced by name (`game`) or package name (`@nookstead/game`).
+All commands use `pnpm nx` from the workspace root. Projects can be referenced by name (`game`) or package name (`@nookstead/game`).
 
 ```bash
 # Development
-npx nx dev game              # Start Next.js dev server (port 3000)
-npx nx build game            # Production build
-npx nx start game            # Start production server (requires build first)
+pnpm nx dev game              # Start Next.js dev server (port 3000)
+pnpm nx build game            # Production build
+pnpm nx start game            # Start production server (requires build first)
 
 # Testing
-npx nx test game             # Run Jest unit tests
-npx nx test game --testFile=specs/index.spec.tsx  # Run a single test file
-npx nx e2e game-e2e          # Run Playwright E2E tests (auto-starts dev server)
+pnpm nx test game             # Run Jest unit tests
+pnpm nx test game --testFile=specs/index.spec.tsx  # Run a single test file
+pnpm nx e2e game-e2e          # Run Playwright E2E tests (auto-starts dev server)
 
 # Code quality
-npx nx lint game             # ESLint
-npx nx typecheck game        # TypeScript type checking
+pnpm nx lint game             # ESLint
+pnpm nx typecheck game        # TypeScript type checking
 
 # Run multiple targets across all projects
-npx nx run-many -t lint test build typecheck e2e
+pnpm nx run-many -t lint test build typecheck e2e
 
 # Run a specific target only on affected projects (compared to base branch)
-npx nx affected -t test
-npx nx affected -t lint
+pnpm nx affected -t test
+pnpm nx affected -t lint
 
 # Explore
-npx nx graph                 # Open project/task graph in browser
-npx nx show project game     # Show all available targets for a project
-npx nx show project game --json  # Same but as JSON (useful for scripting)
-npx nx list                  # List installed plugins
-npx nx list @nx/next         # Show generators/executors for a plugin
+pnpm nx graph                 # Open project/task graph in browser
+pnpm nx show project game     # Show all available targets for a project
+pnpm nx show project game --json  # Same but as JSON (useful for scripting)
+pnpm nx list                  # List installed plugins
+pnpm nx list @nx/next         # Show generators/executors for a plugin
 
 # Generate new projects
-npx nx g @nx/next:app demo           # New Next.js app
-npx nx g @nx/react:lib mylib         # New React library
-npx nx g @nx/node:app server         # New Node.js app (for Colyseus server)
-npx nx g @nx/js:lib shared           # New JS/TS library (for shared types)
+pnpm nx g @nx/next:app demo           # New Next.js app
+pnpm nx g @nx/react:lib mylib         # New React library
+pnpm nx g @nx/node:app server         # New Node.js app (for Colyseus server)
+pnpm nx g @nx/js:lib shared           # New JS/TS library (for shared types)
 
 # Cache
-npx nx reset                 # Clear local Nx cache
+pnpm nx reset                 # Clear local Nx cache
 ```
 
 ## Code Style
@@ -116,6 +116,6 @@ The planned architecture has three layers:
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `master` and all PRs:
-`npx nx run-many -t lint test build typecheck e2e`
+`pnpm nx run-many -t lint test build typecheck e2e`
 
 Default base branch in Nx config is `master`.
