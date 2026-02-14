@@ -39,8 +39,8 @@ export const PANEL_DEFAULT = SLOT_NORMAL;
 export const SPRITES = {
   // Icons (approximate -- verify in image editor)
   coinIcon: [32, 32, 11, 11] as SpriteRect,
-  menuBtnNormal: [24, 32, 11, 11] as SpriteRect,
-  menuBtnHover: [35, 32, 11, 11] as SpriteRect,
+  menuBtnNormal: [928, 32, 32, 32] as SpriteRect,
+  menuBtnActive: [1248, 32, 32, 32] as SpriteRect,
 
   // Season icons
   seasonSpring: [0, 48, 11, 11] as SpriteRect,

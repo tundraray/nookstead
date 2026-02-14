@@ -1,6 +1,6 @@
 'use client';
 
-import { spriteCSSStyle } from './sprite';
+import { spriteNativeStyle } from './sprite';
 import { SPRITES } from './sprites';
 import styles from './MenuButton.module.css';
 
@@ -18,12 +18,12 @@ export function MenuButton({ onClick }: MenuButtonProps) {
     >
       <div
         className={styles.spriteNormal}
-        style={spriteCSSStyle(...SPRITES.menuBtnNormal)}
+        style={spriteNativeStyle(...SPRITES.menuBtnNormal)}
         aria-hidden="true"
       />
       <div
         className={styles.spriteHover}
-        style={spriteCSSStyle(...SPRITES.menuBtnHover)}
+        style={spriteNativeStyle(...SPRITES.menuBtnActive)}
         aria-hidden="true"
       />
     </button>
