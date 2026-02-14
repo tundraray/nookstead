@@ -1,0 +1,40 @@
+.button {
+  position: absolute;
+  bottom: calc(4px * var(--ui-scale));
+  right: calc(4px * var(--ui-scale));
+  border: none;
+  padding: 0;
+  background-color: transparent;
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.button:focus-visible {
+  outline: calc(2px * var(--ui-scale)) solid #ffdd57;
+  outline-offset: calc(1px * var(--ui-scale));
+}
+
+.button:hover .spriteNormal {
+  display: none;
+}
+
+.button:hover .spriteHover {
+  display: block;
+}
+
+.spriteHover {
+  display: none;
+}
+
+.button:active .spriteNormal,
+.button:active .spriteHover {
+  transform: translate(
+    calc(1px * var(--ui-scale)),
+    calc(1px * var(--ui-scale))
+  );
+}

@@ -7,7 +7,7 @@
     <h1>HUD Sprite Viewer</h1>
     <div id="info">Loading...</div>
     <div style="position: relative; display: inline-block;">
-        <img id="hud" src="/assets/ui/hud.png" onload="init()" style="opacity: 0.5;">
+        <img id="hud" src="/assets/ui/hud_32.png" onload="init()" style="opacity: 0.5;">
         <canvas id="c" style="position: absolute; left: 0; top: 0;"></canvas>
     </div>
     <script>
@@ -20,7 +20,7 @@
         c.height = img.naturalHeight;
         const ctx = c.getContext('2d');
         
-        const TILE = 48;
+        const TILE = 32;
         const cols = img.naturalWidth / TILE;
         const rows = img.naturalHeight / TILE;
         
