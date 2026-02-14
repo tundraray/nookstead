@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@nookstead/db": "*",
     "alea": "^1.0.1",
     "next": "~16.0.1",
     "react": "^19.0.0",
