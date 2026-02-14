@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo } from 'react';
-import styles from './LoadingScreen.module.css';
 
 interface LoadingScreenProps {
   visible: boolean;
@@ -23,13 +22,13 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
   if (!visible) return null;
 
   return (
-    <div className={styles.overlay}>
+    <div className="loading-screen">
       {/* Twinkling stars background */}
-      <div className={styles.stars} aria-hidden="true">
+      <div className="loading-screen__stars" aria-hidden="true">
         {stars.map((star) => (
           <span
             key={star.id}
-            className={styles.star}
+            className="loading-screen__star"
             style={{
               left: star.left,
               top: star.top,
@@ -40,28 +39,28 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
         ))}
       </div>
 
-      <div className={styles.content}>
+      <div className="loading-screen__content">
         {/* Floating logo with shadow */}
-        <div className={styles.logoWrapper}>
-          <h1 className={styles.logo}>NOOKSTEAD</h1>
-          <div className={styles.logoShadow} aria-hidden="true">
+        <div className="loading-screen__logo-wrapper">
+          <h1 className="loading-screen__logo">NOOKSTEAD</h1>
+          <div className="loading-screen__logo-shadow" aria-hidden="true">
             NOOKSTEAD
           </div>
         </div>
 
         {/* Pixel divider */}
-        <div className={styles.divider} aria-hidden="true">
+        <div className="loading-screen__divider" aria-hidden="true">
           <span />
           <span />
           <span />
         </div>
 
         {/* Progress bar */}
-        <div className={styles.barOuter}>
-          <div className={styles.barInner} />
+        <div className="loading-screen__bar-outer">
+          <div className="loading-screen__bar-inner" />
         </div>
 
-        <p className={styles.text}>Loading...</p>
+        <p className="loading-screen__text">Loading...</p>
       </div>
     </div>
   );

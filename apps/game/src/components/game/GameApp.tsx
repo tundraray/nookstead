@@ -6,7 +6,6 @@ import { LoadingScreen } from './LoadingScreen';
 import { HUD } from '@/components/hud/HUD';
 import { EventBus } from '@/game/EventBus';
 import { useEffect } from 'react';
-import styles from './GameApp.module.css';
 
 export function GameApp() {
   const phaserRef = useRef<IRefPhaserGame | null>(null);
@@ -25,7 +24,7 @@ export function GameApp() {
   }, []);
 
   return (
-    <div className={styles.wrapper}>
+    <div className="game-app">
       <LoadingScreen visible={loading} />
       <PhaserGame ref={phaserRef} currentActiveScene={onSceneReady} />
       {!loading && <HUD />}

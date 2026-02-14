@@ -2,7 +2,6 @@
 
 import { spriteNativeStyle } from './sprite';
 import { SPRITES } from './sprites';
-import styles from './MenuButton.module.css';
 
 interface MenuButtonProps {
   onClick: () => void;
@@ -11,18 +10,18 @@ interface MenuButtonProps {
 export function MenuButton({ onClick }: MenuButtonProps) {
   return (
     <button
-      className={styles.button}
+      className="menu-button"
       onClick={onClick}
       aria-label="Open game menu"
       data-interactive="true"
     >
       <div
-        className={styles.spriteNormal}
+        className="menu-button__sprite-normal"
         style={spriteNativeStyle(...SPRITES.menuBtnNormal)}
         aria-hidden="true"
       />
       <div
-        className={styles.spriteHover}
+        className="menu-button__sprite-hover"
         style={spriteNativeStyle(...SPRITES.menuBtnActive)}
         aria-hidden="true"
       />

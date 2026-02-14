@@ -3,7 +3,6 @@
 import { NineSlicePanel } from './NineSlicePanel';
 import { spriteCSSStyle } from './sprite';
 import { SPRITES } from './sprites';
-import styles from './CurrencyDisplay.module.css';
 
 interface CurrencyDisplayProps {
   gold: number;
@@ -14,18 +13,18 @@ export function CurrencyDisplay({ gold }: CurrencyDisplayProps) {
 
   return (
     <div
-      className={styles.wrapper}
+      className="currency-display"
       role="status"
       aria-label={`Gold: ${formatted}`}
     >
       <NineSlicePanel>
-        <div className={styles.content}>
+        <div className="currency-display__content">
           <div
-            className={styles.icon}
+            className="currency-display__icon"
             style={spriteCSSStyle(...SPRITES.coinIcon)}
             aria-hidden="true"
           />
-          <span className={styles.amount}>{formatted}</span>
+          <span className="currency-display__amount">{formatted}</span>
         </div>
       </NineSlicePanel>
     </div>

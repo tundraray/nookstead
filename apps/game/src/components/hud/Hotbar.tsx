@@ -2,7 +2,6 @@
 
 import { HotbarSlot } from './HotbarSlot';
 import type { HotbarItem } from './types';
-import styles from './Hotbar.module.css';
 
 interface HotbarProps {
   items: (HotbarItem | null)[];
@@ -13,11 +12,11 @@ interface HotbarProps {
 export function Hotbar({ items, selectedSlot, onSlotClick }: HotbarProps) {
   return (
     <nav
-      className={styles.wrapper}
+      className="hotbar"
       role="toolbar"
       aria-label="Hotbar — keys 1-0 to select"
     >
-      <div className={styles.slots}>
+      <div className="hotbar__slots">
         {items.map((item, i) => (
           <HotbarSlot
             key={i}
