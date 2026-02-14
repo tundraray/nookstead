@@ -1,0 +1,34 @@
+.wrapper {
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  left: calc(4px * var(--ui-scale));
+  opacity: 0.9;
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  padding: calc(2px * var(--ui-scale));
+  white-space: nowrap;
+}
+
+.seasonIcon {
+  flex-shrink: 0;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: calc(1px * var(--ui-scale));
+}
+
+.line {
+  font-size: calc(5px * var(--ui-scale));
+  line-height: 1;
+  color: #3b2819;
+}
+
+.time {
+  color: #6b4226;
+}

@@ -3,7 +3,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { PhaserGame, IRefPhaserGame } from './PhaserGame';
 import { LoadingScreen } from './LoadingScreen';
-import { GameHUD } from './GameHUD';
+import { HUD } from '@/components/hud/HUD';
 import { EventBus } from '@/game/EventBus';
 import { useEffect } from 'react';
 import styles from './GameApp.module.css';
@@ -28,7 +28,7 @@ export function GameApp() {
     <div className={styles.wrapper}>
       <LoadingScreen visible={loading} />
       <PhaserGame ref={phaserRef} currentActiveScene={onSceneReady} />
-      {!loading && <GameHUD />}
+      {!loading && <HUD />}
     </div>
   );
 }

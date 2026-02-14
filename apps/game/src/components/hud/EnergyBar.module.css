@@ -1,0 +1,45 @@
+.wrapper {
+  position: absolute;
+  right: calc(4px * var(--ui-scale));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(2px * var(--ui-scale));
+  opacity: 0.9;
+}
+
+.frame {
+  position: relative;
+}
+
+.track {
+  position: absolute;
+  top: calc(1px * var(--ui-scale));
+  left: calc(1px * var(--ui-scale));
+  width: calc(3px * var(--ui-scale));
+  height: calc(30px * var(--ui-scale));
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+
+.fill {
+  width: 100%;
+  transition: height 0.3s ease-out, background-color 0.3s ease-out;
+}
+
+.label {
+  font-family: var(--font-pixel);
+  font-size: calc(3px * var(--ui-scale));
+  color: #3b2819;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill {
+    transition: none;
+  }
+}
