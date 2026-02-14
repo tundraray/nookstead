@@ -15,6 +15,8 @@ interface TerrainLayer {
   terrainKey: string;
   isFill: boolean;
   isPresent: (type: TerrainCellType) => boolean;
+  /** Treat out-of-bounds cells as present (solid edges). */
+  oobPresent?: boolean;
 }
 
 /**
@@ -35,6 +37,7 @@ const LAYERS: TerrainLayer[] = [
     terrainKey: 'terrain-16', // deep_water_water
     isFill: false,
     isPresent: (type) => type === 'deep_water',
+    oobPresent: true,
   },
   {
     name: 'grass',
@@ -78,7 +81,7 @@ export class AutotilePass implements LayerPass {
       for (let x = 0; x < width; x++) {
         if (!layer.isPresent(grid[y][x].terrain)) continue;
 
-        const neighbors = this.computeNeighborMask(grid, x, y, width, height, layer.isPresent);
+        const neighbors = this.computeNeighborMask(grid, x, y, width, height, layer.isPresent, layer.oobPresent ?? false);
         frames[y][x] = getFrame(neighbors);
       }
     }
@@ -93,11 +96,14 @@ export class AutotilePass implements LayerPass {
     width: number,
     height: number,
     isPresent: (type: TerrainCellType) => boolean,
+    oobPresent: boolean,
   ): number {
     let mask = 0;
 
-    const check = (nx: number, ny: number): boolean =>
-      nx >= 0 && ny >= 0 && nx < width && ny < height && isPresent(grid[ny][nx].terrain);
+    const check = (nx: number, ny: number): boolean => {
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) return oobPresent;
+      return isPresent(grid[ny][nx].terrain);
+    };
 
     if (check(x, y - 1)) mask |= N;
     if (check(x + 1, y - 1)) mask |= NE;

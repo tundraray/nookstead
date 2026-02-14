@@ -36,13 +36,13 @@ export class Game extends Scene {
     const mapPixelW = MAP_WIDTH * TILE_SIZE;
     const mapPixelH = MAP_HEIGHT * TILE_SIZE;
 
+    const tileScale = TILE_SIZE / FRAME_SIZE;
+
     // Render all layers to a single RenderTexture.
-    // A stamp sprite scales 48px frames down to 32px tiles.
     this.rt = this.add.renderTexture(0, 0, mapPixelW, mapPixelH);
     const rt = this.rt;
     rt.setOrigin(0, 0);
 
-    const tileScale = TILE_SIZE / FRAME_SIZE;
     const stamp = this.add.sprite(0, 0, '').setScale(tileScale).setOrigin(0, 0).setVisible(false);
 
     for (const layerData of this.mapData.layers) {
@@ -60,7 +60,7 @@ export class Game extends Scene {
 
     // Camera: center map in viewport
     const cam = this.cameras.main;
-    cam.setBackgroundColor(0x1a1a2e);
+    cam.setBackgroundColor(0x215c81);
 
     const zoomX = this.scale.width / mapPixelW;
     const zoomY = this.scale.height / mapPixelH;
