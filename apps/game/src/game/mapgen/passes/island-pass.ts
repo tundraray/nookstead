@@ -78,8 +78,8 @@ export class IslandPass implements GenerationPass {
     const d = Math.sqrt(nx * nx + ny * ny) / Math.SQRT2;
 
     // Smooth falloff: 1 at center, 0 near edges.
-    // d * 1.0 = island fills ~70% of map, d * 1.3 = smaller island
-    const t = Math.max(0, 1 - d * 1.05);
+    // d * 1.0 = island fills ~70% of map, d * 0.85 = larger island
+    const t = Math.max(0, 1 - d * 0.85);
     return t * t * (3 - 2 * t); // smoothstep
   }
 
