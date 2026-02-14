@@ -2,7 +2,6 @@
 
 import { signIn } from 'next-auth/react';
 import { useState } from 'react';
-import styles from './LoginButton.module.css';
 
 interface LoginButtonProps {
   provider: 'google' | 'discord';
@@ -41,13 +40,13 @@ export function LoginButton({ provider }: LoginButtonProps) {
 
   return (
     <button
-      className={`${styles.button} ${styles[provider]}`}
+      className={`login-button login-button--${provider}`}
       onClick={handleClick}
       disabled={loading}
       type="button"
     >
-      <span className={styles.icon}>{config.icon}</span>
-      <span className={styles.label}>
+      <span className="login-button__icon">{config.icon}</span>
+      <span className="login-button__label">
         {loading ? 'Loading...' : `Sign in with ${config.label}`}
       </span>
     </button>

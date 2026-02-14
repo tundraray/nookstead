@@ -240,6 +240,85 @@ button {
 }
 
 /* ==========================================================================
+   Section 3b: Login Button
+   ========================================================================== */
+
+.login-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 320px;
+  padding: 14px 24px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: #e0e0e0;
+  background-color: #1a1a2e;
+  border: 2px solid #2a2a4a;
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s,
+    transform 0.1s,
+    box-shadow 0.15s;
+  image-rendering: pixelated;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 0 #0a0a1a;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  & .login-button__icon {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  & .login-button__label {
+    white-space: nowrap;
+  }
+}
+
+.login-button--google {
+  border-color: #4a3a2a;
+
+  &:hover:not(:disabled) {
+    background-color: #2a1a0a;
+    border-color: #db4437;
+  }
+}
+
+.login-button--discord {
+  border-color: #2a2a5a;
+
+  &:hover:not(:disabled) {
+    background-color: #1a1a3e;
+    border-color: #5865f2;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-button {
+    font-size: 0.55rem;
+    padding: 12px 16px;
+    gap: 8px;
+    max-width: 100%;
+  }
+}
+
+/* ==========================================================================
    Section 4: Game App Wrapper
    Full-viewport container for the Phaser canvas and React HUD overlay.
    ========================================================================== */
