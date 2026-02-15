@@ -320,15 +320,24 @@ button {
 
 /* ==========================================================================
    Section 4: Game App Wrapper
-   Full-viewport container for the Phaser canvas and React HUD overlay.
+   Flex column layout: fixed-height header + flexible canvas area.
    ========================================================================== */
 
 .game-app {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   width: 100vw;
   height: 100vh;
   overflow: hidden;
   background: #1a1a2e;
+}
+
+.game-canvas-area {
+  --ui-scale: 3;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ==========================================================================
@@ -451,7 +460,6 @@ button {
 /* --- HUD Container --- */
 
 .hud {
-  --ui-scale: 3;
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -503,160 +511,36 @@ button {
   }
 }
 
-/* --- Clock Panel --- */
+/* --- Clock Panel (deprecated — moved to GameHeader) --- */
+/* --- Currency Display (deprecated — moved to GameHeader) --- */
 
-.clock-panel {
-  position: absolute;
-  top: calc(4px * var(--ui-scale));
-  left: calc(4px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .clock-panel__content {
-    display: flex;
-    align-items: center;
-    gap: calc(2px * var(--ui-scale));
-    padding: calc(2px * var(--ui-scale));
-    white-space: nowrap;
-  }
-
-  & .clock-panel__season-icon {
-    flex-shrink: 0;
-  }
-
-  & .clock-panel__text {
-    display: flex;
-    flex-direction: column;
-    gap: calc(1px * var(--ui-scale));
-  }
-
-  & .clock-panel__line {
-    font-size: calc(5px * var(--ui-scale));
-    line-height: 1;
-    color: #3b2819;
-  }
-
-  & .clock-panel__time {
-    color: #6b4226;
-  }
-}
-
-/* --- Currency Display --- */
-
-.currency-display {
-  position: absolute;
-  top: calc(4px * var(--ui-scale));
-  right: calc(4px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .currency-display__content {
-    display: flex;
-    align-items: center;
-    gap: calc(2px * var(--ui-scale));
-    padding: calc(2px * var(--ui-scale));
-    white-space: nowrap;
-  }
-
-  & .currency-display__icon {
-    flex-shrink: 0;
-  }
-
-  & .currency-display__amount {
-    font-size: calc(5px * var(--ui-scale));
-    line-height: 1;
-    color: #daa520;
-    font-family: var(--font-pixel);
-  }
-}
-
-/* --- Menu Button --- */
+/* --- Menu Button (Settings) --- */
 
 .menu-button {
   position: absolute;
-  bottom: calc(4px * var(--ui-scale));
+  top: calc(4px * var(--ui-scale));
   right: calc(4px * var(--ui-scale));
+  background: none;
   border: none;
+  cursor: pointer;
   padding: 0;
-  background-color: transparent;
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  outline: none;
-  -webkit-tap-highlight-color: transparent;
+  z-index: 1;
+}
 
-  &:focus-visible {
-    outline: calc(2px * var(--ui-scale)) solid #ffdd57;
-    outline-offset: calc(1px * var(--ui-scale));
-  }
-
-  &:hover .menu-button__sprite-normal {
-    display: none;
-  }
-
-  &:hover .menu-button__sprite-hover {
-    display: block;
-  }
-
-  &:active .menu-button__sprite-normal,
-  &:active .menu-button__sprite-hover {
-    transform: translate(
-      calc(1px * var(--ui-scale)),
-      calc(1px * var(--ui-scale))
-    );
-  }
+.menu-button__sprite-normal {
+  display: block;
 }
 
 .menu-button__sprite-hover {
   display: none;
 }
 
-/* --- Energy Bar --- */
-
-.energy-bar {
-  position: absolute;
-  right: calc(4px * var(--ui-scale));
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .energy-bar__frame {
-    position: relative;
-  }
-
-  & .energy-bar__track {
-    position: absolute;
-    top: calc(1px * var(--ui-scale));
-    left: calc(1px * var(--ui-scale));
-    width: calc(3px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    overflow: hidden;
-  }
-
-  & .energy-bar__fill {
-    width: 100%;
-    transition: height 0.3s ease-out, background-color 0.3s ease-out;
-  }
-
-  & .energy-bar__label {
-    font-family: var(--font-pixel);
-    font-size: calc(3px * var(--ui-scale));
-    color: #3b2819;
-    text-align: center;
-  }
+.menu-button:hover .menu-button__sprite-normal {
+  display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .energy-bar__fill {
-    transition: none;
-  }
+.menu-button:hover .menu-button__sprite-hover {
+  display: block;
 }
 
 /* --- Hotbar --- */
@@ -746,5 +630,158 @@ button {
       -1px 0 0 #000,
       0 1px 0 #000,
       0 -1px 0 #000;
+  }
+}
+
+/* ==========================================================================
+   Section 7: Game Header
+   Persistent pixel-art header bar with logo, clock, navigation, and currency.
+   All dimensions derived from --tile (32px) for pixel-perfect sprite alignment.
+   ========================================================================== */
+
+@keyframes header-glow-pulse {
+  0%, 100% {
+    text-shadow:
+      0 0 calc(var(--tile) * 0.25) rgba(72, 199, 170, 0.4),
+      0 0 calc(var(--tile) * 0.5) rgba(72, 199, 170, 0.2),
+      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
+  }
+  50% {
+    text-shadow:
+      0 0 calc(var(--tile) * 0.5) rgba(72, 199, 170, 0.6),
+      0 0 var(--tile) rgba(72, 199, 170, 0.3),
+      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
+  }
+}
+
+.game-header {
+  --tile: 32px;
+
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  height: var(--tile);
+  background: #f2e2c4;
+  border-bottom: calc(var(--tile) / 16) solid #6b4226;
+  box-shadow: 0 calc(var(--tile) / 16) 0 rgba(44, 26, 14, 0.3);
+  font-family: var(--font-pixel);
+  color: #3b2819;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+
+  & * {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+    image-rendering: pixelated;
+  }
+
+  & .game-header__content {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--tile) * 0.25);
+    padding: 0 calc(var(--tile) * 0.25);
+    height: 100%;
+    white-space: nowrap;
+  }
+}
+
+/* --- Logo Zone --- */
+
+.game-header__logo-zone {
+  flex-shrink: 0;
+}
+
+.game-header__logo {
+  font-family: var(--font-pixel);
+  color: #48c7aa;
+  letter-spacing: calc(var(--tile) / 32);
+  animation: header-glow-pulse 3s ease-in-out infinite;
+  user-select: none;
+}
+
+/* --- Clock Zone --- */
+
+.game-header__clock-zone {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--tile) * 0.125);
+  flex-shrink: 0;
+}
+
+.game-header__season-icon {
+  flex-shrink: 0;
+}
+
+.game-header__clock-text {
+  display: flex;
+  gap: calc(var(--tile) * 0.125);
+  align-items: baseline;
+}
+
+.game-header__day {
+  font-size: calc(var(--tile) * 0.25);
+  line-height: 1;
+  color: #3b2819;
+}
+
+.game-header__time {
+  font-size: calc(var(--tile) * 0.25);
+  line-height: 1;
+  color: #6b4226;
+}
+
+/* --- Currency Zone --- */
+
+.game-header__currency-zone {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--tile) * 0.125);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.game-header__coin-icon {
+  flex-shrink: 0;
+}
+
+.game-header__gold-amount {
+  font-size: calc(var(--tile) * 0.25);
+  line-height: 1;
+  color: #daa520;
+  font-family: var(--font-pixel);
+}
+
+/* --- Header Responsive --- */
+
+@media (max-width: 639px) {
+  .game-header__logo {
+    font-size: 0;
+  }
+
+  .game-header__logo::after {
+    content: 'N';
+    font-size: calc(var(--tile) * 0.25);
+    color: #48c7aa;
+    animation: header-glow-pulse 3s ease-in-out infinite;
+  }
+
+  .game-header__day {
+    display: none;
+  }
+
+  .game-header__gold-amount {
+    font-size: calc(var(--tile) * 0.1875);
+  }
+}
+
+/* --- Reduced Motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .game-header__logo {
+    animation: none;
+    text-shadow:
+      0 0 calc(var(--tile) * 0.375) rgba(72, 199, 170, 0.5),
+      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
   }
 }
