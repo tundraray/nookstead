@@ -513,54 +513,34 @@ button {
 
 /* --- Clock Panel (deprecated — moved to GameHeader) --- */
 /* --- Currency Display (deprecated — moved to GameHeader) --- */
-/* --- Menu Button (deprecated — replaced by GameHeader nav) --- */
 
-/* --- Energy Bar --- */
+/* --- Menu Button (Settings) --- */
 
-.energy-bar {
+.menu-button {
   position: absolute;
+  top: calc(4px * var(--ui-scale));
   right: calc(4px * var(--ui-scale));
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .energy-bar__frame {
-    position: relative;
-  }
-
-  & .energy-bar__track {
-    position: absolute;
-    top: calc(1px * var(--ui-scale));
-    left: calc(1px * var(--ui-scale));
-    width: calc(3px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    overflow: hidden;
-  }
-
-  & .energy-bar__fill {
-    width: 100%;
-    transition: height 0.3s ease-out, background-color 0.3s ease-out;
-  }
-
-  & .energy-bar__label {
-    font-family: var(--font-pixel);
-    font-size: calc(3px * var(--ui-scale));
-    color: #3b2819;
-    text-align: center;
-  }
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  z-index: 1;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .energy-bar__fill {
-    transition: none;
-  }
+.menu-button__sprite-normal {
+  display: block;
+}
+
+.menu-button__sprite-hover {
+  display: none;
+}
+
+.menu-button:hover .menu-button__sprite-normal {
+  display: none;
+}
+
+.menu-button:hover .menu-button__sprite-hover {
+  display: block;
 }
 
 /* --- Hotbar --- */
@@ -680,8 +660,7 @@ button {
   position: relative;
   z-index: 5;
   flex-shrink: 0;
-  /* height = 1 tile + 0.5 tile padding = 1.5 tiles */
-  height: calc(var(--tile) * 1.5);
+  height: var(--tile);
   background: #f2e2c4;
   border-bottom: calc(var(--tile) / 16) solid #6b4226;
   box-shadow: 0 calc(var(--tile) / 16) 0 rgba(44, 26, 14, 0.3);
@@ -700,10 +679,8 @@ button {
   & .game-header__content {
     display: flex;
     align-items: center;
-    /* gap = 0.375 tile (12px) */
-    gap: calc(var(--tile) * 0.375);
-    /* padding: 0.25 tile vertical, 0.5 tile horizontal */
-    padding: calc(var(--tile) * 0.25) calc(var(--tile) * 0.5);
+    gap: calc(var(--tile) * 0.25);
+    padding: 0 calc(var(--tile) * 0.25);
     height: 100%;
     white-space: nowrap;
   }
@@ -717,10 +694,8 @@ button {
 
 .game-header__logo {
   font-family: var(--font-pixel);
-  /* font-size ≈ 0.4375 tile (14px) */
-  font-size: calc(var(--tile) * 0.4375);
   color: #48c7aa;
-  letter-spacing: calc(var(--tile) / 16);
+  letter-spacing: calc(var(--tile) / 32);
   animation: header-glow-pulse 3s ease-in-out infinite;
   user-select: none;
 }
@@ -730,8 +705,7 @@ button {
 .game-header__clock-zone {
   display: flex;
   align-items: center;
-  /* gap = 0.1875 tile (6px) */
-  gap: calc(var(--tile) * 0.1875);
+  gap: calc(var(--tile) * 0.125);
   flex-shrink: 0;
 }
 
@@ -741,13 +715,11 @@ button {
 
 .game-header__clock-text {
   display: flex;
-  /* gap = 0.25 tile (8px) */
-  gap: calc(var(--tile) * 0.25);
+  gap: calc(var(--tile) * 0.125);
   align-items: baseline;
 }
 
 .game-header__day {
-  /* font-size = 0.25 tile (8px) */
   font-size: calc(var(--tile) * 0.25);
   line-height: 1;
   color: #3b2819;
@@ -759,103 +731,12 @@ button {
   color: #6b4226;
 }
 
-/* --- Navigation Zone --- */
-
-.game-header__nav-zone {
-  display: flex;
-  align-items: center;
-  /* gap = 0.125 tile (4px) */
-  gap: calc(var(--tile) * 0.125);
-  flex: 1;
-  justify-content: center;
-}
-
-.game-header__nav-item {
-  position: relative;
-}
-
-.game-header__nav-icon {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--tile) / 16);
-  border: none;
-  /* padding = 0.125 tile (4px) */
-  padding: calc(var(--tile) * 0.125);
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-  /* min touch target = 1.25 tiles (40px) — meets 44px at tile ≥ 36px */
-  min-width: calc(var(--tile) * 1.25);
-  min-height: calc(var(--tile) * 1.25);
-  justify-content: center;
-  transition: transform 0.1s ease-out;
-  -webkit-tap-highlight-color: transparent;
-
-  &:hover {
-    transform: translateY(calc(var(--tile) / -32));
-    filter: brightness(1.15);
-  }
-
-  &:active {
-    transform: translate(
-      calc(var(--tile) / 32),
-      calc(var(--tile) / 32)
-    );
-  }
-
-  &:focus-visible {
-    outline: calc(var(--tile) / 16) solid #ffdd57;
-    outline-offset: calc(var(--tile) / 16);
-  }
-}
-
-.game-header__nav-icon--active {
-  background: rgba(218, 165, 32, 0.15);
-  border: calc(var(--tile) / 16) solid #daa520;
-  filter: brightness(1.1);
-}
-
-.game-header__nav-sprite {
-  flex-shrink: 0;
-}
-
-.game-header__nav-label {
-  font-family: var(--font-pixel);
-  /* font-size ≈ 0.21875 tile (7px) */
-  font-size: calc(var(--tile) * 0.21875);
-  line-height: 1;
-  color: #3b2819;
-}
-
-/* --- Nav Tooltip --- */
-
-.game-header__tooltip {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: calc(var(--tile) * 0.125);
-  padding: calc(var(--tile) * 0.125) calc(var(--tile) * 0.25);
-  background: #f2e2c4;
-  border: calc(var(--tile) / 16) solid #6b4226;
-  font-family: var(--font-pixel);
-  font-size: calc(var(--tile) * 0.21875);
-  color: #3b2819;
-  white-space: nowrap;
-  z-index: 20;
-  pointer-events: none;
-  filter: drop-shadow(
-    calc(var(--tile) / 32) calc(var(--tile) / 32) 0 rgba(44, 26, 14, 0.5)
-  );
-}
-
 /* --- Currency Zone --- */
 
 .game-header__currency-zone {
   display: flex;
   align-items: center;
-  gap: calc(var(--tile) * 0.1875);
+  gap: calc(var(--tile) * 0.125);
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -865,8 +746,7 @@ button {
 }
 
 .game-header__gold-amount {
-  /* font-size ≈ 0.3125 tile (10px) */
-  font-size: calc(var(--tile) * 0.3125);
+  font-size: calc(var(--tile) * 0.25);
   line-height: 1;
   color: #daa520;
   font-family: var(--font-pixel);
@@ -881,7 +761,7 @@ button {
 
   .game-header__logo::after {
     content: 'N';
-    font-size: calc(var(--tile) * 0.4375);
+    font-size: calc(var(--tile) * 0.25);
     color: #48c7aa;
     animation: header-glow-pulse 3s ease-in-out infinite;
   }
@@ -890,12 +770,8 @@ button {
     display: none;
   }
 
-  .game-header__nav-label {
-    display: none;
-  }
-
   .game-header__gold-amount {
-    font-size: calc(var(--tile) * 0.25);
+    font-size: calc(var(--tile) * 0.1875);
   }
 }
 
@@ -907,9 +783,5 @@ button {
     text-shadow:
       0 0 calc(var(--tile) * 0.375) rgba(72, 199, 170, 0.5),
       calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
-  }
-
-  .game-header__nav-icon {
-    transition: none;
   }
 }

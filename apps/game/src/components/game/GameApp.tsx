@@ -45,7 +45,7 @@ export function GameApp() {
 
   return (
     <div className="game-app">
-      <GameHeader />
+      {!loading && <GameHeader />}
       <div
         className="game-canvas-area"
         ref={canvasAreaRef}

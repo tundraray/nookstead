@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { EventBus } from '@/game/EventBus';
-import { EnergyBar } from './EnergyBar';
 import { Hotbar } from './Hotbar';
+import { MenuButton } from './MenuButton';
 import type { HUDState } from './types';
 
 interface HUDProps {
@@ -11,30 +11,13 @@ interface HUDProps {
 }
 
 const DEFAULT_HUD_STATE: Omit<HUDState, 'day' | 'time' | 'season' | 'gold'> = {
-  energy: 100,
-  maxEnergy: 100,
   hotbarItems: Array(10).fill(null),
   selectedSlot: 0,
 };
 
 export function HUD({ uiScale }: HUDProps) {
-  const [energy, setEnergy] = useState(DEFAULT_HUD_STATE.energy);
-  const [maxEnergy, setMaxEnergy] = useState(DEFAULT_HUD_STATE.maxEnergy);
   const [hotbarItems] = useState(DEFAULT_HUD_STATE.hotbarItems);
   const [selectedSlot, setSelectedSlot] = useState(DEFAULT_HUD_STATE.selectedSlot);
-
-  // EventBus: energy updates from Phaser
-  useEffect(() => {
-    const onEnergy = (e: number, max: number) => {
-      setEnergy(e);
-      setMaxEnergy(max);
-    };
-
-    EventBus.on('hud:energy', onEnergy);
-    return () => {
-      EventBus.removeListener('hud:energy', onEnergy);
-    };
-  }, []);
 
   // Keyboard: hotbar slot selection (1-0)
   useEffect(() => {
@@ -58,7 +41,7 @@ export function HUD({ uiScale }: HUDProps) {
       role="region"
       aria-label="Game heads-up display"
     >
-      <EnergyBar energy={energy} maxEnergy={maxEnergy} />
+      <MenuButton onClick={() => EventBus.emit('hud:menu-toggle')} />
       <Hotbar
         items={hotbarItems}
         selectedSlot={selectedSlot}

@@ -3,10 +3,7 @@
 import { Press_Start_2P } from 'next/font/google';
 import { spriteNativeStyle } from '@/components/hud/sprite';
 import { SPRITES } from '@/components/hud/sprites';
-import { NAV_ITEMS } from './constants';
-import { NavIcon } from './NavIcon';
 import { useHeaderState } from './useHeaderState';
-import { useKeyboardShortcuts } from './useKeyboardShortcuts';
 import type { Season, SpriteRect } from '@/components/hud/types';
 
 const pixelFont = Press_Start_2P({
@@ -24,8 +21,7 @@ const SEASON_SPRITES: Record<Season, SpriteRect> = {
 };
 
 export function GameHeader() {
-  const { state, togglePanel, closePanel } = useHeaderState();
-  useKeyboardShortcuts(togglePanel, closePanel, state.activePanel);
+  const { state } = useHeaderState();
 
   const seasonSprite = SEASON_SPRITES[state.season];
   const formattedGold = state.gold.toLocaleString();
@@ -60,21 +56,6 @@ export function GameHeader() {
             <span className="game-header__time">{state.time}</span>
           </span>
         </div>
-
-        {/* Navigation Zone */}
-        <nav
-          className="game-header__nav-zone"
-          aria-label="Game navigation"
-        >
-          {NAV_ITEMS.map((item) => (
-            <NavIcon
-              key={item.id}
-              item={item}
-              isActive={state.activePanel === item.id}
-              onClick={() => togglePanel(item.id)}
-            />
-          ))}
-        </nav>
 
         {/* Currency Zone */}
         <div

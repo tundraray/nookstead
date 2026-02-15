@@ -1,15 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { EventBus } from '@/game/EventBus';
-import type { HeaderState, PanelId, Season } from '@/components/hud/types';
+import type { HeaderState, Season } from '@/components/hud/types';
 
 const DEFAULT_HEADER_STATE: HeaderState = {
   day: 1,
   time: '08:00',
   season: 'spring',
   gold: 0,
-  activePanel: null,
 };
 
 export function useHeaderState() {
@@ -28,26 +27,5 @@ export function useHeaderState() {
     };
   }, []);
 
-  const togglePanel = useCallback((panelId: PanelId) => {
-    setState((s) => {
-      const newPanel = s.activePanel === panelId ? null : panelId;
-      if (newPanel) {
-        EventBus.emit(`hud:open-panel:${newPanel}`);
-      } else {
-        EventBus.emit('hud:close-panel');
-      }
-      return { ...s, activePanel: newPanel };
-    });
-  }, []);
-
-  const closePanel = useCallback(() => {
-    setState((s) => {
-      if (s.activePanel) {
-        EventBus.emit('hud:close-panel');
-      }
-      return { ...s, activePanel: null };
-    });
-  }, []);
-
-  return { state, togglePanel, closePanel };
+  return { state };
 }
