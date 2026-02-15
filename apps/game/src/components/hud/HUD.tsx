@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { EventBus } from '@/game/EventBus';
 import { Hotbar } from './Hotbar';
+import { GameModal } from './GameModal';
 import { MenuButton } from './MenuButton';
 import type { HUDState } from './types';
 
@@ -18,6 +19,7 @@ const DEFAULT_HUD_STATE: Omit<HUDState, 'day' | 'time' | 'season' | 'gold'> = {
 export function HUD({ uiScale }: HUDProps) {
   const [hotbarItems] = useState(DEFAULT_HUD_STATE.hotbarItems);
   const [selectedSlot, setSelectedSlot] = useState(DEFAULT_HUD_STATE.selectedSlot);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Keyboard: hotbar slot selection (1-0)
   useEffect(() => {
@@ -41,7 +43,7 @@ export function HUD({ uiScale }: HUDProps) {
       role="region"
       aria-label="Game heads-up display"
     >
-      <MenuButton onClick={() => EventBus.emit('hud:menu-toggle')} />
+      <MenuButton onClick={() => setSettingsOpen(true)} />
       <Hotbar
         items={hotbarItems}
         selectedSlot={selectedSlot}
@@ -50,6 +52,13 @@ export function HUD({ uiScale }: HUDProps) {
           EventBus.emit('hud:select-slot', i);
         }}
       />
+      <GameModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        title="Settings"
+      >
+        <p>Settings content goes here</p>
+      </GameModal>
     </div>
   );
 }

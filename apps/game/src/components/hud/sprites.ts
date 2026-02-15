@@ -1,51 +1,74 @@
 import type { NineSliceSet, SpriteRect } from './types';
+import { TILE_SIZE, tileRect, tileRectCentered } from './sprite';
 
-/** Tile size in the sprite sheet (px). Matches --tile in CSS. */
-export const TILE = 32;
+/**
+ * Named regions in hud_32.png (32px tile grid, 61 columns).
+ * Use tileRect(position) to compute [x, y, w, h] from a 1-indexed tile number.
+ * All coordinates are expressed relative to TILE_SIZE (T).
+ *
+ * IMPORTANT: Values are APPROXIMATE. Must be verified at 1:1 zoom
+ * in an image editor before production use.
+ */
 
-/** Returns a SpriteRect for a full tile at grid position (col, row). */
-function tile(col: number, row: number): SpriteRect {
-  return [col * TILE, row * TILE, TILE, TILE];
-}
+const T = TILE_SIZE;
 
-// 9-slice: slot normal
+// 9-slice: slot normal (tile 1102)
 export const SLOT_NORMAL: NineSliceSet = {
-  cornerTL: tile(3, 18),
-  edgeT: tile(4, 18),
-  cornerTR: tile(5, 18),
-  edgeL: tile(3, 19),
-  center: tile(4, 19),
-  edgeR: tile(5, 19),
-  cornerBL: tile(3, 20),
-  edgeB: tile(4, 20),
-  cornerBR: tile(5, 20),
+  cornerTL: tileRect(1102),
+  edgeT: tileRect(1103),
+  cornerTR: tileRect(1104),
+  edgeL: tileRect(1163),
+  center: tileRect(1164),
+  edgeR: tileRect(1165),
+  cornerBL: tileRect(1224),
+  edgeB: tileRect(1225),
+  cornerBR: tileRect(1226),
 };
 
-// 9-slice: slot selected
+// 9-slice: slot selected (tile 614)
 export const SLOT_SELECTED: NineSliceSet = {
-  cornerTL: tile(3, 10),
-  edgeT: tile(4, 10),
-  cornerTR: tile(5, 10),
-  edgeL: tile(3, 11),
-  center: tile(4, 11),
-  edgeR: tile(5, 11),
-  cornerBL: tile(3, 12),
-  edgeB: tile(4, 12),
-  cornerBR: tile(5, 12),
+  cornerTL: tileRect(614),
+  edgeT: tileRect(615),
+  cornerTR: tileRect(616),
+  edgeL: tileRect(675),
+  center: tileRect(676),
+  edgeR: tileRect(677),
+  cornerBL: tileRect(736),
+  edgeB: tileRect(737),
+  cornerBR: tileRect(738),
+};
+
+// 9-slice: modal panel (tile 1)
+export const PANEL_MODAL: NineSliceSet = {
+  cornerTL: tileRect(1),
+  edgeT: tileRect(2),
+  cornerTR: tileRect(3),
+  edgeL: tileRect(62),
+  center: tileRect(63),
+  edgeR: tileRect(64),
+  cornerBL: tileRect(123),
+  edgeB: tileRect(124),
+  cornerBR: tileRect(125),
 };
 
 // Default panel style (reuses slot normal frame)
 export const PANEL_DEFAULT = SLOT_NORMAL;
 
 export const SPRITES = {
-  // Sub-tile icons (pixel coords — not tile-aligned)
-  coinIcon: [32, 32, 11, 11] as SpriteRect,
-  seasonSpring: [0, 48, 11, 11] as SpriteRect,
-  seasonSummer: [11, 48, 11, 11] as SpriteRect,
-  seasonAutumn: [21, 48, 11, 11] as SpriteRect,
-  seasonWinter: [32, 48, 11, 11] as SpriteRect,
+  // Icons
+  coinIcon: tileRect(63, 11, 11),
+  menuBtnNormal: tileRect(91),
+  menuBtnActive: tileRect(101),
 
-  // Menu buttons
-  menuBtnNormal: tile(29, 1),
-  menuBtnActive: tile(39, 1),
+  // Season icons (sub-tile sprites at y = 1.5 * T)
+  seasonSpring: [0, T + T / 2, 11, 11] as SpriteRect,
+  seasonSummer: [11, T + T / 2, 11, 11] as SpriteRect,
+  seasonAutumn: [21, T + T / 2, 11, 11] as SpriteRect,
+  seasonWinter: [T, T + T / 2, 11, 11] as SpriteRect,
+
+  // Modal
+  closeIcon: tileRectCentered(20, T / 2),
+  headerLeft: tileRect(1404),
+  headerCenter: tileRect(1405),
+  headerRight: tileRect(1406),
 } as const;
