@@ -90,7 +90,9 @@ export class ConnectivityPass implements GenerationPass {
         label[y][x] = componentId;
 
         while (stack.length > 0) {
-          const [cx, cy] = stack.pop()!;
+          const popped = stack.pop();
+          if (!popped) break;
+          const [cx, cy] = popped;
           cells.push([cx, cy]);
 
           if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) {
@@ -140,7 +142,9 @@ export class ConnectivityPass implements GenerationPass {
     const dy = [1, -1, 0, 0];
 
     while (stack.length > 0) {
-      const [cx, cy] = stack.pop()!;
+      const popped = stack.pop();
+      if (!popped) break;
+      const [cx, cy] = popped;
       size++;
 
       for (let i = 0; i < 4; i++) {
