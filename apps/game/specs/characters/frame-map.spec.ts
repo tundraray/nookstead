@@ -78,10 +78,10 @@ describe('getAnimationDefs', () => {
   describe('idle animations', () => {
     // base = 1 * COLS = 57
 
-    it('should have idle_left frames [57..62]', () => {
+    it('should have idle_right frames [57..62]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_idle_left'),
-        'idle_left'
+        defs.find((d) => d.key === 'char-scout_idle_right'),
+        'idle_right'
       );
       expect(def.frames).toEqual([57, 58, 59, 60, 61, 62]);
     });
@@ -94,10 +94,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([63, 64, 65, 66, 67, 68]);
     });
 
-    it('should have idle_right frames [69..74]', () => {
+    it('should have idle_left frames [69..74]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_idle_right'),
-        'idle_right'
+        defs.find((d) => d.key === 'char-scout_idle_left'),
+        'idle_left'
       );
       expect(def.frames).toEqual([69, 70, 71, 72, 73, 74]);
     });
@@ -123,10 +123,10 @@ describe('getAnimationDefs', () => {
   describe('walk animations', () => {
     // base = 2 * COLS = 114
 
-    it('should have walk_left frames [114..119]', () => {
+    it('should have walk_right frames [114..119]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_walk_left'),
-        'walk_left'
+        defs.find((d) => d.key === 'char-scout_walk_right'),
+        'walk_right'
       );
       expect(def.frames).toEqual([114, 115, 116, 117, 118, 119]);
     });
@@ -139,10 +139,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([120, 121, 122, 123, 124, 125]);
     });
 
-    it('should have walk_right frames [126..131]', () => {
+    it('should have walk_left frames [126..131]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_walk_right'),
-        'walk_right'
+        defs.find((d) => d.key === 'char-scout_walk_left'),
+        'walk_left'
       );
       expect(def.frames).toEqual([126, 127, 128, 129, 130, 131]);
     });
@@ -199,14 +199,14 @@ describe('getAnimationDefs', () => {
     });
   });
 
-  // --- sit (row 4, 3 frames per direction, DIFFERENT direction order: LEFT, DOWN, RIGHT, UP) ---
+  // --- sit (row 4, 3 frames per direction, DIFFERENT direction order: RIGHT, DOWN, LEFT, UP) ---
   describe('sit animations', () => {
     // base = 4 * COLS = 228
 
-    it('should have sit_left frames [228..230]', () => {
+    it('should have sit_right frames [228..230]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_sit_left'),
-        'sit_left'
+        defs.find((d) => d.key === 'char-scout_sit_right'),
+        'sit_right'
       );
       expect(def.frames).toEqual([228, 229, 230]);
     });
@@ -219,10 +219,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([231, 232, 233]);
     });
 
-    it('should have sit_right frames [234..236]', () => {
+    it('should have sit_left frames [234..236]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_sit_right'),
-        'sit_right'
+        defs.find((d) => d.key === 'char-scout_sit_left'),
+        'sit_left'
       );
       expect(def.frames).toEqual([234, 235, 236]);
     });
@@ -248,10 +248,10 @@ describe('getAnimationDefs', () => {
   describe('hit animations', () => {
     // base = 13 * COLS = 741
 
-    it('should have hit_left frames [741..746]', () => {
+    it('should have hit_right frames [741..746]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_hit_left'),
-        'hit_left'
+        defs.find((d) => d.key === 'char-scout_hit_right'),
+        'hit_right'
       );
       expect(def.frames).toEqual([741, 742, 743, 744, 745, 746]);
     });
@@ -264,10 +264,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([747, 748, 749, 750, 751, 752]);
     });
 
-    it('should have hit_right frames [753..758]', () => {
+    it('should have hit_left frames [753..758]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_hit_right'),
-        'hit_right'
+        defs.find((d) => d.key === 'char-scout_hit_left'),
+        'hit_left'
       );
       expect(def.frames).toEqual([753, 754, 755, 756, 757, 758]);
     });
@@ -293,10 +293,10 @@ describe('getAnimationDefs', () => {
   describe('punch animations', () => {
     // base = 14 * COLS = 798
 
-    it('should have punch_left frames [798..803]', () => {
+    it('should have punch_right frames [798..803]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_punch_left'),
-        'punch_left'
+        defs.find((d) => d.key === 'char-scout_punch_right'),
+        'punch_right'
       );
       expect(def.frames).toEqual([798, 799, 800, 801, 802, 803]);
     });
@@ -309,10 +309,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([804, 805, 806, 807, 808, 809]);
     });
 
-    it('should have punch_right frames [810..815]', () => {
+    it('should have punch_left frames [810..815]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_punch_right'),
-        'punch_right'
+        defs.find((d) => d.key === 'char-scout_punch_left'),
+        'punch_left'
       );
       expect(def.frames).toEqual([810, 811, 812, 813, 814, 815]);
     });
@@ -338,10 +338,10 @@ describe('getAnimationDefs', () => {
   describe('hurt animations', () => {
     // base = 19 * COLS = 1083
 
-    it('should have hurt_left frames [1083..1086]', () => {
+    it('should have hurt_right frames [1083..1086]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_hurt_left'),
-        'hurt_left'
+        defs.find((d) => d.key === 'char-scout_hurt_right'),
+        'hurt_right'
       );
       expect(def.frames).toEqual([1083, 1084, 1085, 1086]);
     });
@@ -354,10 +354,10 @@ describe('getAnimationDefs', () => {
       expect(def.frames).toEqual([1087, 1088, 1089, 1090]);
     });
 
-    it('should have hurt_right frames [1091..1094]', () => {
+    it('should have hurt_left frames [1091..1094]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_hurt_right'),
-        'hurt_right'
+        defs.find((d) => d.key === 'char-scout_hurt_left'),
+        'hurt_left'
       );
       expect(def.frames).toEqual([1091, 1092, 1093, 1094]);
     });

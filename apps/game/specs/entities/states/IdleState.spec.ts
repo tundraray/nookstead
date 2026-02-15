@@ -10,7 +10,7 @@ function createMockContext(
   return {
     sheetKey: 'char-scout',
     facingDirection: 'down',
-    input: {
+    inputController: {
       getDirection: jest.fn().mockReturnValue({ x: 0, y: 0 }),
       isMoving: jest.fn().mockReturnValue(false),
       getFacingDirection: jest.fn().mockReturnValue('down'),
@@ -89,7 +89,7 @@ describe('IdleState', () => {
   describe('update', () => {
     it('should not call setState when input is not moving', () => {
       const ctx = createMockContext();
-      (ctx.input.isMoving as jest.Mock).mockReturnValue(false);
+      (ctx.inputController.isMoving as jest.Mock).mockReturnValue(false);
       const state = new IdleState(ctx);
 
       state.update(16.67);
@@ -99,7 +99,7 @@ describe('IdleState', () => {
 
     it('should call setState("walk") when input detects movement', () => {
       const ctx = createMockContext();
-      (ctx.input.isMoving as jest.Mock).mockReturnValue(true);
+      (ctx.inputController.isMoving as jest.Mock).mockReturnValue(true);
       const state = new IdleState(ctx);
 
       state.update(16.67);
@@ -110,14 +110,14 @@ describe('IdleState', () => {
 
     it('should check isMoving on every update call', () => {
       const ctx = createMockContext();
-      (ctx.input.isMoving as jest.Mock).mockReturnValue(false);
+      (ctx.inputController.isMoving as jest.Mock).mockReturnValue(false);
       const state = new IdleState(ctx);
 
       state.update(16.67);
       state.update(16.67);
       state.update(16.67);
 
-      expect(ctx.input.isMoving).toHaveBeenCalledTimes(3);
+      expect(ctx.inputController.isMoving).toHaveBeenCalledTimes(3);
     });
   });
 });

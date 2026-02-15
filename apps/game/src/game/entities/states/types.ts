@@ -26,7 +26,7 @@ export interface PlayerContext {
   /** Current facing direction for animation selection. */
   facingDirection: Direction;
   /** Input controller for reading keyboard state. */
-  input: InputController;
+  inputController: InputController;
   /** State machine that manages state transitions. */
   stateMachine: StateMachine;
   /** Base movement speed in pixels per second. */

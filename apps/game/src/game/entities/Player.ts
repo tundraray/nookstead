@@ -28,12 +28,7 @@ export class Player extends Phaser.GameObjects.Sprite {
   public readonly sheetKey: string;
   public facingDirection: Direction;
 
-  // Phaser.GameObjects.GameObject declares `input` as InteractiveObject | null.
-  // Player intentionally shadows it with InputController so that state classes
-  // (IdleState, WalkState) can read keyboard input via PlayerContext.input.
-  // The base Sprite.input is never used in this codebase.
-  // @ts-expect-error -- incompatible override is intentional (see above)
-  public override readonly input: InputController;
+  public readonly inputController: InputController;
 
   public readonly stateMachine: StateMachine;
   public readonly mapData: GeneratedMap;
@@ -65,10 +60,10 @@ export class Player extends Phaser.GameObjects.Sprite {
     this.setDepth(2);
 
     // Add to scene display list
-    scene.add.existing(this as unknown as Phaser.GameObjects.GameObject);
+    scene.add.existing(this);
 
     // Create input controller
-    this.input = new InputController(scene);
+    this.inputController = new InputController(scene);
 
     // Create MVP states
     const idleState = new IdleState(this);

@@ -7,18 +7,18 @@ describe('skin-registry', () => {
       expect(skins.length).toBeGreaterThanOrEqual(1);
     });
 
-    it('should return array containing the Scout skin', () => {
+    it('should return array containing the first Scout skin', () => {
       const skins = getSkins();
-      const scout = skins.find((s: SkinDefinition) => s.key === 'scout');
+      const scout = skins.find((s: SkinDefinition) => s.key === 'scout_1');
       expect(scout).toBeDefined();
     });
 
-    it('should have correct Scout skin properties', () => {
+    it('should have correct first Scout skin properties', () => {
       const skins = getSkins();
-      const scout = skins.find((s: SkinDefinition) => s.key === 'scout');
+      const scout = skins.find((s: SkinDefinition) => s.key === 'scout_1');
       expect(scout).toEqual({
-        key: 'scout',
-        sheetPath: 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png',
+        key: 'scout_1',
+        sheetPath: 'characters/scout_1.png',
         sheetKey: 'char-scout',
       });
     });
@@ -32,9 +32,9 @@ describe('skin-registry', () => {
   });
 
   describe('getDefaultSkin()', () => {
-    it('should return the Scout skin as the default', () => {
+    it('should return the first Scout skin as the default', () => {
       const defaultSkin = getDefaultSkin();
-      expect(defaultSkin.key).toBe('scout');
+      expect(defaultSkin.key).toBe('scout_1');
     });
 
     it('should return a SkinDefinition with all required fields', () => {

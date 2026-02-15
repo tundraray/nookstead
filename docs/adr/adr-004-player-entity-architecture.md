@@ -12,7 +12,7 @@ Nookstead is introducing its first interactive game entity: the player character
 
 2. **Character State Machine Pattern**: How to manage character behavioral states (idle, walk, sit, hit, punch, hurt) and their transitions. The MVP uses only idle and walk, but the architecture must register all 7 states and scale to NPC autonomous behavior.
 
-3. **Sprite Sheet Loading Strategy**: The LimeZu character sprite sheet (`Modern_Exteriors_Characters_Scout_16x16_6.png`, 927x656 pixels) uses 16x32 frame cells with an irregular layout -- different animation rows have different frame counts (3-6 frames), different direction orders (LEFT/UP/RIGHT/DOWN vs LEFT/DOWN/RIGHT/UP), and the sheet width (927px) does not divide evenly by the 16px frame width (927/16 = 57.9375). The loading strategy must handle this reliably while supporting the multi-skin architecture.
+3. **Sprite Sheet Loading Strategy**: The LimeZu character sprite sheet (`scout_6.png`, 927x656 pixels) uses 16x32 frame cells with an irregular layout -- different animation rows have different frame counts (3-6 frames), different direction orders (LEFT/UP/RIGHT/DOWN vs LEFT/DOWN/RIGHT/UP), and the sheet width (927px) does not divide evenly by the 16px frame width (927/16 = 57.9375). The loading strategy must handle this reliably while supporting the multi-skin architecture.
 
 ### Constraints
 

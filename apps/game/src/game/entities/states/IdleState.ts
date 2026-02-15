@@ -34,7 +34,7 @@ export class IdleState implements State {
   }
 
   update(_delta: number): void {
-    if (this.context.input.isMoving()) {
+    if (this.context.inputController.isMoving()) {
       this.context.stateMachine.setState('walk');
     }
   }

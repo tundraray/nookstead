@@ -184,7 +184,7 @@ graph TD
 - [x] **Task 1.2**: Create `apps/game/src/game/characters/skin-registry.ts`
   - Define `SkinDefinition` interface (`key: string`, `sheetPath: string`, `sheetKey: string`)
   - Create `SKIN_REGISTRY` array with Scout entry:
-    - `key: 'scout'`, `sheetPath: 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png'`, `sheetKey: 'char-scout'`
+    - `key: 'scout'`, `sheetPath: 'characters/scout_6.png'`, `sheetKey: 'char-scout'`
   - Export `getSkins(): SkinDefinition[]` function
   - Export `getDefaultSkin(): SkinDefinition` function (returns first entry)
   - **AC Coverage**: FR-8 (multi-skin architecture), FR-1 (sprite sheet path)
@@ -464,11 +464,11 @@ graph TD
   - **Completion**: All 27 animations registered in Phaser AnimationManager when called with scene reference
 
 - [ ] **Task 4.2**: Place character sprite asset in `apps/game/public/assets/characters/`
-  - Copy `Modern_Exteriors_Characters_Scout_16x16_6.png` to `apps/game/public/assets/characters/`
+  - Copy `scout_6.png` to `apps/game/public/assets/characters/`
   - Create `characters/` directory if it does not exist
   - Verify file dimensions match expected (927 x 656 pixels)
   - **AC Coverage**: FR-1 (character sprite sheet available for loading)
-  - **Completion**: PNG file exists at correct path; accessible via Phaser loader at `assets/characters/Modern_Exteriors_Characters_Scout_16x16_6.png`
+  - **Completion**: PNG file exists at correct path; accessible via Phaser loader at `assets/characters/scout_6.png`
 
 - [x] **Task 4.3**: Modify `apps/game/src/game/scenes/Preloader.ts`
   - Import `getSkins` from `skin-registry.ts`
@@ -578,7 +578,7 @@ graph TD
 
 #### Operational Verification Procedures
 
-1. **Asset verification**: Confirm `apps/game/public/assets/characters/Modern_Exteriors_Characters_Scout_16x16_6.png` exists and has dimensions 927 x 656 pixels
+1. **Asset verification**: Confirm `apps/game/public/assets/characters/scout_6.png` exists and has dimensions 927 x 656 pixels
 2. Run `pnpm nx dev game` and load the game page at `http://localhost:3000/game`
 3. **Spawn verification** (Integration Point 3): Verify the player character appears on a grass tile near the center of the island. Open browser console and confirm "Player spawned at tile X, Y" log.
 4. **Idle animation** (FR-3): Verify the character plays a subtle idle animation (breathing/swaying) facing downward without any input.
@@ -675,7 +675,7 @@ graph TD
 | `apps/game/src/game/input/InputController.ts` | P3 | WASD/arrow key input handler |
 | `apps/game/src/game/systems/movement.ts` | P2 | Movement and collision pure functions |
 | `apps/game/src/game/systems/spawn.ts` | P2 | Smart spawn algorithm |
-| `apps/game/public/assets/characters/Modern_Exteriors_Characters_Scout_16x16_6.png` | P4 | Scout character sprite sheet |
+| `apps/game/public/assets/characters/scout_6.png` | P4 | Scout character sprite sheet |
 
 ### Modified Files (3)
 
@@ -733,7 +733,7 @@ graph TD
 - **Commit Strategy**: Manual commits controlled by the user. Tasks are designed as logical 1-commit units with clear completion criteria.
 - **Test Strategy**: Implementation-first development (Strategy B) since no test design information was provided. Tests are included in each phase alongside implementation.
 - **Phaser Mocking**: InputController and Player entity tests require Phaser keyboard and scene mocks. Consider using a lightweight Phaser mock setup or testing the pure logic portions separately.
-- **Asset Dependency**: The Scout sprite sheet PNG (`Modern_Exteriors_Characters_Scout_16x16_6.png`) must be obtained from the LimeZu Modern Exteriors asset pack. Without this file, Phase 4 cannot produce visible results.
+- **Asset Dependency**: The Scout sprite sheet PNG (`scout_6.png`) must be obtained from the LimeZu Modern Exteriors asset pack. Without this file, Phase 4 cannot produce visible results.
 - **Parallel Work**: Within Phase 1, tasks 1.2 and 1.3 can be done in parallel (both depend only on 1.1). Within Phase 2, tasks 2.1, 2.2, and 2.3 are independent and can be done in parallel. Phase 3 task 3.1 is independent of 2.x and could theoretically start after Phase 1.
 - **Grid Indexing**: All collision and terrain lookups use row-major `[y][x]` indexing as established in `GeneratedMap.walkable` and `GeneratedMap.grid`. This must be consistently respected in movement.ts and spawn.ts.
 - **Camera Behavior Change**: The drag-scroll camera is intentionally removed per PRD FR-7. This is a known developer workflow change.

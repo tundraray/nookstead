@@ -146,7 +146,7 @@ graph TB
 - [ ] **FR-1: Character sprite loading in Preloader**
   - Load character sprite sheet(s) during the Preloader scene using Phaser's `spritesheet` loader.
   - Frame size: 16px wide x 32px tall (character is taller than one tile).
-  - The reference sprite is `Modern_Exteriors_Characters_Scout_16x16_6.png` placed in `apps/game/public/assets/characters/`.
+  - The reference sprite is `scout_6.png` placed in `apps/game/public/assets/characters/`.
   - All 7 animation state frame sets are extracted from the sprite sheet using a uniform layout definition (all skins share identical frame positions and counts).
   - AC: Given the Preloader scene runs, when sprite loading completes, then the character sprite sheet is available in the Phaser texture cache with correctly sized frames (16x32) and all 7 animation sets are registered as Phaser animations.
 
@@ -295,7 +295,7 @@ graph TB
 - **Existing map generation pipeline**: The `GeneratedMap` output provides the `walkable` boolean grid and `grid` (for terrain type lookups for speed modifiers). No changes to map generation are required.
 - **`terrain-properties.ts`**: The `getSurfaceProperties()` function provides `speedModifier` per terrain type. Already implemented.
 - **`constants.ts`**: Uses `TILE_SIZE` (16), `SPRITE_SIZE` (16), `FRAME_SIZE` (16), `MAP_WIDTH` (64), `MAP_HEIGHT` (64). The character frame height (32) is a new constant.
-- **LimeZu Modern Exteriors character sprite sheets**: The `Modern_Exteriors_Characters_Scout_16x16_6.png` file must be placed in `apps/game/public/assets/characters/`.
+- **LimeZu Modern Exteriors character sprite sheets**: The `scout_6.png` file must be placed in `apps/game/public/assets/characters/`.
 - **`EventBus`**: Used to communicate scene readiness. May be extended for character position events.
 
 ### Constraints
@@ -303,13 +303,13 @@ graph TB
 - **Frame size mismatch**: Character frames are 16x32, while tiles and the existing `FRAME_SIZE` constant are 16x16. The sprite sheet loader must use a different frame height for characters than for terrain tiles.
 - **No server authority**: Movement is purely client-side in this phase. The collision detection is local. M0.2 will add server-authoritative movement, which may require refactoring the movement system to send inputs rather than positions.
 - **Existing camera behavior replacement**: The current camera is set to fit the entire map and supports drag-scroll. This PRD replaces that with character-following. The drag-scroll functionality is intentionally removed; zoom is preserved.
-- **Sprite asset required**: The `Modern_Exteriors_Characters_Scout_16x16_6.png` sprite sheet must be obtained from the LimeZu Modern Exteriors asset pack and placed in the project. Without this asset, the feature cannot function.
+- **Sprite asset required**: The `scout_6.png` sprite sheet must be obtained from the LimeZu Modern Exteriors asset pack and placed in the project. Without this asset, the feature cannot function.
 - **CSS Modules / global CSS**: Any UI changes (if needed) must follow existing CSS conventions.
 
 ### Assumptions
 
 - The LimeZu Modern Exteriors character sprite sheets follow a uniform layout where all skins have identical frame positions and counts per animation state.
-- The Scout sprite sheet (`Modern_Exteriors_Characters_Scout_16x16_6.png`) contains all 7 animation states in a single PNG file with consistent row/column layout.
+- The Scout sprite sheet (`scout_6.png`) contains all 7 animation states in a single PNG file with consistent row/column layout.
 - The character collision bounds can be approximated as a rectangle at the character's feet (bottom tile-sized area) without requiring per-pixel collision.
 - Grass terrain (speedModifier 1.0) is the only walkable terrain type in the current map generator. Additional terrain types with different speed modifiers will be added in future updates, and the movement system must already support them.
 - The 16x32 character sprite height does not require any changes to the tile rendering system; the character simply renders with its feet on one tile row while the upper body visually extends into the row above.
@@ -339,7 +339,7 @@ graph TB
 ### Character Sprite Layout Reference
 
 ```
-Sprite Sheet: Modern_Exteriors_Characters_Scout_16x16_6.png
+Sprite Sheet: scout_6.png
 Frame Size: 16x32 (width x height)
 
 Animation States and Frame Counts:

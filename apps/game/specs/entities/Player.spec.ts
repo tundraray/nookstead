@@ -115,7 +115,7 @@ jest.mock('../../src/game/entities/states/WalkState', () => ({
 jest.mock('../../src/game/characters/skin-registry', () => ({
   getDefaultSkin: jest.fn().mockReturnValue({
     key: 'scout',
-    sheetPath: 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png',
+    sheetPath: 'characters/scout_6.png',
     sheetKey: 'char-scout',
   }),
 }));
@@ -249,7 +249,7 @@ describe('Player', () => {
 
     it('should expose the input controller as a public property', () => {
       const player = new Player(scene, 100, 200, mapData);
-      expect(player.input).toBeDefined();
+      expect(player.inputController).toBeDefined();
     });
   });
 

@@ -17,7 +17,7 @@ function createMockContext(
   return {
     sheetKey: 'char-scout',
     facingDirection: 'down',
-    input: {
+    inputController: {
       getDirection: jest.fn().mockReturnValue({ x: 1, y: 0 }),
       isMoving: jest.fn().mockReturnValue(true),
       getFacingDirection: jest.fn().mockReturnValue('right'),
@@ -110,7 +110,7 @@ describe('WalkState', () => {
   describe('update - transition to idle', () => {
     it('should call setState("idle") when direction is zero', () => {
       const ctx = createMockContext();
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -121,7 +121,7 @@ describe('WalkState', () => {
 
     it('should not call calculateMovement when direction is zero', () => {
       const ctx = createMockContext();
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -131,7 +131,7 @@ describe('WalkState', () => {
 
     it('should not call setPosition when direction is zero', () => {
       const ctx = createMockContext();
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 0 });
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -146,8 +146,8 @@ describe('WalkState', () => {
   describe('update - movement', () => {
     it('should call calculateMovement with correct parameters', () => {
       const ctx = createMockContext();
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('right');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
       ctx.facingDirection = 'right';
       const state = new WalkState(ctx);
 
@@ -169,8 +169,8 @@ describe('WalkState', () => {
 
     it('should call setPosition with movement result', () => {
       const ctx = createMockContext();
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('right');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
       ctx.facingDirection = 'right';
       mockCalculateMovement.mockReturnValue({ x: 55, y: 50, blocked: { x: false, y: false } });
       const state = new WalkState(ctx);
@@ -181,10 +181,30 @@ describe('WalkState', () => {
       expect(ctx.setPosition).toHaveBeenCalledWith(55, 50);
     });
 
+    it('should normalize diagonal direction before calling calculateMovement', () => {
+      const ctx = createMockContext();
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 1 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
+      ctx.facingDirection = 'right';
+      const state = new WalkState(ctx);
+
+      state.update(16.67);
+
+      const norm = 1 / Math.sqrt(2);
+      expect(mockCalculateMovement).toHaveBeenCalledWith(
+        expect.objectContaining({
+          direction: {
+            x: expect.closeTo(norm, 5),
+            y: expect.closeTo(norm, 5),
+          },
+        })
+      );
+    });
+
     it('should use current context position for movement calculation', () => {
       const ctx = createMockContext({ x: 120, y: 80 });
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 1 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('down');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 0, y: 1 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('down');
       ctx.facingDirection = 'down';
       const state = new WalkState(ctx);
 
@@ -205,8 +225,8 @@ describe('WalkState', () => {
   describe('update - direction change', () => {
     it('should update animation when facing direction changes', () => {
       const ctx = createMockContext({ facingDirection: 'down' });
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('right');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -217,8 +237,8 @@ describe('WalkState', () => {
 
     it('should update facingDirection on context when direction changes', () => {
       const ctx = createMockContext({ facingDirection: 'down' });
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: -1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('left');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: -1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('left');
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -228,8 +248,8 @@ describe('WalkState', () => {
 
     it('should not call play when facing direction has not changed', () => {
       const ctx = createMockContext({ facingDirection: 'right' });
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('right');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
       const state = new WalkState(ctx);
 
       state.update(16.67);
@@ -242,8 +262,8 @@ describe('WalkState', () => {
       const state = new WalkState(ctx);
 
       // Frame 1: change to right
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('right');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 1, y: 0 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('right');
       state.update(16.67);
       expect(ctx.facingDirection).toBe('right');
       expect(ctx.play).toHaveBeenCalledWith('char-scout_walk_right', true);
@@ -252,8 +272,8 @@ describe('WalkState', () => {
       mockCalculateMovement.mockReturnValue({ x: 60, y: 60, blocked: { x: false, y: false } });
 
       // Frame 2: change to up
-      (ctx.input.getDirection as jest.Mock).mockReturnValue({ x: 0, y: -1 });
-      (ctx.input.getFacingDirection as jest.Mock).mockReturnValue('up');
+      (ctx.inputController.getDirection as jest.Mock).mockReturnValue({ x: 0, y: -1 });
+      (ctx.inputController.getFacingDirection as jest.Mock).mockReturnValue('up');
       state.update(16.67);
       expect(ctx.facingDirection).toBe('up');
       expect(ctx.play).toHaveBeenCalledWith('char-scout_walk_up', true);

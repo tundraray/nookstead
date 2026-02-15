@@ -21,8 +21,33 @@ export interface SkinDefinition {
  */
 const SKIN_REGISTRY: readonly SkinDefinition[] = [
   {
-    key: 'scout',
-    sheetPath: 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png',
+    key: 'scout_1',
+    sheetPath: 'characters/scout_1.png',
+    sheetKey: 'char-scout',
+  },
+  {
+    key: 'scout_2',
+    sheetPath: 'characters/scout_2.png',
+    sheetKey: 'char-scout',
+  },
+  {
+    key: 'scout_3',
+    sheetPath: 'characters/scout_3.png',
+    sheetKey: 'char-scout',
+  },
+  {
+    key: 'scout_4',
+    sheetPath: 'characters/scout_4.png',
+    sheetKey: 'char-scout',
+  },
+  {
+    key: 'scout_5',
+    sheetPath: 'characters/scout_5.png',
+    sheetKey: 'char-scout',
+  },
+  {
+    key: 'scout_6',
+    sheetPath: 'characters/scout_6.png',
     sheetKey: 'char-scout',
   },
 ];

@@ -36,7 +36,7 @@ export class WalkState implements State {
   }
 
   update(delta: number): void {
-    const direction = this.context.input.getDirection();
+    const direction = this.context.inputController.getDirection();
 
     if (direction.x === 0 && direction.y === 0) {
       this.context.stateMachine.setState('idle');
@@ -44,17 +44,24 @@ export class WalkState implements State {
     }
 
     // Update facing direction (horizontal priority is handled by InputController)
-    const newFacing = this.context.input.getFacingDirection();
+    const newFacing = this.context.inputController.getFacingDirection();
     if (newFacing !== this.context.facingDirection) {
       this.context.facingDirection = newFacing;
       const key = animKey(this.context.sheetKey, 'walk', newFacing);
       this.context.play(key, true);
     }
 
+    // Normalize diagonal direction so diagonal speed equals cardinal speed
+    const mag = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+    const normalizedDir =
+      mag > 0
+        ? { x: direction.x / mag, y: direction.y / mag }
+        : direction;
+
     // Calculate and apply movement
     const result = calculateMovement({
       position: { x: this.context.x, y: this.context.y },
-      direction,
+      direction: normalizedDir,
       speed: this.context.speed,
       delta,
       walkable: this.context.mapData.walkable,

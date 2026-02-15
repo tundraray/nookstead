@@ -7,8 +7,8 @@
  *
  * - 927px width / 16px frame width = 57 columns per row
  * - Variable frame counts: idle/walk/hit/punch = 6, sit = 3, hurt = 4
- * - Irregular direction orders: most rows LEFT/UP/RIGHT/DOWN,
- *   sit row uses LEFT/DOWN/RIGHT/UP
+ * - Irregular direction orders: most rows RIGHT/UP/LEFT/DOWN,
+ *   sit row uses RIGHT/DOWN/LEFT/UP
  * - Hurt has only 3 directions (no down variant)
  *
  * Pure data module with NO Phaser dependency.
@@ -31,24 +31,24 @@ export interface AnimationDef {
   repeat: number;
 }
 
-/** Standard direction order used by most animation rows. */
+/** Standard direction order used by most animation rows: RIGHT, UP, LEFT, DOWN. */
 const STANDARD_DIRS: readonly Direction[] = [
-  'left',
-  'up',
   'right',
+  'up',
+  'left',
   'down',
 ] as const;
 
-/** Sit row uses a different direction order: LEFT, DOWN, RIGHT, UP. */
+/** Sit row uses a different direction order: RIGHT, DOWN, LEFT, UP. */
 const SIT_DIRS: readonly Direction[] = [
-  'left',
-  'down',
   'right',
+  'down',
+  'left',
   'up',
 ] as const;
 
 /** Hurt row has only 3 directions (no down variant). */
-const HURT_DIRS: readonly Direction[] = ['left', 'up', 'right'] as const;
+const HURT_DIRS: readonly Direction[] = ['right', 'up', 'left'] as const;
 
 /**
  * Configuration for a single animation state row in the sprite sheet.

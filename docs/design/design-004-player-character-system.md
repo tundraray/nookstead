@@ -423,7 +423,7 @@ Integration Point 4:
   ```typescript
   interface SkinDefinition {
     key: string;          // e.g., 'scout'
-    sheetPath: string;    // e.g., 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png'
+    sheetPath: string;    // e.g., 'characters/scout_6.png'
     sheetKey: string;     // Phaser texture key, e.g., 'char-scout'
   }
 
@@ -694,7 +694,7 @@ stateDiagram-v2
 
 ### Sprite Sheet Frame Mapping
 
-The character sprite sheet `Modern_Exteriors_Characters_Scout_16x16_6.png` has these properties:
+The character sprite sheet `scout_6.png` has these properties:
 
 - **Image dimensions**: 927 x 656 pixels
 - **Frame cell size**: 16 wide x 32 tall
@@ -903,7 +903,7 @@ function isValidSpawn(x, y, walkable, grid):
 const SKIN_REGISTRY: SkinDefinition[] = [
   {
     key: 'scout',
-    sheetPath: 'characters/Modern_Exteriors_Characters_Scout_16x16_6.png',
+    sheetPath: 'characters/scout_6.png',
     sheetKey: 'char-scout',
   },
   // To add a new skin, append a SkinDefinition entry here.
