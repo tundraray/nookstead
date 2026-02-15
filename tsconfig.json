@@ -11,6 +11,12 @@
     },
     {
       "path": "./packages/db"
+    },
+    {
+      "path": "./packages/shared"
+    },
+    {
+      "path": "./apps/server"
     }
   ]
 }

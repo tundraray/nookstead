@@ -13,6 +13,7 @@ const config = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx'],
   coverageDirectory: '../../coverage/apps/game',
   testEnvironment: 'jsdom',
+  forceExit: true,
 };
 
 module.exports = createJestConfig(config);
