@@ -30,11 +30,6 @@ export class Preloader extends Scene {
         frameHeight: FRAME_SIZE,
       });
     }
-
-    this.load.spritesheet('ui-elements', 'ui/hud.png', {
-      frameWidth: FRAME_SIZE,
-      frameHeight: FRAME_SIZE,
-    });
   }
 
   create() {
