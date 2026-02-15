@@ -10,6 +10,10 @@
   padding: 0;
 }
 
+:root {
+  --tile-size: 32px;
+}
+
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
@@ -479,8 +483,8 @@ button {
 
 .nine-slice {
   display: grid;
-  grid-template-columns: 32px 1fr 32px;
-  grid-template-rows: 32px 1fr 32px;
+  grid-template-columns: var(--tile-size) 1fr var(--tile-size);
+  grid-template-rows: var(--tile-size) 1fr var(--tile-size);
   position: relative;
   filter: drop-shadow(1px 1px 0 rgba(44, 26, 14, 0.5));
 
@@ -500,71 +504,6 @@ button {
     grid-row: 2;
     position: relative;
     z-index: 1;
-  }
-}
-
-/* --- Clock Panel --- */
-
-.clock-panel {
-  position: absolute;
-  top: calc(4px * var(--ui-scale));
-  left: calc(4px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .clock-panel__content {
-    display: flex;
-    align-items: center;
-    gap: calc(2px * var(--ui-scale));
-    padding: calc(2px * var(--ui-scale));
-    white-space: nowrap;
-  }
-
-  & .clock-panel__season-icon {
-    flex-shrink: 0;
-  }
-
-  & .clock-panel__text {
-    display: flex;
-    flex-direction: column;
-    gap: calc(1px * var(--ui-scale));
-  }
-
-  & .clock-panel__line {
-    font-size: calc(5px * var(--ui-scale));
-    line-height: 1;
-    color: #3b2819;
-  }
-
-  & .clock-panel__time {
-    color: #6b4226;
-  }
-}
-
-/* --- Currency Display --- */
-
-.currency-display {
-  position: absolute;
-  top: calc(4px * var(--ui-scale));
-  right: calc(4px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .currency-display__content {
-    display: flex;
-    align-items: center;
-    gap: calc(2px * var(--ui-scale));
-    padding: calc(2px * var(--ui-scale));
-    white-space: nowrap;
-  }
-
-  & .currency-display__icon {
-    flex-shrink: 0;
-  }
-
-  & .currency-display__amount {
-    font-size: calc(5px * var(--ui-scale));
-    line-height: 1;
-    color: #daa520;
-    font-family: var(--font-pixel);
   }
 }
 
@@ -611,54 +550,6 @@ button {
   display: none;
 }
 
-/* --- Energy Bar --- */
-
-.energy-bar {
-  position: absolute;
-  right: calc(4px * var(--ui-scale));
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(2px * var(--ui-scale));
-  opacity: 0.9;
-
-  & .energy-bar__frame {
-    position: relative;
-  }
-
-  & .energy-bar__track {
-    position: absolute;
-    top: calc(1px * var(--ui-scale));
-    left: calc(1px * var(--ui-scale));
-    width: calc(3px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    overflow: hidden;
-  }
-
-  & .energy-bar__fill {
-    width: 100%;
-    transition: height 0.3s ease-out, background-color 0.3s ease-out;
-  }
-
-  & .energy-bar__label {
-    font-family: var(--font-pixel);
-    font-size: calc(3px * var(--ui-scale));
-    color: #3b2819;
-    text-align: center;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .energy-bar__fill {
-    transition: none;
-  }
-}
-
 /* --- Hotbar --- */
 
 .hotbar {
@@ -692,9 +583,9 @@ button {
 
   & .hotbar-slot__button {
     position: relative;
-    width: 32px;
-    height: 32px;
-    padding: 16px;
+    width: var(--tile-size);
+    height: var(--tile-size);
+    padding: calc(var(--tile-size) / 2);
     box-sizing: content-box;
     flex-shrink: 0;
     border: none;
@@ -804,8 +695,8 @@ button {
 .game-modal-header {
   display: flex;
   width: fit-content;
-  height: 32px;
-  margin: -32px auto 8px 0;
+  height: var(--tile-size);
+  margin: calc(var(--tile-size) * -1) auto 8px 0;
   image-rendering: pixelated;
 
   & .game-modal-header__left,

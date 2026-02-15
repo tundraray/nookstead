@@ -3,9 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Press_Start_2P } from 'next/font/google';
 import { EventBus } from '@/game/EventBus';
-import { ClockPanel } from './ClockPanel';
-import { CurrencyDisplay } from './CurrencyDisplay';
-import { EnergyBar } from './EnergyBar';
 import { Hotbar } from './Hotbar';
 import { GameModal } from './GameModal';
 import { MenuButton } from './MenuButton';
@@ -78,9 +75,6 @@ export function HUD() {
       role="region"
       aria-label="Game heads-up display"
     >
-      <ClockPanel day={state.day} time={state.time} season={state.season} />
-      <CurrencyDisplay gold={state.gold} />
-      <EnergyBar energy={state.energy} maxEnergy={state.maxEnergy} />
       <Hotbar
         items={state.hotbarItems}
         selectedSlot={state.selectedSlot}

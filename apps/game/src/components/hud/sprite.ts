@@ -10,12 +10,17 @@ export const TILE_COLS = Math.floor(SHEET_W / TILE_SIZE); // 61
 /**
  * Converts a 1-indexed tile position to a SpriteRect [x, y, w, h].
  * Tile numbering: 1 = top-left, increments left-to-right then top-to-bottom.
+ * Optional w/h override the default TILE_SIZE dimensions.
  */
-export function tileRect(position: number, size = TILE_SIZE): SpriteRect {
+export function tileRect(
+  position: number,
+  w = TILE_SIZE,
+  h = w,
+): SpriteRect {
   const index = position - 1;
   const col = index % TILE_COLS;
   const row = Math.floor(index / TILE_COLS);
-  return [col * TILE_SIZE, row * TILE_SIZE, size, size];
+  return [col * TILE_SIZE, row * TILE_SIZE, w, h];
 }
 
 /**
