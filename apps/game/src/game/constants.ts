@@ -1,6 +1,6 @@
-export const FRAME_SIZE = 48;   // actual pixel size in spritesheet PNGs
-export const TILE_SIZE = 48;
-export const SPRITE_SIZE = 48;
+export const FRAME_SIZE = 16;   // actual pixel size in spritesheet PNGs
+export const TILE_SIZE = 16;
+export const SPRITE_SIZE = 16;
 
 export const GAME_WIDTH = 1024;
 export const GAME_HEIGHT = 768;

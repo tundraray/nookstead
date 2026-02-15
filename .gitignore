@@ -52,3 +52,4 @@ nul
 *.local.*
 *.local
 docs/plans/tasks/*
+tmp/*
