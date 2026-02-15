@@ -1,9 +1,10 @@
 import NextAuth from 'next-auth';
+import type { NextAuthResult } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Discord from 'next-auth/providers/discord';
 import { getDb, findOrCreateUser, users, eq } from '@nookstead/db';
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth: NextAuthResult = NextAuth({
   providers: [Google, Discord],
   session: {
     strategy: 'jwt',
@@ -77,3 +78,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const handlers: NextAuthResult['handlers'] = nextAuth.handlers;
+export const auth: NextAuthResult['auth'] = nextAuth.auth;
+export const signIn: NextAuthResult['signIn'] = nextAuth.signIn;
+export const signOut: NextAuthResult['signOut'] = nextAuth.signOut;

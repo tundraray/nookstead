@@ -1,6 +1,8 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { FRAME_SIZE } from '../constants';
+import { registerAnimations } from '../characters/animations';
+import { getSkins } from '../characters/skin-registry';
+import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
 import { TERRAINS } from '../terrain';
 
 export class Preloader extends Scene {
@@ -30,9 +32,24 @@ export class Preloader extends Scene {
         frameHeight: FRAME_SIZE,
       });
     }
+
+    // Load character spritesheets
+    for (const skin of getSkins()) {
+      this.load.spritesheet(skin.sheetKey, skin.sheetPath, {
+        frameWidth: TILE_SIZE,
+        frameHeight: CHARACTER_FRAME_HEIGHT,
+      });
+    }
   }
 
   create() {
+    // Register character animations
+    for (const skin of getSkins()) {
+      const texture = this.textures.get(skin.sheetKey);
+      const source = texture.getSourceImage() as HTMLImageElement;
+      registerAnimations(this, skin.sheetKey, source.width, TILE_SIZE);
+    }
+
     EventBus.emit('preload-complete');
     this.scene.start('Game');
   }

@@ -5,12 +5,15 @@ import { MapGenerator, IslandPass, ConnectivityPass, WaterBorderPass, AutotilePa
 import { EMPTY_FRAME } from '../autotile';
 import type { GeneratedMap } from '../mapgen/types';
 import { PlayerManager } from '../multiplayer/PlayerManager';
+import { Player } from '../entities/Player';
+import { findSpawnTile } from '../systems/spawn';
 
 export class Game extends Scene {
   private mapData!: GeneratedMap;
   private rt!: Phaser.GameObjects.RenderTexture;
   private hover!: Phaser.GameObjects.Graphics;
   private playerManager!: PlayerManager;
+  private player!: Player;
 
   constructor() {
     super('Game');
@@ -60,14 +63,23 @@ export class Game extends Scene {
     }
     stamp.destroy();
 
-    // Camera: center map in viewport
+    // Find spawn position and create player
+    const spawn = findSpawnTile(
+      this.mapData.walkable,
+      this.mapData.grid,
+      MAP_WIDTH,
+      MAP_HEIGHT,
+    );
+    const spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
+    const spawnY = (spawn.tileY + 1) * TILE_SIZE;
+    this.player = new Player(this, spawnX, spawnY, this.mapData);
+
+    // Camera: follow player with lerp smoothing, bounded by map
     const cam = this.cameras.main;
     cam.setBackgroundColor(0x215c81);
-
-    const zoomX = this.scale.width / mapPixelW;
-    const zoomY = this.scale.height / mapPixelH;
-    cam.setZoom(Math.min(zoomX, zoomY));
-    cam.centerOn(mapPixelW / 2, mapPixelH / 2);
+    cam.setBounds(0, 0, mapPixelW, mapPixelH);
+    cam.startFollow(this.player, true, 0.1, 0.1);
+    cam.setZoom(2);
 
     // Tile hover highlight
     this.hover = this.add.graphics();
@@ -75,17 +87,7 @@ export class Game extends Scene {
     let prevTileX = -1;
     let prevTileY = -1;
 
-    // Drag-scroll + hover
     this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-      if (pointer.isDown) {
-        cam.scrollX -= (pointer.x - pointer.prevPosition.x) / cam.zoom;
-        cam.scrollY -= (pointer.y - pointer.prevPosition.y) / cam.zoom;
-        this.hover.clear();
-        prevTileX = -1;
-        prevTileY = -1;
-        return;
-      }
-
       const tileX = Math.floor(pointer.worldX / TILE_SIZE);
       const tileY = Math.floor(pointer.worldY / TILE_SIZE);
 
@@ -137,10 +139,6 @@ export class Game extends Scene {
     // Re-fit camera when the canvas resizes
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       cam.setSize(gameSize.width, gameSize.height);
-      const zx = gameSize.width / mapPixelW;
-      const zy = gameSize.height / mapPixelH;
-      cam.setZoom(Math.min(zx, zy));
-      cam.centerOn(mapPixelW / 2, mapPixelH / 2);
     });
 
     // Multiplayer

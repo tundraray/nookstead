@@ -14,6 +14,7 @@ const config = {
   coverageDirectory: '../../coverage/apps/game',
   testEnvironment: 'jsdom',
   forceExit: true,
+  maxWorkers: '50%',
 };
 
 module.exports = createJestConfig(config);
