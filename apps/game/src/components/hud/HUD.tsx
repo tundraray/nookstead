@@ -1,55 +1,37 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Press_Start_2P } from 'next/font/google';
 import { EventBus } from '@/game/EventBus';
-import { ClockPanel } from './ClockPanel';
-import { CurrencyDisplay } from './CurrencyDisplay';
 import { EnergyBar } from './EnergyBar';
 import { Hotbar } from './Hotbar';
-import { MenuButton } from './MenuButton';
-import { DEFAULT_HUD_STATE } from './types';
-import type { HUDState, Season } from './types';
+import type { HUDState } from './types';
 
-const pixelFont = Press_Start_2P({
-  weight: '400',
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-pixel',
-});
+interface HUDProps {
+  uiScale: number;
+}
 
-export function HUD() {
-  const [state, setState] = useState<HUDState>(DEFAULT_HUD_STATE);
-  const [uiScale, setUiScale] = useState(3);
+const DEFAULT_HUD_STATE: Omit<HUDState, 'day' | 'time' | 'season' | 'gold'> = {
+  energy: 100,
+  maxEnergy: 100,
+  hotbarItems: Array(10).fill(null),
+  selectedSlot: 0,
+};
 
-  // Compute integer scale from viewport
+export function HUD({ uiScale }: HUDProps) {
+  const [energy, setEnergy] = useState(DEFAULT_HUD_STATE.energy);
+  const [maxEnergy, setMaxEnergy] = useState(DEFAULT_HUD_STATE.maxEnergy);
+  const [hotbarItems] = useState(DEFAULT_HUD_STATE.hotbarItems);
+  const [selectedSlot, setSelectedSlot] = useState(DEFAULT_HUD_STATE.selectedSlot);
+
+  // EventBus: energy updates from Phaser
   useEffect(() => {
-    function updateScale() {
-      const vw = window.innerWidth;
-      const vh = window.innerHeight;
-      const scaleX = Math.floor(vw / 480);
-      const scaleY = Math.floor(vh / 270);
-      setUiScale(Math.max(2, Math.min(6, Math.min(scaleX, scaleY))));
-    }
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
+    const onEnergy = (e: number, max: number) => {
+      setEnergy(e);
+      setMaxEnergy(max);
+    };
 
-  // EventBus subscriptions (Phaser -> React)
-  useEffect(() => {
-    const onTime = (day: number, time: string, season: string) =>
-      setState((s) => ({ ...s, day, time, season: season as Season }));
-    const onGold = (gold: number) => setState((s) => ({ ...s, gold }));
-    const onEnergy = (energy: number, maxEnergy: number) =>
-      setState((s) => ({ ...s, energy, maxEnergy }));
-
-    EventBus.on('hud:time', onTime);
-    EventBus.on('hud:gold', onGold);
     EventBus.on('hud:energy', onEnergy);
     return () => {
-      EventBus.removeListener('hud:time', onTime);
-      EventBus.removeListener('hud:gold', onGold);
       EventBus.removeListener('hud:energy', onEnergy);
     };
   }, []);
@@ -61,7 +43,7 @@ export function HUD() {
       if (match) {
         const digit = parseInt(match[1], 10);
         const slot = digit === 0 ? 9 : digit - 1;
-        setState((s) => ({ ...s, selectedSlot: slot }));
+        setSelectedSlot(slot);
         EventBus.emit('hud:select-slot', slot);
       }
     }
@@ -71,23 +53,20 @@ export function HUD() {
 
   return (
     <div
-      className={`hud ${pixelFont.variable}`}
+      className="hud"
       style={{ '--ui-scale': uiScale } as React.CSSProperties}
       role="region"
       aria-label="Game heads-up display"
     >
-      <ClockPanel day={state.day} time={state.time} season={state.season} />
-      <CurrencyDisplay gold={state.gold} />
-      <EnergyBar energy={state.energy} maxEnergy={state.maxEnergy} />
+      <EnergyBar energy={energy} maxEnergy={maxEnergy} />
       <Hotbar
-        items={state.hotbarItems}
-        selectedSlot={state.selectedSlot}
+        items={hotbarItems}
+        selectedSlot={selectedSlot}
         onSlotClick={(i) => {
-          setState((s) => ({ ...s, selectedSlot: i }));
+          setSelectedSlot(i);
           EventBus.emit('hud:select-slot', i);
         }}
       />
-      <MenuButton onClick={() => EventBus.emit('hud:menu-toggle')} />
     </div>
   );
 }

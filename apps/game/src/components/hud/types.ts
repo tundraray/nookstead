@@ -1,5 +1,22 @@
 export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
 export type SpriteRect = [x: number, y: number, w: number, h: number];
+export type PanelId = 'inventory' | 'map' | 'quests' | 'social' | 'settings';
+
+export interface NavItem {
+  id: PanelId;
+  label: string;
+  shortcutKey: string;
+  shortcutCode: string;
+  tooltip: string;
+}
+
+export interface HeaderState {
+  day: number;
+  time: string;
+  season: Season;
+  gold: number;
+  activePanel: PanelId | null;
+}
 
 export interface NineSliceSet {
   cornerTL: SpriteRect;

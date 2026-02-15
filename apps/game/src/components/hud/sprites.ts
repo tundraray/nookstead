@@ -52,4 +52,11 @@ export const SPRITES = {
   energyFrame: [64, 0, 5, 32] as SpriteRect,
   energyFill: [69, 0, 3, 32] as SpriteRect,
   energyEmpty: [72, 0, 3, 32] as SpriteRect,
+
+  // Navigation icons (approximate -- verify in image editor)
+  navInventory: [928, 64, 32, 32] as SpriteRect,
+  navMap: [960, 64, 32, 32] as SpriteRect,
+  navQuests: [992, 64, 32, 32] as SpriteRect,
+  navSocial: [1024, 64, 32, 32] as SpriteRect,
+  navSettings: [1056, 64, 32, 32] as SpriteRect,
 } as const;
