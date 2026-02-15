@@ -1,8 +1,37 @@
 import type React from 'react';
+import type { SpriteRect } from './types';
 
 export const SHEET_PATH = '/assets/ui/hud_32.png';
 export const SHEET_W = 1952;
 export const SHEET_H = 1376;
+export const TILE_SIZE = 32;
+export const TILE_COLS = Math.floor(SHEET_W / TILE_SIZE); // 61
+
+/**
+ * Converts a 1-indexed tile position to a SpriteRect [x, y, w, h].
+ * Tile numbering: 1 = top-left, increments left-to-right then top-to-bottom.
+ */
+export function tileRect(position: number, size = TILE_SIZE): SpriteRect {
+  const index = position - 1;
+  const col = index % TILE_COLS;
+  const row = Math.floor(index / TILE_COLS);
+  return [col * TILE_SIZE, row * TILE_SIZE, size, size];
+}
+
+/**
+ * Like tileRect but centers a smaller sprite within the tile cell.
+ * E.g. a 16x16 icon centered in a 32x32 tile.
+ */
+export function tileRectCentered(
+  position: number,
+  size: number,
+): SpriteRect {
+  const index = position - 1;
+  const col = index % TILE_COLS;
+  const row = Math.floor(index / TILE_COLS);
+  const offset = Math.floor((TILE_SIZE - size) / 2);
+  return [col * TILE_SIZE + offset, row * TILE_SIZE + offset, size, size];
+}
 
 /**
  * Returns inline styles that slice a rectangle from hud.png

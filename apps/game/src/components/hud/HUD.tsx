@@ -7,6 +7,7 @@ import { ClockPanel } from './ClockPanel';
 import { CurrencyDisplay } from './CurrencyDisplay';
 import { EnergyBar } from './EnergyBar';
 import { Hotbar } from './Hotbar';
+import { GameModal } from './GameModal';
 import { MenuButton } from './MenuButton';
 import { DEFAULT_HUD_STATE } from './types';
 import type { HUDState, Season } from './types';
@@ -21,6 +22,7 @@ const pixelFont = Press_Start_2P({
 export function HUD() {
   const [state, setState] = useState<HUDState>(DEFAULT_HUD_STATE);
   const [uiScale, setUiScale] = useState(3);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Compute integer scale from viewport
   useEffect(() => {
@@ -87,7 +89,14 @@ export function HUD() {
           EventBus.emit('hud:select-slot', i);
         }}
       />
-      <MenuButton onClick={() => EventBus.emit('hud:menu-toggle')} />
+      <MenuButton onClick={() => setSettingsOpen(true)} />
+      <GameModal
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        title="Settings"
+      >
+        <p>Settings content goes here</p>
+      </GameModal>
     </div>
   );
 }
