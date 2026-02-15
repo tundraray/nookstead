@@ -637,34 +637,32 @@ button {
 /* ==========================================================================
    Section 7: Game Header
    Persistent pixel-art header bar with logo, clock, navigation, and currency.
-   All dimensions derived from --tile (32px) for pixel-perfect sprite alignment.
+   All dimensions derived from --tile-size (32px) for pixel-perfect sprite alignment.
    ========================================================================== */
 
 @keyframes header-glow-pulse {
   0%, 100% {
     text-shadow:
-      0 0 calc(var(--tile) * 0.25) rgba(72, 199, 170, 0.4),
-      0 0 calc(var(--tile) * 0.5) rgba(72, 199, 170, 0.2),
-      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
+      0 0 calc(var(--tile-size) * 0.25) rgba(72, 199, 170, 0.4),
+      0 0 calc(var(--tile-size) * 0.5) rgba(72, 199, 170, 0.2),
+      calc(var(--tile-size) / 16) calc(var(--tile-size) / 16) 0 #1a3a2e;
   }
   50% {
     text-shadow:
-      0 0 calc(var(--tile) * 0.5) rgba(72, 199, 170, 0.6),
-      0 0 var(--tile) rgba(72, 199, 170, 0.3),
-      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
+      0 0 calc(var(--tile-size) * 0.5) rgba(72, 199, 170, 0.6),
+      0 0 var(--tile-size) rgba(72, 199, 170, 0.3),
+      calc(var(--tile-size) / 16) calc(var(--tile-size) / 16) 0 #1a3a2e;
   }
 }
 
 .game-header {
-  --tile: 32px;
-
   position: relative;
   z-index: 5;
   flex-shrink: 0;
-  height: var(--tile);
+  height: var(--tile-size);
   background: #f2e2c4;
-  border-bottom: calc(var(--tile) / 16) solid #6b4226;
-  box-shadow: 0 calc(var(--tile) / 16) 0 rgba(44, 26, 14, 0.3);
+  border-bottom: calc(var(--tile-size) / 16) solid #6b4226;
+  box-shadow: 0 calc(var(--tile-size) / 16) 0 rgba(44, 26, 14, 0.3);
   font-family: var(--font-pixel);
   color: #3b2819;
   image-rendering: -webkit-optimize-contrast;
@@ -680,8 +678,8 @@ button {
   & .game-header__content {
     display: flex;
     align-items: center;
-    gap: calc(var(--tile) * 0.25);
-    padding: 0 calc(var(--tile) * 0.25);
+    gap: calc(var(--tile-size) * 0.25);
+    padding: 0 calc(var(--tile-size) * 0.25);
     height: 100%;
     white-space: nowrap;
   }
@@ -696,7 +694,7 @@ button {
 .game-header__logo {
   font-family: var(--font-pixel);
   color: #48c7aa;
-  letter-spacing: calc(var(--tile) / 32);
+  letter-spacing: calc(var(--tile-size) / 32);
   animation: header-glow-pulse 3s ease-in-out infinite;
   user-select: none;
 }
@@ -706,7 +704,7 @@ button {
 .game-header__clock-zone {
   display: flex;
   align-items: center;
-  gap: calc(var(--tile) * 0.125);
+  gap: calc(var(--tile-size) * 0.125);
   flex-shrink: 0;
 }
 
@@ -716,18 +714,18 @@ button {
 
 .game-header__clock-text {
   display: flex;
-  gap: calc(var(--tile) * 0.125);
+  gap: calc(var(--tile-size) * 0.125);
   align-items: baseline;
 }
 
 .game-header__day {
-  font-size: calc(var(--tile) * 0.25);
+  font-size: calc(var(--tile-size) * 0.25);
   line-height: 1;
   color: #3b2819;
 }
 
 .game-header__time {
-  font-size: calc(var(--tile) * 0.25);
+  font-size: calc(var(--tile-size) * 0.25);
   line-height: 1;
   color: #6b4226;
 }
@@ -737,7 +735,7 @@ button {
 .game-header__currency-zone {
   display: flex;
   align-items: center;
-  gap: calc(var(--tile) * 0.125);
+  gap: calc(var(--tile-size) * 0.125);
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -747,7 +745,7 @@ button {
 }
 
 .game-header__gold-amount {
-  font-size: calc(var(--tile) * 0.25);
+  font-size: calc(var(--tile-size) * 0.25);
   line-height: 1;
   color: #daa520;
   font-family: var(--font-pixel);
@@ -762,7 +760,7 @@ button {
 
   .game-header__logo::after {
     content: 'N';
-    font-size: calc(var(--tile) * 0.25);
+    font-size: calc(var(--tile-size) * 0.25);
     color: #48c7aa;
     animation: header-glow-pulse 3s ease-in-out infinite;
   }
@@ -772,7 +770,7 @@ button {
   }
 
   .game-header__gold-amount {
-    font-size: calc(var(--tile) * 0.1875);
+    font-size: calc(var(--tile-size) * 0.1875);
   }
 }
 
@@ -782,8 +780,8 @@ button {
   .game-header__logo {
     animation: none;
     text-shadow:
-      0 0 calc(var(--tile) * 0.375) rgba(72, 199, 170, 0.5),
-      calc(var(--tile) / 16) calc(var(--tile) / 16) 0 #1a3a2e;
+      0 0 calc(var(--tile-size) * 0.375) rgba(72, 199, 170, 0.5),
+      calc(var(--tile-size) / 16) calc(var(--tile-size) / 16) 0 #1a3a2e;
   }
 }
 
