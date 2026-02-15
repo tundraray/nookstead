@@ -1,4 +1,4 @@
-import type { NineSliceSet } from './types';
+import type { NineSliceSet, SpriteRect } from './types';
 import { TILE_SIZE, tileRect, tileRectCentered } from './sprite';
 
 /**
@@ -56,8 +56,15 @@ export const PANEL_DEFAULT = SLOT_NORMAL;
 
 export const SPRITES = {
   // Icons
+  coinIcon: tileRect(63, 11, 11),
   menuBtnNormal: tileRect(91),
   menuBtnActive: tileRect(101),
+
+  // Season icons (sub-tile sprites at y = 1.5 * T)
+  seasonSpring: [0, T + T / 2, 11, 11] as SpriteRect,
+  seasonSummer: [11, T + T / 2, 11, 11] as SpriteRect,
+  seasonAutumn: [21, T + T / 2, 11, 11] as SpriteRect,
+  seasonWinter: [T, T + T / 2, 11, 11] as SpriteRect,
 
   // Modal
   closeIcon: tileRectCentered(20, T / 2),
