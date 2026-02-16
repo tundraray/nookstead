@@ -6,6 +6,9 @@ export class Player extends Schema {
   @type('number') y = 0;
   @type('string') name = '';
   @type('boolean') connected = true;
+  @type('string') skin = '';
+  @type('string') direction = 'down';
+  @type('string') animState = 'idle';
 }
 
 export class GameRoomState extends Schema {

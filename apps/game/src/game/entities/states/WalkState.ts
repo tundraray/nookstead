@@ -5,21 +5,28 @@
  * using the movement system, and transitions back to idle when input
  * ceases. Updates the animation key when the facing direction changes
  * during movement.
+ *
+ * Supports two movement sources with keyboard taking priority:
+ * 1. **Keyboard input** (WASD/arrows) -- clears any active moveTarget
+ * 2. **Click-to-move target** -- moves toward a pixel position set by
+ *    the click handler in Game.ts
  */
 
 import type { State } from '../StateMachine';
+import type { Direction } from '../../characters/frame-map';
 import { animKey } from '../../characters/frame-map';
 import { calculateMovement } from '../../systems/movement';
 import type { PlayerContext } from './types';
+
+/** Distance threshold (in pixels) to consider the player "arrived" at the move target. */
+const ARRIVAL_THRESHOLD = 8;
 
 /**
  * Walk state: handles movement, animation updates, and idle transition.
  *
  * Lifecycle:
  * - `enter()`: plays the walk animation for the current facing direction
- * - `update()`: reads input direction, updates animation on direction
- *   change, calculates movement via the movement system, and applies
- *   the resulting position. Transitions to idle when input stops.
+ * - `update()`: checks keyboard first (priority), then moveTarget, then idle
  */
 export class WalkState implements State {
   readonly name = 'walk';
@@ -36,14 +43,33 @@ export class WalkState implements State {
   }
 
   update(delta: number): void {
-    const direction = this.context.inputController.getDirection();
+    const keyboardDir = this.context.inputController.getDirection();
+    const hasKeyboardInput = keyboardDir.x !== 0 || keyboardDir.y !== 0;
 
-    if (direction.x === 0 && direction.y === 0) {
-      this.context.stateMachine.setState('idle');
+    if (hasKeyboardInput) {
+      // Keyboard takes priority -- clear any click-to-move target
+      this.context.clearMoveTarget();
+      this.moveWithKeyboard(keyboardDir, delta);
       return;
     }
 
-    // Update facing direction (horizontal priority is handled by InputController)
+    if (this.context.moveTarget) {
+      this.moveTowardTarget(delta);
+      return;
+    }
+
+    // No keyboard input and no moveTarget -- transition to idle
+    this.context.stateMachine.setState('idle');
+  }
+
+  /**
+   * Handle keyboard-driven movement (existing behavior).
+   */
+  private moveWithKeyboard(
+    direction: { x: number; y: number },
+    delta: number
+  ): void {
+    // Update facing direction (horizontal priority handled by InputController)
     const newFacing = this.context.inputController.getFacingDirection();
     if (newFacing !== this.context.facingDirection) {
       this.context.facingDirection = newFacing;
@@ -52,16 +78,57 @@ export class WalkState implements State {
     }
 
     // Normalize diagonal direction so diagonal speed equals cardinal speed
-    const mag = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+    const mag = Math.sqrt(
+      direction.x * direction.x + direction.y * direction.y
+    );
     const normalizedDir =
       mag > 0
         ? { x: direction.x / mag, y: direction.y / mag }
         : direction;
 
-    // Calculate and apply movement
+    this.applyMovement(normalizedDir, delta);
+  }
+
+  /**
+   * Handle click-to-move movement toward the stored target.
+   */
+  private moveTowardTarget(delta: number): void {
+    const target = this.context.moveTarget!;
+    const dx = target.x - this.context.x;
+    const dy = target.y - this.context.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Check if we have arrived at the target
+    if (dist <= ARRIVAL_THRESHOLD) {
+      this.context.clearMoveTarget();
+      this.context.stateMachine.setState('idle');
+      return;
+    }
+
+    // Calculate normalized direction toward target
+    const normalizedDir = { x: dx / dist, y: dy / dist };
+
+    // Determine facing direction from movement direction
+    const newFacing = this.directionFromVector(normalizedDir);
+    if (newFacing !== this.context.facingDirection) {
+      this.context.facingDirection = newFacing;
+      const key = animKey(this.context.sheetKey, 'walk', newFacing);
+      this.context.play(key, true);
+    }
+
+    this.applyMovement(normalizedDir, delta);
+  }
+
+  /**
+   * Apply movement using the movement system (shared by both input modes).
+   */
+  private applyMovement(
+    direction: { x: number; y: number },
+    delta: number
+  ): void {
     const result = calculateMovement({
       position: { x: this.context.x, y: this.context.y },
-      direction: normalizedDir,
+      direction,
       speed: this.context.speed,
       delta,
       walkable: this.context.mapData.walkable,
@@ -72,5 +139,16 @@ export class WalkState implements State {
     });
 
     this.context.setPosition(result.x, result.y);
+  }
+
+  /**
+   * Convert a direction vector to a cardinal facing direction.
+   * Horizontal takes priority for diagonal movement.
+   */
+  private directionFromVector(dir: { x: number; y: number }): Direction {
+    if (Math.abs(dir.x) >= Math.abs(dir.y)) {
+      return dir.x < 0 ? 'left' : 'right';
+    }
+    return dir.y < 0 ? 'up' : 'down';
   }
 }

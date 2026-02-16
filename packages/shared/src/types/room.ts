@@ -4,6 +4,9 @@ export interface PlayerState {
   y: number;
   name: string;
   connected: boolean;
+  skin: string;
+  direction: string;
+  animState: string;
 }
 
 export interface GameRoomState {

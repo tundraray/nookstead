@@ -43,8 +43,12 @@ export interface PlayerContext {
   mapHeight: number;
   /** Size of each tile in pixels. */
   tileSize: number;
+  /** Click-to-move target position, or null if not active. */
+  moveTarget: { x: number; y: number } | null;
   /** Play an animation by key. */
   play(key: string, ignoreIfPlaying?: boolean): void;
   /** Set the entity position in pixel coordinates. */
   setPosition(x: number, y: number): this;
+  /** Clear the click-to-move target. */
+  clearMoveTarget(): void;
 }

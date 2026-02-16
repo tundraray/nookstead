@@ -37,6 +37,9 @@ export class Player extends Phaser.GameObjects.Sprite {
   public readonly mapHeight: number;
   public readonly tileSize: number;
 
+  /** Click-to-move target position, or null when inactive. */
+  public moveTarget: { x: number; y: number } | null = null;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -90,6 +93,26 @@ export class Player extends Phaser.GameObjects.Sprite {
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
     this.stateMachine.update(delta);
+  }
+
+  /**
+   * Set a click-to-move target position.
+   *
+   * Stores the target and transitions to 'walk' if currently idle,
+   * so the WalkState can begin moving toward the target.
+   */
+  setMoveTarget(x: number, y: number): void {
+    this.moveTarget = { x, y };
+    if (this.stateMachine.currentState === 'idle') {
+      this.stateMachine.setState('walk');
+    }
+  }
+
+  /**
+   * Clear the click-to-move target.
+   */
+  clearMoveTarget(): void {
+    this.moveTarget = null;
   }
 
   /**

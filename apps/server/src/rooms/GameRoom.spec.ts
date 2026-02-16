@@ -56,7 +56,7 @@ jest.mock('../auth/verifyToken', () => ({
 /* ------------------------------------------------------------------ */
 import { GameRoom } from './GameRoom';
 import { verifyNextAuthToken } from '../auth/verifyToken';
-import type { AuthData } from '@nookstead/shared';
+import { AVAILABLE_SKINS, type AuthData } from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Type aliases for readability                                      */
@@ -104,6 +104,62 @@ describe('GameRoom', () => {
       expect(player?.x).toBe(0);
       expect(player?.y).toBe(0);
       expect(player?.connected).toBe(true);
+    });
+
+    it('should assign a non-empty skin from AVAILABLE_SKINS on join', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      expect(player).toBeDefined();
+      expect(player?.skin).not.toBe('');
+      expect(AVAILABLE_SKINS).toContain(player?.skin);
+    });
+
+    it('should set default direction to down and animState to idle on join', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      expect(player).toBeDefined();
+      expect(player?.direction).toBe('down');
+      expect(player?.animState).toBe('idle');
+    });
+
+    it('should assign skin from AVAILABLE_SKINS for multiple players', () => {
+      const authData1: AuthData = {
+        userId: 'user-1',
+        email: 'user1@example.com',
+      };
+      const authData2: AuthData = {
+        userId: 'user-2',
+        email: 'user2@example.com',
+      };
+
+      const mockClient2: MockClient = {
+        sessionId: 'test-session-id-2',
+        send: jest.fn(),
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData1);
+      room.onJoin(mockClient2 as never, {}, authData2);
+
+      const player1 = room.state.players.get('test-session-id');
+      const player2 = room.state.players.get('test-session-id-2');
+
+      expect(AVAILABLE_SKINS).toContain(player1?.skin);
+      expect(AVAILABLE_SKINS).toContain(player2?.skin);
     });
   });
 
@@ -224,6 +280,126 @@ describe('GameRoom', () => {
   });
 
   /* ---------------------------------------------------------------- */
+  /*  handlePositionUpdate (via onMessage)                            */
+  /* ---------------------------------------------------------------- */
+  describe('handlePositionUpdate (via onMessage)', () => {
+    it('should update player position, direction, and animState on valid payload', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const positionHandler = messageHandlers.get('position_update');
+      expect(positionHandler).toBeDefined();
+
+      positionHandler!(mockClient, {
+        x: 150,
+        y: 200,
+        direction: 'right',
+        animState: 'walk',
+      });
+
+      const player = room.state.players.get('test-session-id');
+      expect(player?.x).toBe(150);
+      expect(player?.y).toBe(200);
+      expect(player?.direction).toBe('right');
+      expect(player?.animState).toBe('walk');
+    });
+
+    it('should not update state when payload has non-numeric x', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      const initialX = player?.x;
+      const initialY = player?.y;
+
+      const positionHandler = messageHandlers.get('position_update');
+      positionHandler!(mockClient, {
+        x: 'bad',
+        y: 200,
+        direction: 'right',
+        animState: 'walk',
+      });
+
+      expect(player?.x).toBe(initialX);
+      expect(player?.y).toBe(initialY);
+    });
+
+    it('should not update state when payload is missing direction', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      const initialDirection = player?.direction;
+
+      const positionHandler = messageHandlers.get('position_update');
+      positionHandler!(mockClient, {
+        x: 150,
+        y: 200,
+        animState: 'walk',
+      });
+
+      expect(player?.direction).toBe(initialDirection);
+    });
+
+    it('should not update state when payload is null', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      const initialX = player?.x;
+      const initialY = player?.y;
+
+      const positionHandler = messageHandlers.get('position_update');
+      positionHandler!(mockClient, null);
+
+      expect(player?.x).toBe(initialX);
+      expect(player?.y).toBe(initialY);
+    });
+
+    it('should not update state when payload is missing animState', () => {
+      const authData: AuthData = {
+        userId: 'user-123',
+        email: 'test@example.com',
+      };
+
+      room.onCreate();
+      room.onJoin(mockClient as never, {}, authData);
+
+      const player = room.state.players.get('test-session-id');
+      const initialAnimState = player?.animState;
+
+      const positionHandler = messageHandlers.get('position_update');
+      positionHandler!(mockClient, {
+        x: 150,
+        y: 200,
+        direction: 'right',
+      });
+
+      expect(player?.animState).toBe(initialAnimState);
+    });
+  });
+
+  /* ---------------------------------------------------------------- */
   /*  Authentication                                                  */
   /* ---------------------------------------------------------------- */
   describe('onAuth', () => {
@@ -293,6 +469,12 @@ describe('GameRoom', () => {
       room.onCreate();
 
       expect(messageHandlers.has('move')).toBe(true);
+    });
+
+    it('should register a position_update message handler', () => {
+      room.onCreate();
+
+      expect(messageHandlers.has('position_update')).toBe(true);
     });
   });
 });

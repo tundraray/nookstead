@@ -133,6 +133,14 @@ export class Game extends Scene {
       const tileY = Math.floor(pointer.worldY / TILE_SIZE);
       if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
 
+      // Calculate pixel target (center of tile, bottom edge for feet alignment)
+      const targetX = tileX * TILE_SIZE + TILE_SIZE / 2;
+      const targetY = (tileY + 1) * TILE_SIZE;
+
+      // Move local player toward the clicked tile
+      this.player.setMoveTarget(targetX, targetY);
+
+      // Also notify server of the tile click (backward compat)
       this.playerManager.sendMove(tileX, tileY);
     });
 
@@ -146,6 +154,23 @@ export class Game extends Scene {
     this.playerManager.connect();
 
     EventBus.emit('current-scene-ready', this);
+  }
+
+  /**
+   * Per-frame update: drive remote sprite interpolation and report
+   * local player position to the server.
+   */
+  override update(_time: number, delta: number): void {
+    // Drive interpolation on all remote player sprites
+    this.playerManager.update(delta);
+
+    // Report local player position to server (throttled inside PlayerManager)
+    this.playerManager.sendPositionUpdate(
+      this.player.x,
+      this.player.y,
+      this.player.facingDirection,
+      this.player.stateMachine.currentState
+    );
   }
 
   shutdown(): void {

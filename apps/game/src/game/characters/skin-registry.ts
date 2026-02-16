@@ -23,32 +23,32 @@ const SKIN_REGISTRY: readonly SkinDefinition[] = [
   {
     key: 'scout_1',
     sheetPath: 'characters/scout_1.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_1',
   },
   {
     key: 'scout_2',
     sheetPath: 'characters/scout_2.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_2',
   },
   {
     key: 'scout_3',
     sheetPath: 'characters/scout_3.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_3',
   },
   {
     key: 'scout_4',
     sheetPath: 'characters/scout_4.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_4',
   },
   {
     key: 'scout_5',
     sheetPath: 'characters/scout_5.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_5',
   },
   {
     key: 'scout_6',
     sheetPath: 'characters/scout_6.png',
-    sheetKey: 'char-scout',
+    sheetKey: 'scout_6',
   },
 ];
 
@@ -64,4 +64,12 @@ export function getSkins(): SkinDefinition[] {
  */
 export function getDefaultSkin(): SkinDefinition {
   return SKIN_REGISTRY[0];
+}
+
+/**
+ * Look up a skin definition by its key (e.g., 'scout_3').
+ * Returns undefined if no skin matches.
+ */
+export function getSkinByKey(key: string): SkinDefinition | undefined {
+  return SKIN_REGISTRY.find((s) => s.key === key);
 }
