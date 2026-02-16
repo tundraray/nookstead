@@ -29,3 +29,11 @@ export const WATER_THRESHOLD = 0.18;
 
 // Water border
 export const MIN_WATER_BORDER = 5;
+
+// --- Player rendering ---
+export const PLAYER_DEPTH = 2;
+export const PLAYER_SIZE = 32;
+export const PLAYER_LOCAL_COLOR = 0x2ecc71;
+export const PLAYER_REMOTE_COLOR = 0x3498db;
+export const PLAYER_LABEL_FONT_SIZE = 10;
+export const CLICK_THRESHOLD = 8;

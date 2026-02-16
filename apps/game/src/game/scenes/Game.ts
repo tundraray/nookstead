@@ -1,9 +1,10 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
-import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT } from '../constants';
+import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
 import { MapGenerator, IslandPass, ConnectivityPass, WaterBorderPass, AutotilePass } from '../mapgen';
 import { EMPTY_FRAME } from '../autotile';
 import type { GeneratedMap } from '../mapgen/types';
+import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { findSpawnTile } from '../systems/spawn';
 
@@ -11,6 +12,7 @@ export class Game extends Scene {
   private mapData!: GeneratedMap;
   private rt!: Phaser.GameObjects.RenderTexture;
   private hover!: Phaser.GameObjects.Graphics;
+  private playerManager!: PlayerManager;
   private player!: Player;
 
   constructor() {
@@ -115,11 +117,63 @@ export class Game extends Scene {
       },
     );
 
+    // Click-to-move: track pointer down position to distinguish clicks from drags
+    let pointerDownX = 0;
+    let pointerDownY = 0;
+    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      pointerDownX = pointer.x;
+      pointerDownY = pointer.y;
+    });
+    this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      const dx = pointer.x - pointerDownX;
+      const dy = pointer.y - pointerDownY;
+      if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD) return;
+
+      const tileX = Math.floor(pointer.worldX / TILE_SIZE);
+      const tileY = Math.floor(pointer.worldY / TILE_SIZE);
+      if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
+
+      // Calculate pixel target (center of tile, bottom edge for feet alignment)
+      const targetX = tileX * TILE_SIZE + TILE_SIZE / 2;
+      const targetY = (tileY + 1) * TILE_SIZE;
+
+      // Move local player toward the clicked tile
+      this.player.setMoveTarget(targetX, targetY);
+
+      // Also notify server of the tile click (backward compat)
+      this.playerManager.sendMove(tileX, tileY);
+    });
+
     // Re-fit camera when the canvas resizes
     this.scale.on('resize', (gameSize: Phaser.Structs.Size) => {
       cam.setSize(gameSize.width, gameSize.height);
     });
 
+    // Multiplayer
+    this.playerManager = new PlayerManager(this);
+    this.playerManager.connect();
+
     EventBus.emit('current-scene-ready', this);
+  }
+
+  /**
+   * Per-frame update: drive remote sprite interpolation and report
+   * local player position to the server.
+   */
+  override update(_time: number, delta: number): void {
+    // Drive interpolation on all remote player sprites
+    this.playerManager.update(delta);
+
+    // Report local player position to server (throttled inside PlayerManager)
+    this.playerManager.sendPositionUpdate(
+      this.player.x,
+      this.player.y,
+      this.player.facingDirection,
+      this.player.stateMachine.currentState
+    );
+  }
+
+  shutdown(): void {
+    this.playerManager.destroy();
   }
 }

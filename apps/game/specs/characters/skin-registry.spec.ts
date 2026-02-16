@@ -1,4 +1,9 @@
-import { getSkins, getDefaultSkin, SkinDefinition } from '../../src/game/characters/skin-registry';
+import {
+  getSkins,
+  getDefaultSkin,
+  getSkinByKey,
+  SkinDefinition,
+} from '../../src/game/characters/skin-registry';
 
 describe('skin-registry', () => {
   describe('getSkins()', () => {
@@ -7,20 +12,39 @@ describe('skin-registry', () => {
       expect(skins.length).toBeGreaterThanOrEqual(1);
     });
 
+    it('should return all 6 scout skins', () => {
+      const skins = getSkins();
+      expect(skins).toHaveLength(6);
+    });
+
     it('should return array containing the first Scout skin', () => {
       const skins = getSkins();
       const scout = skins.find((s: SkinDefinition) => s.key === 'scout_1');
       expect(scout).toBeDefined();
     });
 
-    it('should have correct first Scout skin properties', () => {
+    it('should have correct first Scout skin properties with unique sheetKey', () => {
       const skins = getSkins();
       const scout = skins.find((s: SkinDefinition) => s.key === 'scout_1');
       expect(scout).toEqual({
         key: 'scout_1',
         sheetPath: 'characters/scout_1.png',
-        sheetKey: 'char-scout',
+        sheetKey: 'scout_1',
       });
+    });
+
+    it('should have unique sheetKey for every skin entry', () => {
+      const skins = getSkins();
+      const sheetKeys = skins.map((s: SkinDefinition) => s.sheetKey);
+      const uniqueKeys = new Set(sheetKeys);
+      expect(uniqueKeys.size).toBe(skins.length);
+    });
+
+    it('should have sheetKey matching key for every skin entry', () => {
+      const skins = getSkins();
+      for (const skin of skins) {
+        expect(skin.sheetKey).toBe(skin.key);
+      }
     });
 
     it('should return a new array each time (defensive copy)', () => {
@@ -48,6 +72,41 @@ describe('skin-registry', () => {
       const skins = getSkins();
       const defaultSkin = getDefaultSkin();
       expect(defaultSkin).toEqual(skins[0]);
+    });
+
+    it('should have sheetKey matching its key', () => {
+      const defaultSkin = getDefaultSkin();
+      expect(defaultSkin.sheetKey).toBe(defaultSkin.key);
+    });
+  });
+
+  describe('getSkinByKey()', () => {
+    it('should return the correct skin definition for a valid key', () => {
+      const skin = getSkinByKey('scout_3');
+      expect(skin).toBeDefined();
+      expect(skin!.key).toBe('scout_3');
+      expect(skin!.sheetKey).toBe('scout_3');
+      expect(skin!.sheetPath).toBe('characters/scout_3.png');
+    });
+
+    it('should return undefined for an invalid key', () => {
+      const skin = getSkinByKey('invalid');
+      expect(skin).toBeUndefined();
+    });
+
+    it('should return undefined for an empty string key', () => {
+      const skin = getSkinByKey('');
+      expect(skin).toBeUndefined();
+    });
+
+    it('should find each of the 6 scout skins by key', () => {
+      for (let i = 1; i <= 6; i++) {
+        const key = `scout_${i}`;
+        const skin = getSkinByKey(key);
+        expect(skin).toBeDefined();
+        expect(skin!.key).toBe(key);
+        expect(skin!.sheetKey).toBe(key);
+      }
     });
   });
 });

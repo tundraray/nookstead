@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "../../dist/out-tsc",
+    "module": "esnext",
+    "types": ["jest", "node"],
+    "rootDir": ".",
+    "tsBuildInfoFile": "../../dist/apps/server/tsconfig.spec.tsbuildinfo"
+  },
+  "include": [
+    "jest.config.ts",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts",
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/shared/tsconfig.lib.json"
+    }
+  ]
+}

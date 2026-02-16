@@ -3,7 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@colyseus/sdk": "^0.17.33",
     "@nookstead/db": "workspace:*",
+    "@nookstead/shared": "workspace:*",
     "alea": "^1.0.1",
     "next": "~16.0.1",
     "react": "^19.0.0",

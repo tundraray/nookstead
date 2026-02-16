@@ -32,8 +32,10 @@ function createMockContext(
     mapWidth: 10,
     mapHeight: 10,
     tileSize: 16,
+    moveTarget: null,
     play: jest.fn(),
     setPosition: jest.fn().mockReturnThis(),
+    clearMoveTarget: jest.fn(),
     ...overrides,
   };
 }
