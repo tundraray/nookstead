@@ -7,3 +7,15 @@ export {
   type FindOrCreateUserParams,
   type FindOrCreateUserResult,
 } from './services/auth';
+export {
+  savePosition,
+  loadPosition,
+  type SavePositionData,
+  type LoadPositionResult,
+} from './services/player';
+export {
+  saveMap,
+  loadMap,
+  type SaveMapData,
+  type LoadMapResult,
+} from './services/map';

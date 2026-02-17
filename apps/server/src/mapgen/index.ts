@@ -1,6 +1,10 @@
 /**
  * MapGenerator: Composable procedural map generation pipeline.
  *
+ * Server-side map generation pipeline.
+ * Identical logic to client mapgen but running in Node.js.
+ * All dependencies are pure JS (alea, simplex-noise) -- no browser/Phaser deps.
+ *
  * Usage:
  *   const gen = new MapGenerator(64, 64)
  *     .addPass(new IslandPass())
@@ -15,8 +19,12 @@
  */
 
 import alea from 'alea';
-import { isWalkable } from '../terrain-properties';
+import { isWalkable } from './terrain-properties';
 import type { Cell, GeneratedMap, GenerationPass, Grid, LayerPass } from './types';
+import { IslandPass } from './passes/island-pass';
+import { ConnectivityPass } from './passes/connectivity-pass';
+import { WaterBorderPass } from './passes/water-border-pass';
+import { AutotilePass } from './passes/autotile-pass';
 
 export class MapGenerator {
   private passes: GenerationPass[] = [];
@@ -83,6 +91,19 @@ export class MapGenerator {
 // Re-export types and passes for convenience
 export type { GeneratedMap, GenerationPass, LayerPass, Grid, Cell, CellAction, LayerData, TerrainCellType } from './types';
 export { IslandPass } from './passes/island-pass';
+export { ConnectivityPass } from './passes/connectivity-pass';
 export { WaterBorderPass } from './passes/water-border-pass';
 export { AutotilePass } from './passes/autotile-pass';
-export { ConnectivityPass } from './passes/connectivity-pass';
+
+/**
+ * Factory function to create a fully configured MapGenerator.
+ * Pre-configured with all 4 passes in the correct order:
+ * IslandPass -> ConnectivityPass -> WaterBorderPass -> AutotilePass (layer pass).
+ */
+export function createMapGenerator(width: number, height: number): MapGenerator {
+  return new MapGenerator(width, height)
+    .addPass(new IslandPass())
+    .addPass(new ConnectivityPass())
+    .addPass(new WaterBorderPass())
+    .setLayerPass(new AutotilePass());
+}

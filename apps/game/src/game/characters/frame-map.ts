@@ -8,7 +8,7 @@
  * - 927px width / 16px frame width = 57 columns per row
  * - Variable frame counts: idle = 1, wait/walk/hit/punch = 6, sit = 3, hurt = 4
  * - Irregular direction orders: most rows RIGHT/UP/LEFT/DOWN,
- *   sit row uses RIGHT/DOWN/LEFT/UP
+ *   sit row uses DOWN/RIGHT/UP/LEFT
  * - Hurt has only 3 directions (no down variant)
  *
  * Pure data module with NO Phaser dependency.
@@ -39,12 +39,12 @@ const STANDARD_DIRS: readonly Direction[] = [
   'down',
 ] as const;
 
-/** Sit row uses a different direction order: RIGHT, DOWN, LEFT, UP. */
+/** Sit row uses a different direction order: DOWN, RIGHT, UP, LEFT. */
 const SIT_DIRS: readonly Direction[] = [
-  'right',
   'down',
-  'left',
+  'right',
   'up',
+  'left',
 ] as const;
 
 /** Hurt row has only 3 directions (no down variant). */

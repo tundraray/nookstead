@@ -9,7 +9,7 @@
  */
 
 import { getSurfaceProperties } from '../terrain-properties';
-import type { Grid } from '../mapgen/types';
+import type { Grid } from '@nookstead/shared';
 
 /** Input parameters for a single movement calculation. */
 export interface MovementInput {

@@ -7,7 +7,7 @@
  */
 
 import type { GenerationPass, Grid } from '../types';
-import { MIN_WATER_BORDER } from '../../constants';
+import { MIN_WATER_BORDER } from '@nookstead/shared';
 
 export class WaterBorderPass implements GenerationPass {
   readonly name = 'water-border';

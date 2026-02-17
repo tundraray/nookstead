@@ -6,7 +6,7 @@
  * per-cell frames for each terrain layer.
  */
 
-import { getFrame, SOLID_FRAME, EMPTY_FRAME, N, NE, E, SE, S, SW, W, NW } from '../../autotile';
+import { getFrame, SOLID_FRAME, EMPTY_FRAME, N, NE, E, SE, S, SW, W, NW } from '../autotile';
 import type { Grid, LayerData, LayerPass, TerrainCellType } from '../types';
 
 /** Definition of a rendering layer. */
@@ -20,7 +20,7 @@ interface TerrainLayer {
 }
 
 /**
- * Layer stack (bottom → top):
+ * Layer stack (bottom -> top):
  * 1. base: solid shallow water fill (every cell)
  * 2. deep_water: autotiled deep water over shallow water background
  * 3. grass: autotiled grass over water background

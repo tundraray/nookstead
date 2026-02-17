@@ -1,15 +1,25 @@
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { loadConfig } from './config';
-import { GameRoom } from './rooms/GameRoom';
-import { ROOM_NAME } from '@nookstead/shared';
+import { ChunkRoom } from './rooms/ChunkRoom';
+import { CHUNK_ROOM_NAME } from '@nookstead/shared';
 import { getGameDb, closeGameDb } from '@nookstead/db/adapters/colyseus';
+import { world } from './world/World';
+import { chunkManager } from './world/ChunkManager';
+import { sessionTracker } from './sessions';
 
 const config = loadConfig();
 
 // Initialize database connection
 getGameDb(config.databaseUrl);
 console.log('[server] Database connection initialized');
+
+// Initialize singletons (module-level instances created on import)
+// Reference them here to make initialization order explicit and verifiable.
+void world;
+void chunkManager;
+void sessionTracker;
+console.log('[Server] World, ChunkManager, and SessionTracker initialized');
 
 const gameServer = new Server({
   transport: new WebSocketTransport({ pingInterval: 10000 }),
@@ -34,7 +44,10 @@ const gameServer = new Server({
   },
 });
 
-gameServer.define(ROOM_NAME, GameRoom);
+gameServer.define(CHUNK_ROOM_NAME, ChunkRoom).filterBy(['chunkId']);
+console.log(
+  `[Server] ChunkRoom registered with name: ${CHUNK_ROOM_NAME}`
+);
 
 gameServer.listen(config.port).then(() => {
   console.log(`[server] Colyseus server listening on port ${config.port}`);

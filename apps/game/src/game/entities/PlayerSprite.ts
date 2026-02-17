@@ -39,8 +39,8 @@ export class PlayerSprite {
 
   constructor(
     scene: Phaser.Scene,
-    x: number,
-    y: number,
+    worldX: number,
+    worldY: number,
     skinKey: string,
     name: string,
     _isLocal: boolean,
@@ -54,7 +54,7 @@ export class PlayerSprite {
     this.skinKey = skin ? skin.sheetKey : 'scout_1';
 
     // Create sprite with bottom-center origin (consistent with local Player)
-    this.sprite = scene.add.sprite(x, y, this.skinKey);
+    this.sprite = scene.add.sprite(worldX, worldY, this.skinKey);
     this.sprite.setOrigin(0.5, 1.0);
     this.sprite.setDepth(PLAYER_DEPTH);
 
@@ -63,7 +63,7 @@ export class PlayerSprite {
     this.sprite.play(idleKey, true);
 
     // Name label above sprite
-    this.nameLabel = scene.add.text(x, y - 34, name, {
+    this.nameLabel = scene.add.text(worldX, worldY - 34, name, {
       fontSize: '10px',
       color: '#ffffff',
       align: 'center',
@@ -72,10 +72,20 @@ export class PlayerSprite {
     this.nameLabel.setDepth(PLAYER_DEPTH);
 
     // Initialize interpolation anchors
-    this.startX = x;
-    this.startY = y;
-    this.targetX = x;
-    this.targetY = y;
+    this.startX = worldX;
+    this.startY = worldY;
+    this.targetX = worldX;
+    this.targetY = worldY;
+  }
+
+  /** Current rendered X position of the sprite. */
+  getX(): number {
+    return this.sprite.x;
+  }
+
+  /** Current rendered Y position of the sprite. */
+  getY(): number {
+    return this.sprite.y;
   }
 
   /**

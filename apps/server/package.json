@@ -5,22 +5,34 @@
   "type": "module",
   "nx": {
     "name": "server",
-    "tags": ["scope:server", "type:app"],
+    "tags": [
+      "scope:server",
+      "type:app"
+    ],
     "targets": {
       "build": {
         "executor": "@nx/esbuild:esbuild",
-        "outputs": ["{options.outputPath}"],
+        "outputs": [
+          "{options.outputPath}"
+        ],
         "defaultConfiguration": "production",
         "options": {
           "platform": "node",
           "outputPath": "dist/apps/server",
-          "format": ["esm"],
+          "format": [
+            "esm"
+          ],
           "bundle": true,
           "thirdParty": true,
           "main": "apps/server/src/main.ts",
           "tsConfig": "apps/server/tsconfig.app.json",
-          "assets": ["apps/server/src/assets"],
-          "external": ["bufferutil", "utf-8-validate"],
+          "assets": [
+            "apps/server/src/assets"
+          ],
+          "external": [
+            "bufferutil",
+            "utf-8-validate"
+          ],
           "esbuildOptions": {
             "sourcemap": true,
             "outExtension": {
@@ -51,7 +63,9 @@
         "continuous": true,
         "executor": "@nx/js:node",
         "defaultConfiguration": "development",
-        "dependsOn": ["build"],
+        "dependsOn": [
+          "build"
+        ],
         "options": {
           "buildTarget": "server:build",
           "runBuildTargetDependencies": false
@@ -69,6 +83,8 @@
   },
   "dependencies": {
     "@nookstead/db": "workspace:*",
-    "@nookstead/shared": "workspace:*"
+    "@nookstead/shared": "workspace:*",
+    "alea": "^1.0.1",
+    "simplex-noise": "^4.0.3"
   }
 }

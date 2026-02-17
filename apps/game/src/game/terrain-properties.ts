@@ -5,7 +5,7 @@
  * gameplay-relevant properties per terrain classification.
  */
 
-import type { TerrainCellType } from './mapgen/types';
+import type { TerrainCellType } from '@nookstead/shared';
 
 export interface SurfaceProperties {
   /** Can the player walk on this surface? */

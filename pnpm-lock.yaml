@@ -230,6 +230,12 @@ importers:
       '@nookstead/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      alea:
+        specifier: ^1.0.1
+        version: 1.0.1
+      simplex-noise:
+        specifier: ^4.0.3
+        version: 4.0.3
 
   packages/db:
     dependencies:
