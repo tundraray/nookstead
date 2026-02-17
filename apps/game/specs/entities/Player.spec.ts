@@ -3,7 +3,7 @@ import { StateMachine, type State } from '../../src/game/entities/StateMachine';
 import { InputController } from '../../src/game/input/InputController';
 import { IdleState } from '../../src/game/entities/states/IdleState';
 import { WalkState } from '../../src/game/entities/states/WalkState';
-import { getDefaultSkin } from '../../src/game/characters/skin-registry';
+import { getDefaultSkin, getActiveSkin } from '../../src/game/characters/skin-registry';
 import {
   PLAYER_SPEED,
   MAP_WIDTH,
@@ -117,6 +117,15 @@ jest.mock('../../src/game/characters/skin-registry', () => ({
     key: 'scout',
     sheetPath: 'characters/scout_6.png',
     sheetKey: 'char-scout',
+    type: 'preset',
+    textureWidth: 927,
+  }),
+  getActiveSkin: jest.fn().mockReturnValue({
+    key: 'scout',
+    sheetPath: 'characters/scout_6.png',
+    sheetKey: 'char-scout',
+    type: 'preset',
+    textureWidth: 927,
   }),
 }));
 
@@ -169,9 +178,9 @@ describe('Player', () => {
   // Construction
   // -----------------------------------------------------------
   describe('construction', () => {
-    it('should call getDefaultSkin to determine the sprite sheet', () => {
+    it('should call getActiveSkin to determine the sprite sheet', () => {
       new Player(scene, 100, 200, mapData);
-      expect(getDefaultSkin).toHaveBeenCalledTimes(1);
+      expect(getActiveSkin).toHaveBeenCalledTimes(1);
     });
 
     it('should store the sheetKey from the default skin', () => {

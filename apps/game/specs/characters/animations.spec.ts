@@ -61,13 +61,13 @@ describe('registerAnimations', () => {
     consoleInfoSpy.mockRestore();
   });
 
-  it('should register exactly 27 animations', () => {
-    expect(createdAnims).toHaveLength(27);
+  it('should register exactly 31 animations', () => {
+    expect(createdAnims).toHaveLength(31);
   });
 
   it('should have unique keys for all registered animations', () => {
     const keys = createdAnims.map((a) => a.key);
-    expect(new Set(keys).size).toBe(27);
+    expect(new Set(keys).size).toBe(31);
   });
 
   it('should produce keys matching sheetKey_state_direction format', () => {

@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 test('has title', async ({ page }) => {
   await page.goto('/');
 
-  // Expect h1 to contain the game title.
-  expect(await page.locator('h1').innerText()).toContain('NOOKSTEAD');
+  // Expect logo image to be present with the game title as alt text.
+  const logo = page.locator('img[alt="Nookstead"]');
+  await expect(logo).toBeVisible();
 });

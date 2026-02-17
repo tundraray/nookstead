@@ -59,13 +59,13 @@ describe('getAnimationDefs', () => {
     defs = getAnimationDefs('scout', 'char-scout');
   });
 
-  it('should return exactly 27 animation definitions', () => {
-    expect(defs).toHaveLength(27);
+  it('should return exactly 31 animation definitions', () => {
+    expect(defs).toHaveLength(31);
   });
 
   it('should have unique keys for all definitions', () => {
     const keys = defs.map((d) => d.key);
-    expect(new Set(keys).size).toBe(27);
+    expect(new Set(keys).size).toBe(31);
   });
 
   it('should use ANIMATION_FPS for all frameRate values', () => {
