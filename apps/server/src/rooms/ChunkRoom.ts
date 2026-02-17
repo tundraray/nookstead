@@ -99,7 +99,18 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
     }
 
-    // 2. Load or generate map
+    // 2. Redirect if player belongs in a different chunk
+    const targetChunkId = savedPosition?.chunkId ?? `player:${userId}`;
+
+    if (targetChunkId !== this.chunkId) {
+      console.log(
+        `[ChunkRoom] Redirecting: userId=${userId}, from=${this.chunkId} to=${targetChunkId}`
+      );
+      client.send(ServerMessage.ROOM_REDIRECT, { chunkId: targetChunkId });
+      return;
+    }
+
+    // 3. Load or generate map
     let mapPayload: MapDataPayload;
     let mapWalkable: boolean[][] | null = null;
     let mapGrid: Grid | null = null;
@@ -185,8 +196,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       chunkId = savedPosition.chunkId;
       direction = savedPosition.direction;
     } else {
-      // New player: compute spawn from map data
-      chunkId = DEFAULT_SPAWN.chunkId;
+      // New player: use this room's chunkId (after redirect, this IS the correct chunk)
+      chunkId = this.chunkId;
       direction = 'down';
 
       if (mapWalkable && mapGrid) {

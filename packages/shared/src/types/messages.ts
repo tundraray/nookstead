@@ -10,6 +10,7 @@ export const ServerMessage = {
   CHUNK_TRANSITION: 'chunk_transition',
   MAP_DATA: 'map_data',
   SESSION_KICKED: 'session_kicked',
+  ROOM_REDIRECT: 'room_redirect',
 } as const;
 
 export interface MovePayload {

@@ -77,32 +77,60 @@ export class LoadingScene extends Scene {
       this.setState('LOADING_MAP');
       this.startTimeout();
 
-      // Listen for MAP_DATA message
-      this.room.onMessage(
-        ServerMessage.MAP_DATA,
-        (data: MapDataPayload) => {
-          console.log('[LoadingScene] MAP_DATA received');
-          this.clearTimeoutHandle();
-          this.mapData = data;
-          this.setState('LOADING_PLAYERS');
-          this.waitForPlayers();
-        }
-      );
-
-      // Listen for ERROR message from server
-      this.room.onMessage(
-        ServerMessage.ERROR,
-        (data: { message: string }) => {
-          console.error('[LoadingScene] Server error:', data.message);
-          this.clearTimeoutHandle();
-          this.setState('ERROR', data.message);
-        }
-      );
+      this.setupRoomListeners();
     } catch (err) {
       console.error('[LoadingScene] Room join failed:', err);
       this.clearTimeoutHandle();
       this.setState('ERROR', 'Connection failed');
     }
+  }
+
+  private setupRoomListeners(): void {
+    if (!this.room) return;
+
+    // Listen for ROOM_REDIRECT (wrong chunk — rejoin correct one)
+    this.room.onMessage(
+      ServerMessage.ROOM_REDIRECT,
+      async (data: { chunkId: string }) => {
+        console.log(
+          `[LoadingScene] ROOM_REDIRECT received, target=${data.chunkId}`
+        );
+        this.clearTimeoutHandle();
+
+        try {
+          await leaveCurrentRoom(false);
+          this.room = await joinChunkRoom(data.chunkId);
+          this.setState('LOADING_MAP');
+          this.startTimeout();
+          this.setupRoomListeners();
+        } catch (err) {
+          console.error('[LoadingScene] Redirect join failed:', err);
+          this.setState('ERROR', 'Redirect failed');
+        }
+      }
+    );
+
+    // Listen for MAP_DATA message
+    this.room.onMessage(
+      ServerMessage.MAP_DATA,
+      (data: MapDataPayload) => {
+        console.log('[LoadingScene] MAP_DATA received');
+        this.clearTimeoutHandle();
+        this.mapData = data;
+        this.setState('LOADING_PLAYERS');
+        this.waitForPlayers();
+      }
+    );
+
+    // Listen for ERROR message from server
+    this.room.onMessage(
+      ServerMessage.ERROR,
+      (data: { message: string }) => {
+        console.error('[LoadingScene] Server error:', data.message);
+        this.clearTimeoutHandle();
+        this.setState('ERROR', data.message);
+      }
+    );
   }
 
   private waitForPlayers(): void {
