@@ -19,6 +19,17 @@
   text-align: center;
   margin-bottom: 32px;
   animation: pgFadeIn 0.8s ease-out;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  width: 280px;
+  height: auto;
+  filter: drop-shadow(0 0 12px rgba(72, 199, 170, 0.4))
+    drop-shadow(0 0 24px rgba(72, 199, 170, 0.2));
 }
 
 .title {

@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import Image from 'next/image';
 import { LoginButton } from '@/components/auth/LoginButton';
 
 export default async function LandingPage() {
@@ -30,10 +31,14 @@ export default async function LandingPage() {
       <div className="landing-page__content">
         {/* Pixel art logo */}
         <div className="landing-page__logo-wrapper">
-          <h1 className="landing-page__logo">NOOKSTEAD</h1>
-          <div className="landing-page__logo-shadow" aria-hidden="true">
-            NOOKSTEAD
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Nookstead"
+            width={400}
+            height={98}
+            priority
+            className="landing-page__logo-img"
+          />
         </div>
 
         {/* Tagline */}

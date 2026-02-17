@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import Image from 'next/image';
 import { usePortraitState } from './usePortraitState';
 import { PortraitCanvas } from './PortraitCanvas';
 import { FlatSelector, GroupedSelector } from './LayerSelector';
@@ -57,6 +58,14 @@ export function PortraitGenerator() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <Image
+          src="/logo.png"
+          alt="Nookstead"
+          width={280}
+          height={68}
+          priority
+          className={styles.logo}
+        />
         <h1 className={styles.title}>Portrait Generator</h1>
         <p className={styles.subtitle}>Create your Nookstead character</p>
       </header>

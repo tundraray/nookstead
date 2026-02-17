@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useCharacterState } from './useCharacterState';
 import { CharacterPreview } from './CharacterPreview';
 import { LayerPanel } from './LayerPanel';
@@ -29,6 +30,14 @@ export function CharacterGenerator() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
+        <Image
+          src="/logo.png"
+          alt="Nookstead"
+          width={280}
+          height={68}
+          priority
+          className={styles.logo}
+        />
         <h1 className={styles.title}>Character Generator</h1>
         <p className={styles.subtitle}>
           Customize your character and save to use in-game
