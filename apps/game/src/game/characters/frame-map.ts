@@ -6,7 +6,7 @@
  * sprite sheet layout:
  *
  * - 927px width / 16px frame width = 57 columns per row
- * - Variable frame counts: idle/walk/hit/punch = 6, sit = 3, hurt = 4
+ * - Variable frame counts: idle = 1, wait/walk/hit/punch = 6, sit = 3, hurt = 4
  * - Irregular direction orders: most rows RIGHT/UP/LEFT/DOWN,
  *   sit row uses RIGHT/DOWN/LEFT/UP
  * - Hurt has only 3 directions (no down variant)
@@ -64,6 +64,8 @@ interface AnimStateConfig {
   row: number;
   /** Number of frames per direction */
   frameCount: number;
+  /** Column stride between directions (defaults to frameCount). */
+  stride?: number;
   /** Ordered list of directions for this row */
   directions: readonly Direction[];
   /** -1 for loop, 0 for play-once */
@@ -74,18 +76,26 @@ interface AnimStateConfig {
  * All animation state configurations.
  *
  * Row indices correspond to the 16x32 frame grid within the sprite sheet:
- * - Row 1 (y=32): idle
+ * - Row 1 (y=32): idle (static first frame), wait (6-frame loop)
  * - Row 2 (y=64): walk
  * - Row 4 (y=128): sit (different direction order)
  * - Row 13 (y=416): hit
  * - Row 14 (y=448): punch
  * - Row 19 (y=608): hurt (3 directions only)
  *
- * "waiting" reuses idle frames and is handled separately.
+ * "waiting" reuses wait frames and is handled separately.
  */
 const ANIM_STATES: readonly AnimStateConfig[] = [
   {
     state: 'idle',
+    row: 1,
+    frameCount: 1,
+    stride: 6,
+    directions: STANDARD_DIRS,
+    repeat: 0,
+  },
+  {
+    state: 'wait',
     row: 1,
     frameCount: 6,
     directions: STANDARD_DIRS,
@@ -128,8 +138,8 @@ const ANIM_STATES: readonly AnimStateConfig[] = [
   },
 ];
 
-/** Hardcoded sprite sheet width for MVP (Task 4.1 will derive at runtime). */
-const TEXTURE_WIDTH = 927;
+/** Default sprite sheet width (927px for scout skins). */
+const DEFAULT_TEXTURE_WIDTH = 927;
 
 /** Width of a single frame in the sprite sheet. */
 const FRAME_WIDTH = 16;
@@ -183,10 +193,11 @@ function buildStateAnimations(
   colsPerRow: number
 ): AnimationDef[] {
   const base = config.row * colsPerRow;
+  const stride = config.stride ?? config.frameCount;
 
   return config.directions.map((dir, dirIndex) => ({
     key: animKey(sheetKey, config.state, dir),
-    frames: generateFrames(base + dirIndex * config.frameCount, config.frameCount),
+    frames: generateFrames(base + dirIndex * stride, config.frameCount),
     frameRate: ANIMATION_FPS,
     repeat: config.repeat,
   }));
@@ -195,39 +206,42 @@ function buildStateAnimations(
 /**
  * Generate all 27 animation definitions for a character skin.
  *
- * Produces AnimationDef objects for 7 animation states across up to 4
- * directions each. The "waiting" state reuses idle frames with looping
- * playback. The "hurt" state has only 3 directions (no down variant).
+ * Produces AnimationDef objects for 8 animation states across up to 4
+ * directions each. "idle" is a static single frame, "wait" is the animated
+ * version. The "waiting" state reuses wait frames with looping playback.
+ * The "hurt" state has only 3 directions (no down variant).
  *
  * @param skinKey - Skin identifier (e.g. 'scout'), used for reference only
  * @param sheetKey - Sprite sheet texture key (e.g. 'char-scout'), used in animation keys
+ * @param textureWidth - Width of the spritesheet in pixels (default 927 for scouts, 896 for custom skins)
  * @returns Array of 27 AnimationDef objects with exact frame indices
  */
 export function getAnimationDefs(
   skinKey: string,
-  sheetKey: string
+  sheetKey: string,
+  textureWidth: number = DEFAULT_TEXTURE_WIDTH
 ): AnimationDef[] {
-  const colsPerRow = computeColumnsPerRow(TEXTURE_WIDTH, FRAME_WIDTH);
+  const colsPerRow = computeColumnsPerRow(textureWidth, FRAME_WIDTH);
   const defs: AnimationDef[] = [];
 
   for (const config of ANIM_STATES) {
     defs.push(...buildStateAnimations(sheetKey, config, colsPerRow));
   }
 
-  // "waiting" reuses idle frames with looping playback
-  const idleConfig = ANIM_STATES.find((c) => c.state === 'idle');
-  if (!idleConfig) {
-    throw new Error('idle state not found in ANIM_STATES');
+  // "waiting" reuses wait frames with looping playback
+  const waitConfig = ANIM_STATES.find((c) => c.state === 'wait');
+  if (!waitConfig) {
+    throw new Error('wait state not found in ANIM_STATES');
   }
-  const idleBase = idleConfig.row * colsPerRow;
+  const waitBase = waitConfig.row * colsPerRow;
 
-  for (let dirIndex = 0; dirIndex < idleConfig.directions.length; dirIndex++) {
-    const dir = idleConfig.directions[dirIndex];
+  for (let dirIndex = 0; dirIndex < waitConfig.directions.length; dirIndex++) {
+    const dir = waitConfig.directions[dirIndex];
     defs.push({
       key: animKey(sheetKey, 'waiting', dir),
       frames: generateFrames(
-        idleBase + dirIndex * idleConfig.frameCount,
-        idleConfig.frameCount
+        waitBase + dirIndex * waitConfig.frameCount,
+        waitConfig.frameCount
       ),
       frameRate: ANIMATION_FPS,
       repeat: -1,

@@ -1,7 +1,12 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { registerAnimations } from '../characters/animations';
-import { getSkins } from '../characters/skin-registry';
+import { getSkins, getSkinByKey } from '../characters/skin-registry';
+import {
+  hasCustomSkin,
+  getPresetSkinKey,
+  loadCustomSkinTexture,
+} from '../characters/custom-skin-loader';
 import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
 import { TERRAINS } from '../terrain';
 
@@ -33,7 +38,7 @@ export class Preloader extends Scene {
       });
     }
 
-    // Load character spritesheets
+    // Load all preset character spritesheets
     for (const skin of getSkins()) {
       this.load.spritesheet(skin.sheetKey, skin.sheetPath, {
         frameWidth: TILE_SIZE,
@@ -42,12 +47,34 @@ export class Preloader extends Scene {
     }
   }
 
-  create() {
-    // Register character animations
+  async create() {
+    // Register animations for all preset skins
     for (const skin of getSkins()) {
       const texture = this.textures.get(skin.sheetKey);
       const source = texture.getSourceImage() as HTMLImageElement;
       registerAnimations(this, skin.sheetKey, source.width, TILE_SIZE);
+    }
+
+    // Load custom skin from localStorage if present
+    if (hasCustomSkin()) {
+      const customSkin = await loadCustomSkinTexture(this);
+      if (customSkin) {
+        registerAnimations(
+          this,
+          customSkin.sheetKey,
+          customSkin.textureWidth,
+          TILE_SIZE
+        );
+      }
+    }
+
+    // Check if a preset skin is selected in localStorage
+    const presetKey = getPresetSkinKey();
+    if (presetKey) {
+      const skin = getSkinByKey(presetKey);
+      if (skin) {
+        console.info(`Preset skin selected: ${presetKey}`);
+      }
     }
 
     EventBus.emit('preload-complete');
