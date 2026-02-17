@@ -68,7 +68,7 @@ jest.mock('../config', () => ({
 
 jest.mock('../auth/verifyToken', () => ({
   __esModule: true,
-  verifyNextAuthToken: jest.fn(),
+  verifyNextAuthToken: jest.fn<(token: string, secret: string, isProduction?: boolean) => Promise<unknown>>(),
 }));
 
 // Mock the World module - provide a fresh World-like object for each test
@@ -120,7 +120,7 @@ jest.mock('@nookstead/db/adapters/colyseus', () => ({
 }));
 
 // Mock mapgen module
-const mockGenerate = jest.fn<() => unknown>().mockReturnValue({
+const mockGenerate = jest.fn<(seed: number) => unknown>().mockReturnValue({
   seed: 42,
   width: 64,
   height: 64,
@@ -128,7 +128,7 @@ const mockGenerate = jest.fn<() => unknown>().mockReturnValue({
   layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
   walkable: [[true]],
 });
-const mockCreateMapGenerator = jest.fn<() => unknown>().mockReturnValue({
+const mockCreateMapGenerator = jest.fn<(w: number, h: number) => unknown>().mockReturnValue({
   generate: mockGenerate,
 });
 
@@ -642,7 +642,7 @@ describe('ChunkRoom', () => {
 
     it('onAuth with duplicate session: calls checkAndKick with userId', async () => {
       // Arrange: configure verifyNextAuthToken to return a valid payload
-      const mockVerify = verifyNextAuthToken as jest.Mock;
+      const mockVerify = verifyNextAuthToken as jest.MockedFunction<typeof verifyNextAuthToken>;
       mockVerify.mockResolvedValue({
         userId: 'user-dup-session',
         email: 'dup@test.com',
