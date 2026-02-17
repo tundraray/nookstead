@@ -81,30 +81,6 @@ function makeAccessory(
   };
 }
 
-function makeSmartphone(num: string): LayerOption {
-  return {
-    id: `smartphone_${num}`,
-    category: 'smartphone',
-    path: `${BASE_PATH}/smartphones/Smartphone_${num}.png`,
-    displayName: `Smartphone ${num}`,
-    columns: 24,
-    sheetWidth: 384,
-    sheetHeight: 192,
-  };
-}
-
-function makeBook(num: string): LayerOption {
-  return {
-    id: `book_${num}`,
-    category: 'book',
-    path: `${BASE_PATH}/books/Book_${num}.png`,
-    displayName: `Book ${num}`,
-    columns: ADULT_OVERLAY_COLUMNS,
-    sheetWidth: ADULT_OVERLAY_WIDTH,
-    sheetHeight: ADULT_OVERLAY_HEIGHT,
-  };
-}
-
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
@@ -186,10 +162,6 @@ const EYES = generateRange(7, makeEyes);
 const HAIRSTYLES = generateHairstyles();
 const OUTFITS = generateOutfits();
 const ACCESSORIES = generateAccessories();
-const SMARTPHONES = Array.from({ length: 5 }, (_, i) =>
-  makeSmartphone(String(i + 1))
-);
-const BOOKS = generateRange(6, makeBook);
 
 const CATEGORY_MAP: Record<LayerCategory, LayerOption[]> = {
   body: BODIES,
@@ -197,8 +169,6 @@ const CATEGORY_MAP: Record<LayerCategory, LayerOption[]> = {
   hairstyle: HAIRSTYLES,
   outfit: OUTFITS,
   accessory: ACCESSORIES,
-  smartphone: SMARTPHONES,
-  book: BOOKS,
 };
 
 export function getLayerOptions(category: LayerCategory): LayerOption[] {
@@ -212,8 +182,6 @@ export function getDefaultOptions(): Record<LayerCategory, LayerOption | null> {
     hairstyle: HAIRSTYLES[0],
     outfit: OUTFITS[0],
     accessory: null,
-    smartphone: null,
-    book: null,
   };
 }
 

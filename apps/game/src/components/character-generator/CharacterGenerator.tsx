@@ -75,20 +75,6 @@ export function CharacterGenerator() {
             allowNone
             label="Accessory"
           />
-          <LayerPanel
-            category="book"
-            selected={state.book}
-            onSelect={(opt) => setLayer('book', opt)}
-            allowNone
-            label="Book"
-          />
-          <LayerPanel
-            category="smartphone"
-            selected={state.smartphone}
-            onSelect={(opt) => setLayer('smartphone', opt)}
-            allowNone
-            label="Smartphone"
-          />
 
           <div className={styles.actions}>
             <button

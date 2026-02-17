@@ -17,8 +17,6 @@ export interface CharacterState {
   hairstyle: LayerOption | null;
   outfit: LayerOption | null;
   accessory: LayerOption | null;
-  smartphone: LayerOption | null;
-  book: LayerOption | null;
 }
 
 export interface UseCharacterStateReturn {
@@ -59,12 +57,6 @@ function loadSavedRecipe(): CharacterState | null {
       accessory: recipe.accessory
         ? getLayerOptionById('accessory', recipe.accessory) ?? null
         : null,
-      smartphone: recipe.smartphone
-        ? getLayerOptionById('smartphone', recipe.smartphone) ?? null
-        : null,
-      book: recipe.book
-        ? getLayerOptionById('book', recipe.book) ?? null
-        : null,
     };
   } catch {
     return null;
@@ -79,8 +71,6 @@ function stateToRecipe(state: CharacterState): SkinRecipe {
     hairstyle: state.hairstyle?.id ?? null,
     outfit: state.outfit?.id ?? null,
     accessory: state.accessory?.id ?? null,
-    smartphone: state.smartphone?.id ?? null,
-    book: state.book?.id ?? null,
     isKid: false,
   };
 }
@@ -96,8 +86,6 @@ export function useCharacterState(): UseCharacterStateReturn {
       hairstyle: defaults.hairstyle,
       outfit: defaults.outfit,
       accessory: defaults.accessory,
-      smartphone: defaults.smartphone,
-      book: defaults.book,
     };
   });
 
@@ -127,9 +115,6 @@ export function useCharacterState(): UseCharacterStateReturn {
       const option = state[cat];
       if (option) activeLayers.push(option);
     }
-    // Add smartphone and book if selected
-    if (state.smartphone) activeLayers.push(state.smartphone);
-    if (state.book) activeLayers.push(state.book);
 
     Promise.all(activeLayers.map((opt) => loadImage(opt.path)))
       .then((images) => {
@@ -174,8 +159,6 @@ export function useCharacterState(): UseCharacterStateReturn {
         Math.random() < 0.6
           ? randomFrom(getLayerOptions('accessory'))
           : null,
-      smartphone: null,
-      book: null,
     });
     setHasUnsavedChanges(true);
     setSavedSuccessfully(false);

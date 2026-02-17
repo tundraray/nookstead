@@ -3,9 +3,7 @@ export type LayerCategory =
   | 'eyes'
   | 'hairstyle'
   | 'outfit'
-  | 'accessory'
-  | 'smartphone'
-  | 'book';
+  | 'accessory';
 
 export interface LayerOption {
   id: string;
@@ -26,8 +24,6 @@ export interface SkinRecipe {
   hairstyle: string | null;
   outfit: string | null;
   accessory: string | null;
-  smartphone: string | null;
-  book: string | null;
   isKid: boolean;
 }
 
