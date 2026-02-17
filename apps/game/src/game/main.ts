@@ -1,6 +1,7 @@
 import { AUTO, Game } from 'phaser';
 import { Boot } from './scenes/Boot';
 import { Preloader } from './scenes/Preloader';
+import { LoadingScene } from './scenes/LoadingScene';
 import { Game as MainGame } from './scenes/Game';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -16,7 +17,7 @@ const config: Phaser.Types.Core.GameConfig = {
     width: '100%',
     height: '100%',
   },
-  scene: [Boot, Preloader, MainGame],
+  scene: [Boot, Preloader, LoadingScene, MainGame],
 };
 
 const StartGame = (parent: string) => {

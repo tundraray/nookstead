@@ -21,8 +21,9 @@ import { InputController } from '../input/InputController';
 import { IdleState, WalkState } from './states';
 import { type Direction, animKey } from '../characters/frame-map';
 import { getDefaultSkin } from '../characters/skin-registry';
-import type { GeneratedMap } from '../mapgen/types';
+import type { GeneratedMap } from '@nookstead/shared';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
+import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
 
 export class Player extends Phaser.GameObjects.Sprite {
   public readonly sheetKey: string;
@@ -40,6 +41,14 @@ export class Player extends Phaser.GameObjects.Sprite {
   /** Click-to-move target position, or null when inactive. */
   public moveTarget: { x: number; y: number } | null = null;
 
+  // Prediction state (FR-16)
+  /** Last authoritative X position received from the server. */
+  authoritativeX: number;
+  /** Last authoritative Y position received from the server. */
+  authoritativeY: number;
+  /** Whether the player is currently interpolating toward the authoritative position. */
+  private isInterpolating = false;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -56,6 +65,10 @@ export class Player extends Phaser.GameObjects.Sprite {
     this.mapWidth = MAP_WIDTH;
     this.mapHeight = MAP_HEIGHT;
     this.tileSize = TILE_SIZE;
+
+    // Initialize authoritative position to starting position
+    this.authoritativeX = x;
+    this.authoritativeY = y;
 
     // Bottom-center anchor (feet alignment)
     this.setOrigin(0.5, 1.0);
@@ -87,12 +100,70 @@ export class Player extends Phaser.GameObjects.Sprite {
   /**
    * Phaser frame update hook.
    *
-   * Calls the parent implementation (required for the animation system)
+   * Calls the parent implementation (required for the animation system),
+   * applies reconciliation interpolation toward the authoritative position,
    * then delegates to the active FSM state.
+   *
+   * Interpolation runs at the Player entity level so it continues through
+   * Walk -> Idle state transitions without interruption.
    */
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+
+    // Apply reconciliation interpolation if active (FR-16)
+    if (this.isInterpolating) {
+      const dx = this.authoritativeX - this.x;
+      const dy = this.authoritativeY - this.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < 0.5) {
+        // Close enough: snap to authoritative and stop interpolating
+        this.x = this.authoritativeX;
+        this.y = this.authoritativeY;
+        this.isInterpolating = false;
+      } else {
+        // Lerp toward authoritative position
+        this.x += dx * INTERPOLATION_SPEED;
+        this.y += dy * INTERPOLATION_SPEED;
+      }
+    }
+
     this.stateMachine.update(delta);
+  }
+
+  /**
+   * Called when the server sends an authoritative position update.
+   *
+   * Determines whether to interpolate smoothly or snap to the new position
+   * based on the distance delta between predicted and authoritative positions.
+   *
+   * - Delta >= CORRECTION_THRESHOLD (8px): snap immediately
+   * - Delta > 0.5px but < CORRECTION_THRESHOLD: smooth interpolation
+   * - Delta <= 0.5px: already in sync, no action needed
+   *
+   * This method is called at the Player entity level, NOT within FSM states.
+   * Interpolation continues even when state transitions from Walk to Idle.
+   */
+  reconcile(serverX: number, serverY: number): void {
+    this.authoritativeX = serverX;
+    this.authoritativeY = serverY;
+
+    const dx = serverX - this.x;
+    const dy = serverY - this.y;
+    const delta = Math.sqrt(dx * dx + dy * dy);
+
+    if (delta >= CORRECTION_THRESHOLD) {
+      // Large delta: snap immediately
+      this.x = serverX;
+      this.y = serverY;
+      this.isInterpolating = false;
+    } else if (delta > 0.5) {
+      // Small delta: begin interpolation
+      this.isInterpolating = true;
+    } else {
+      // Negligible delta: already in sync
+      this.isInterpolating = false;
+    }
   }
 
   /**

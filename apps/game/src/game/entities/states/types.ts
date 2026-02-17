@@ -11,7 +11,7 @@
 import type { Direction } from '../../characters/frame-map';
 import type { InputController } from '../../input/InputController';
 import type { StateMachine } from '../StateMachine';
-import type { Grid } from '../../mapgen/types';
+import type { Grid } from '@nookstead/shared';
 
 /**
  * Context interface that player states use to interact with the player entity.

@@ -2,58 +2,62 @@ import { Scene } from 'phaser';
 import { Callbacks } from '@colyseus/sdk';
 import type { Room } from '@colyseus/sdk';
 import {
-  joinGameRoom,
-  leaveGameRoom,
+  joinChunkRoom,
+  leaveCurrentRoom,
 } from '@/services/colyseus';
-import type { GameRoomState, PositionUpdatePayload } from '@nookstead/shared';
-import {
-  ClientMessage,
-  POSITION_SYNC_INTERVAL_MS,
-} from '@nookstead/shared';
+import type { ChunkRoomState } from '@nookstead/shared';
 import { EventBus } from '../EventBus';
 import { PlayerSprite } from '../entities/PlayerSprite';
+import type { Player } from '../entities/Player';
 
 /**
  * Manages multiplayer player state synchronization.
  *
  * Handles:
- * - Connecting to the Colyseus game room
+ * - Connecting to the Colyseus chunk room
  * - Creating animated PlayerSprite instances for remote players
- * - Throttled position update sending for the local player
  * - Per-frame interpolation updates for remote player sprites
- * - Backward-compatible click-to-move via sendMove()
+ *
+ * Local player movement is sent by WalkState directly via the Colyseus service.
  */
 export class PlayerManager {
   private scene: Scene;
-  private room: Room<unknown, GameRoomState> | null = null;
+  private room: Room<unknown, ChunkRoomState> | null = null;
   private sprites = new Map<string, PlayerSprite>();
   private detachCallbacks: (() => void)[] = [];
-
-  // Position sync state for throttling and dirty-checking
-  private lastSentTime = 0;
-  private lastSentX = 0;
-  private lastSentY = 0;
-  private lastSentDirection = '';
-  private lastSentAnimState = '';
+  /** Local Player entity for reconciliation wiring (FR-16). */
+  private localPlayer: Player | null = null;
 
   constructor(scene: Scene) {
     this.scene = scene;
   }
 
-  async connect(): Promise<void> {
+  /**
+   * Register the local Player entity for server reconciliation (FR-16).
+   *
+   * When the server sends authoritative position updates for this session,
+   * the PlayerManager calls player.reconcile() to correct any prediction drift.
+   * Must be called before connect() so the reference is available when the
+   * onAdd callback fires for the local player.
+   */
+  setLocalPlayer(player: Player): void {
+    this.localPlayer = player;
+  }
+
+  async connect(existingRoom?: Room<unknown, ChunkRoomState>): Promise<void> {
     EventBus.emit('multiplayer:connecting');
 
     try {
-      this.room = await joinGameRoom();
+      this.room = existingRoom ?? (await joinChunkRoom());
     } catch (err) {
       EventBus.emit('multiplayer:error', err);
-      console.error('[PlayerManager] Failed to join game room:', err);
+      console.error('[PlayerManager] Failed to join chunk room:', err);
       return;
     }
 
     // Guard: scene may have been destroyed while awaiting
     if (!this.scene.scene.isActive(this.scene.scene.key)) {
-      leaveGameRoom().catch(() => { /* fire-and-forget */ });
+      leaveCurrentRoom().catch(() => { /* fire-and-forget */ });
       return;
     }
 
@@ -64,48 +68,6 @@ export class PlayerManager {
       '[PlayerManager] Connected, sessionId:',
       this.room.sessionId
     );
-  }
-
-  /**
-   * Send a throttled position update to the server.
-   * Only sends if enough time has elapsed (POSITION_SYNC_INTERVAL_MS)
-   * and state has actually changed since the last send.
-   */
-  sendPositionUpdate(
-    x: number,
-    y: number,
-    direction: string,
-    animState: string
-  ): void {
-    if (!this.room) return;
-
-    const now = Date.now();
-    if (now - this.lastSentTime < POSITION_SYNC_INTERVAL_MS) return;
-
-    // Skip if nothing changed (dirty check)
-    if (
-      x === this.lastSentX &&
-      y === this.lastSentY &&
-      direction === this.lastSentDirection &&
-      animState === this.lastSentAnimState
-    ) {
-      return;
-    }
-
-    const payload: PositionUpdatePayload = {
-      x,
-      y,
-      direction,
-      animState,
-    };
-
-    this.room.send(ClientMessage.POSITION_UPDATE, payload);
-
-    this.lastSentTime = now;
-    this.lastSentX = x;
-    this.lastSentY = y;
-    this.lastSentDirection = direction;
-    this.lastSentAnimState = animState;
   }
 
   /**
@@ -136,12 +98,20 @@ export class PlayerManager {
       (player: any, sessionId: any) => {
         const isLocal = sessionId === this.room!.sessionId;
 
+        if (isLocal && this.localPlayer) {
+          // Wire server position updates to local player reconciliation (FR-16)
+          const detachChange = $.onChange(player, () => {
+            this.localPlayer?.reconcile(player.worldX, player.worldY);
+          });
+          this.detachCallbacks.push(detachChange);
+        }
+
         if (!isLocal) {
           // Create animated sprite for remote player using server-assigned skin
           const sprite = new PlayerSprite(
             this.scene,
-            player.x,
-            player.y,
+            player.worldX,
+            player.worldY,
             player.skin || 'scout_1',
             player.name || sessionId,
             false,
@@ -151,10 +121,17 @@ export class PlayerManager {
 
           // Listen for state changes on this remote player
           const detachChange = $.onChange(player, () => {
-            sprite.setTarget(player.x, player.y);
+            // Update remote sprite target position using worldX/worldY
+            sprite.setTarget(player.worldX, player.worldY);
+
+            // Derive animState client-side: walking if position differs from
+            // current rendered position, idle otherwise
+            const isMoving =
+              player.worldX !== sprite.getX() ||
+              player.worldY !== sprite.getY();
             sprite.updateAnimation(
               player.direction || 'down',
-              player.animState || 'idle'
+              isMoving ? 'walk' : 'idle'
             );
           });
           this.detachCallbacks.push(detachChange);
@@ -197,15 +174,6 @@ export class PlayerManager {
     });
   }
 
-  /**
-   * Send a click-to-move message with tile coordinates.
-   * Kept for backward compatibility with the existing MOVE message handler.
-   */
-  sendMove(tileX: number, tileY: number): void {
-    if (!this.room) return;
-    this.room.send(ClientMessage.MOVE, { x: tileX, y: tileY });
-  }
-
   destroy(): void {
     for (const detach of this.detachCallbacks) {
       detach();
@@ -218,6 +186,6 @@ export class PlayerManager {
     this.sprites.clear();
 
     this.room = null;
-    leaveGameRoom().catch(() => { /* fire-and-forget */ });
+    leaveCurrentRoom().catch(() => { /* fire-and-forget */ });
   }
 }

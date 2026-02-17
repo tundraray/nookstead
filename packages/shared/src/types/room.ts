@@ -1,12 +1,13 @@
+import type { LocationType } from '../constants.js';
+
 export interface PlayerState {
   userId: string;
-  x: number;
-  y: number;
-  name: string;
-  connected: boolean;
-  skin: string;
+  worldX: number;
+  worldY: number;
+  chunkId: string;
   direction: string;
-  animState: string;
+  skin: string;
+  name: string;
 }
 
 export interface GameRoomState {
@@ -16,4 +17,21 @@ export interface GameRoomState {
 export interface AuthData {
   userId: string;
   email: string;
+}
+
+export interface ChunkRoomState {
+  players: Map<string, PlayerState>;
+}
+
+export interface Location {
+  id: string;
+  type: LocationType;
+}
+
+export interface MoveResult {
+  worldX: number;
+  worldY: number;
+  chunkChanged: boolean;
+  oldChunkId?: string;
+  newChunkId?: string;
 }
