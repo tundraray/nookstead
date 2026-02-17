@@ -199,38 +199,38 @@ describe('getAnimationDefs', () => {
     });
   });
 
-  // --- sit (row 4, 3 frames per direction, DIFFERENT direction order: RIGHT, DOWN, LEFT, UP) ---
+  // --- sit (row 4, 3 frames per direction, DIFFERENT direction order: DOWN, RIGHT, UP, LEFT) ---
   describe('sit animations', () => {
     // base = 4 * COLS = 228
 
-    it('should have sit_right frames [228..230]', () => {
-      const def = defined(
-        defs.find((d) => d.key === 'char-scout_sit_right'),
-        'sit_right'
-      );
-      expect(def.frames).toEqual([228, 229, 230]);
-    });
-
-    it('should have sit_down frames [231..233] (second in sit row)', () => {
+    it('should have sit_down frames [228..230] (first in sit row)', () => {
       const def = defined(
         defs.find((d) => d.key === 'char-scout_sit_down'),
         'sit_down'
       );
+      expect(def.frames).toEqual([228, 229, 230]);
+    });
+
+    it('should have sit_right frames [231..233]', () => {
+      const def = defined(
+        defs.find((d) => d.key === 'char-scout_sit_right'),
+        'sit_right'
+      );
       expect(def.frames).toEqual([231, 232, 233]);
     });
 
-    it('should have sit_left frames [234..236]', () => {
+    it('should have sit_up frames [234..236]', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_sit_left'),
-        'sit_left'
+        defs.find((d) => d.key === 'char-scout_sit_up'),
+        'sit_up'
       );
       expect(def.frames).toEqual([234, 235, 236]);
     });
 
-    it('should have sit_up frames [237..239] (last in sit row)', () => {
+    it('should have sit_left frames [237..239] (last in sit row)', () => {
       const def = defined(
-        defs.find((d) => d.key === 'char-scout_sit_up'),
-        'sit_up'
+        defs.find((d) => d.key === 'char-scout_sit_left'),
+        'sit_left'
       );
       expect(def.frames).toEqual([237, 238, 239]);
     });

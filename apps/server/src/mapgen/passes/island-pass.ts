@@ -2,7 +2,7 @@
  * IslandPass: Generates island terrain using multi-octave simplex noise
  * with a radial gradient mask for organic island shapes.
  *
- * The mask guarantees elevation → 0 at map edges (no land leaking out).
+ * The mask guarantees elevation -> 0 at map edges (no land leaking out).
  * Noise provides the organic coastline variation within the mask.
  */
 
@@ -16,7 +16,7 @@ import {
   ELEVATION_EXPONENT,
   DEEP_WATER_THRESHOLD,
   WATER_THRESHOLD,
-} from '../../constants';
+} from '@nookstead/shared';
 
 export class IslandPass implements GenerationPass {
   readonly name = 'island';
@@ -45,7 +45,7 @@ export class IslandPass implements GenerationPass {
     const noise = this.fbm(x, y, noise2D);
     const mask = this.islandMask(x, y, width, height);
 
-    // Multiply noise by mask directly — guarantees 0 at edges.
+    // Multiply noise by mask directly -- guarantees 0 at edges.
     // Apply redistribution exponent after masking for sharper land/water split.
     const e = Math.pow(noise * mask, ELEVATION_EXPONENT);
 

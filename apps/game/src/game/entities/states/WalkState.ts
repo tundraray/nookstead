@@ -16,6 +16,8 @@ import type { State } from '../StateMachine';
 import type { Direction } from '../../characters/frame-map';
 import { animKey } from '../../characters/frame-map';
 import { calculateMovement } from '../../systems/movement';
+import { getRoom } from '../../../services/colyseus';
+import { ClientMessage } from '@nookstead/shared';
 import type { PlayerContext } from './types';
 
 /** Distance threshold (in pixels) to consider the player "arrived" at the move target. */
@@ -121,6 +123,9 @@ export class WalkState implements State {
 
   /**
    * Apply movement using the movement system (shared by both input modes).
+   *
+   * Computes the movement delta, applies it locally for zero-frame-lag
+   * prediction, then sends the delta to the server (fire-and-forget).
    */
   private applyMovement(
     direction: { x: number; y: number },
@@ -138,7 +143,18 @@ export class WalkState implements State {
       tileSize: this.context.tileSize,
     });
 
+    // Compute movement delta BEFORE updating position
+    const dx = result.x - this.context.x;
+    const dy = result.y - this.context.y;
+
+    // Apply movement locally for zero-frame-lag prediction (FR-16 AC16.1)
     this.context.setPosition(result.x, result.y);
+
+    // Send movement delta to server (fire-and-forget, drop if not connected)
+    const room = getRoom();
+    if (room && (dx !== 0 || dy !== 0)) {
+      room.send(ClientMessage.MOVE, { dx, dy });
+    }
   }
 
   /**

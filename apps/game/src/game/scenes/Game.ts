@@ -1,42 +1,47 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
-import { MapGenerator, IslandPass, ConnectivityPass, WaterBorderPass, AutotilePass } from '../mapgen';
 import { EMPTY_FRAME } from '../autotile';
-import type { GeneratedMap } from '../mapgen/types';
+import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
+import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { findSpawnTile } from '../systems/spawn';
 
 export class Game extends Scene {
-  private mapData!: GeneratedMap;
+  private mapData: GeneratedMap | null = null;
   private rt!: Phaser.GameObjects.RenderTexture;
   private hover!: Phaser.GameObjects.Graphics;
   private playerManager!: PlayerManager;
   private player!: Player;
+  private room: Room | null = null;
+  private serverSpawnX: number | undefined;
+  private serverSpawnY: number | undefined;
 
   constructor() {
     super('Game');
   }
 
+  /**
+   * Called by Phaser before create() with data from scene.start().
+   * Receives mapData and room from LoadingScene.
+   */
+  init(data: { mapData: MapDataPayload; room?: Room }): void {
+    // Cast MapDataPayload to GeneratedMap at the network boundary.
+    // The structures are identical at runtime; the server generates
+    // map data using the same pipeline. The only type-level difference
+    // is SerializedCell.terrain (string) vs Cell.terrain (TerrainCellType).
+    this.mapData = data.mapData as unknown as GeneratedMap;
+    this.room = data.room ?? null;
+    this.serverSpawnX = data.mapData.spawnX;
+    this.serverSpawnY = data.mapData.spawnY;
+  }
+
   create() {
-    // Generate island using the pipeline
-    const generator = new MapGenerator(MAP_WIDTH, MAP_HEIGHT)
-      .addPass(new IslandPass())
-      .addPass(new ConnectivityPass())
-      .addPass(new WaterBorderPass())
-      .setLayerPass(new AutotilePass());
-
-    // Read seed from URL query string (?seed=12345)
-    const urlSeed = new URLSearchParams(window.location.search).get('seed');
-    const seed = urlSeed ? Number(urlSeed) : undefined;
-
-    this.mapData = generator.generate(seed);
-
-    // Update URL with actual seed so the map is shareable
-    const url = new URL(window.location.href);
-    url.searchParams.set('seed', String(this.mapData.seed));
-    window.history.replaceState(null, '', url.toString());
+    if (!this.mapData) {
+      console.error('[Game] No mapData received from LoadingScene!');
+      return;
+    }
 
     const mapPixelW = MAP_WIDTH * TILE_SIZE;
     const mapPixelH = MAP_HEIGHT * TILE_SIZE;
@@ -63,15 +68,22 @@ export class Game extends Scene {
     }
     stamp.destroy();
 
-    // Find spawn position and create player
-    const spawn = findSpawnTile(
-      this.mapData.walkable,
-      this.mapData.grid,
-      MAP_WIDTH,
-      MAP_HEIGHT,
-    );
-    const spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
-    const spawnY = (spawn.tileY + 1) * TILE_SIZE;
+    // Determine spawn position: prefer server-computed, fall back to client-side
+    let spawnX: number;
+    let spawnY: number;
+    if (this.serverSpawnX != null && this.serverSpawnY != null) {
+      spawnX = this.serverSpawnX;
+      spawnY = this.serverSpawnY;
+    } else {
+      const spawn = findSpawnTile(
+        this.mapData.walkable,
+        this.mapData.grid,
+        MAP_WIDTH,
+        MAP_HEIGHT,
+      );
+      spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
+      spawnY = (spawn.tileY + 1) * TILE_SIZE;
+    }
     this.player = new Player(this, spawnX, spawnY, this.mapData);
 
     // Camera: follow player with lerp smoothing, bounded by map
@@ -139,9 +151,6 @@ export class Game extends Scene {
 
       // Move local player toward the clicked tile
       this.player.setMoveTarget(targetX, targetY);
-
-      // Also notify server of the tile click (backward compat)
-      this.playerManager.sendMove(tileX, tileY);
     });
 
     // Re-fit camera when the canvas resizes
@@ -149,28 +158,21 @@ export class Game extends Scene {
       cam.setSize(gameSize.width, gameSize.height);
     });
 
-    // Multiplayer
+    // Multiplayer — reuse existing room from LoadingScene to avoid duplicate connection
     this.playerManager = new PlayerManager(this);
-    this.playerManager.connect();
+    this.playerManager.setLocalPlayer(this.player);
+    this.playerManager.connect(this.room ?? undefined);
 
     EventBus.emit('current-scene-ready', this);
   }
 
   /**
-   * Per-frame update: drive remote sprite interpolation and report
-   * local player position to the server.
+   * Per-frame update: drive remote sprite interpolation.
+   * Local player movement is sent by WalkState via the Colyseus service.
    */
   override update(_time: number, delta: number): void {
     // Drive interpolation on all remote player sprites
     this.playerManager.update(delta);
-
-    // Report local player position to server (throttled inside PlayerManager)
-    this.playerManager.sendPositionUpdate(
-      this.player.x,
-      this.player.y,
-      this.player.facingDirection,
-      this.player.stateMachine.currentState
-    );
   }
 
   shutdown(): void {

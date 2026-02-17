@@ -13,56 +13,16 @@
  * **SSR Safety:** All browser-dependent operations (cookie access) return null
  * during server-side rendering.
  *
- * ## Integration with Phaser Scenes (Task 4.4)
- *
- * To connect the Phaser game to the Colyseus server, import and call
- * `joinGameRoom()` from your scene's `create()` method:
- *
- * ```typescript
- * // In apps/game/src/game/scenes/Game.ts
- * import { joinGameRoom, leaveGameRoom, getRoom } from '@/services/colyseus';
- * import { Callbacks } from '@colyseus/sdk';
- *
- * export class Game extends Phaser.Scene {
- *   async create() {
- *     try {
- *       const room = await joinGameRoom();
- *       const callbacks = Callbacks.get(room);
- *
- *       // Listen for player additions
- *       callbacks.onAdd('players', (player, sessionId) => {
- *         // Create a Phaser sprite for this player
- *         console.log('Player joined:', sessionId, player);
- *       });
- *
- *       // Listen for player removals
- *       callbacks.onRemove('players', (player, sessionId) => {
- *         // Destroy the Phaser sprite for this player
- *         console.log('Player left:', sessionId);
- *       });
- *
- *       // Send movement messages
- *       room.send('move', { x: this.player.x, y: this.player.y });
- *
- *     } catch (error) {
- *       console.error('Failed to connect to game server:', error);
- *       // Handle connection failure (show error UI, retry, etc.)
- *     }
- *   }
- *
- *   shutdown() {
- *     // Clean up connection when scene shuts down
- *     leaveGameRoom();
- *   }
- * }
- * ```
- *
  * @module services/colyseus
  */
 
 import { Client, Room } from '@colyseus/sdk';
-import { COLYSEUS_PORT, ROOM_NAME } from '@nookstead/shared';
-import type { GameRoomState } from '@nookstead/shared';
+import {
+  COLYSEUS_PORT,
+  CHUNK_ROOM_NAME,
+  ServerMessage,
+} from '@nookstead/shared';
+import type { ChunkRoomState, ChunkTransitionPayload } from '@nookstead/shared';
 
 /**
  * Default Colyseus server URL, constructed from the NEXT_PUBLIC_COLYSEUS_URL
@@ -77,7 +37,10 @@ const COLYSEUS_URL =
 let client: Client | null = null;
 
 /** Currently joined room instance. */
-let currentRoom: Room<unknown, GameRoomState> | null = null;
+let currentRoom: Room<unknown, ChunkRoomState> | null = null;
+
+/** Callback invoked when the server kicks this session (duplicate login). */
+let sessionKickedCallback: (() => void) | null = null;
 
 /**
  * Fetch the session token from the server-side API route.
@@ -118,39 +81,94 @@ export function getClient(): Client {
 }
 
 /**
- * Join or create the game room with the current session token.
+ * Join a chunk room by chunkId.
  *
- * Extracts the NextAuth session token from cookies and uses it to authenticate
- * with the Colyseus server. The server's `onAuth` hook decrypts the token
- * to verify the player's identity.
+ * If chunkId is omitted, the server uses the player's last known chunk or
+ * default spawn location.
  *
+ * Registers message handlers for SESSION_KICKED and CHUNK_TRANSITION on the
+ * newly joined room.
+ *
+ * @param chunkId - Optional chunk identifier to join a specific chunk room.
  * @returns The joined Room instance for state observation and message sending.
  * @throws Error if no session token is found (user not logged in).
  * @throws Error if the connection or authentication fails.
  */
-export async function joinGameRoom(): Promise<
-  Room<unknown, GameRoomState>
-> {
+export async function joinChunkRoom(
+  chunkId?: string
+): Promise<Room<unknown, ChunkRoomState>> {
   const token = await fetchSessionToken();
   if (!token) {
     throw new Error('No session token found. Please log in first.');
   }
 
   const colyseusClient = getClient();
-  currentRoom = await colyseusClient.joinOrCreate<GameRoomState>(ROOM_NAME, {
-    token,
+  const options: Record<string, unknown> = { token };
+  if (chunkId) {
+    options['chunkId'] = chunkId;
+  }
+
+  const room = await colyseusClient.joinOrCreate<ChunkRoomState>(
+    CHUNK_ROOM_NAME,
+    options
+  );
+  currentRoom = room;
+
+  // Handle SESSION_KICKED message from server
+  room.onMessage(ServerMessage.SESSION_KICKED, () => {
+    console.log(
+      '[ColyseusService] Session kicked: You logged in from another location'
+    );
+    if (sessionKickedCallback) {
+      sessionKickedCallback();
+    }
+    currentRoom = null;
   });
 
-  return currentRoom;
+  // Handle CHUNK_TRANSITION message from server
+  room.onMessage(
+    ServerMessage.CHUNK_TRANSITION,
+    async (data: ChunkTransitionPayload) => {
+      console.log(
+        `[ColyseusService] Chunk transition: -> ${data.newChunkId}`
+      );
+      await handleChunkTransition(data.newChunkId);
+    }
+  );
+
+  return room;
 }
 
 /**
- * Leave the current game room.
+ * Handle chunk transition: leave current room, join new chunk room.
  *
- * @param consented Whether the leave is intentional. Defaults to true.
- *   Pass false to simulate an unexpected disconnect.
+ * @param newChunkId - The chunk identifier to transition to.
+ * @returns The newly joined Room instance.
  */
-export async function leaveGameRoom(consented = true): Promise<void> {
+export async function handleChunkTransition(
+  newChunkId: string
+): Promise<Room<unknown, ChunkRoomState>> {
+  if (currentRoom) {
+    try {
+      await currentRoom.leave(false);
+    } catch (err) {
+      console.error(
+        '[ColyseusService] Error leaving room during chunk transition:',
+        err
+      );
+    }
+    currentRoom = null;
+  }
+  return joinChunkRoom(newChunkId);
+}
+
+/**
+ * Leave the current room gracefully.
+ *
+ * @param consented - If true, server does not attempt to reconnect. Defaults
+ *   to true.
+ */
+export async function leaveCurrentRoom(consented = true): Promise<void> {
   if (currentRoom) {
     await currentRoom.leave(consented);
     currentRoom = null;
@@ -158,11 +176,21 @@ export async function leaveGameRoom(consented = true): Promise<void> {
 }
 
 /**
+ * Register a callback for when this client receives a SESSION_KICKED message.
+ * Called when a new connection from the same user forces this session out.
+ *
+ * @param callback - Function to invoke when session is kicked.
+ */
+export function onSessionKicked(callback: () => void): void {
+  sessionKickedCallback = callback;
+}
+
+/**
  * Get the current room instance.
  *
  * @returns The current Room instance, or null if not connected to a room.
  */
-export function getRoom(): Room<unknown, GameRoomState> | null {
+export function getRoom(): Room<unknown, ChunkRoomState> | null {
   return currentRoom;
 }
 
@@ -173,10 +201,11 @@ export function getRoom(): Room<unknown, GameRoomState> | null {
  * Call this on logout or when the game is fully torn down.
  */
 export async function disconnect(): Promise<void> {
-  await leaveGameRoom(true);
+  await leaveCurrentRoom(true);
   client = null;
+  sessionKickedCallback = null;
 }
 
 // Re-export types for consumers of the connection service
 export type { Room, Client } from '@colyseus/sdk';
-export type { GameRoomState } from '@nookstead/shared';
+export type { ChunkRoomState } from '@nookstead/shared';

@@ -51,6 +51,6 @@ export class Preloader extends Scene {
     }
 
     EventBus.emit('preload-complete');
-    this.scene.start('Game');
+    this.scene.start('Loading');
   }
 }
