@@ -14,7 +14,7 @@
 // The Playwright webServer config starts the game client; the game server
 // must be started separately or via a test setup script.
 
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 
 /* ================================================================ */
 /*  E2E-1: Two-Client Movement Visibility + Chunk Transition        */

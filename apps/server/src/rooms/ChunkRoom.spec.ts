@@ -68,7 +68,7 @@ jest.mock('../config', () => ({
 
 jest.mock('../auth/verifyToken', () => ({
   __esModule: true,
-  verifyNextAuthToken: jest.fn(),
+  verifyNextAuthToken: jest.fn<(token: string, secret: string, isProduction?: boolean) => Promise<unknown>>(),
 }));
 
 // Mock the World module - provide a fresh World-like object for each test
@@ -120,7 +120,7 @@ jest.mock('@nookstead/db/adapters/colyseus', () => ({
 }));
 
 // Mock mapgen module
-const mockGenerate = jest.fn<() => unknown>().mockReturnValue({
+const mockGenerate = jest.fn<(seed: number) => unknown>().mockReturnValue({
   seed: 42,
   width: 64,
   height: 64,
@@ -128,7 +128,7 @@ const mockGenerate = jest.fn<() => unknown>().mockReturnValue({
   layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
   walkable: [[true]],
 });
-const mockCreateMapGenerator = jest.fn<() => unknown>().mockReturnValue({
+const mockCreateMapGenerator = jest.fn<(w: number, h: number) => unknown>().mockReturnValue({
   generate: mockGenerate,
 });
 
@@ -155,7 +155,7 @@ jest.mock('../sessions', () => ({
 import { ChunkRoom } from './ChunkRoom';
 import { verifyNextAuthToken } from '../auth/verifyToken';
 import type { AuthData } from '@nookstead/shared';
-import { DEFAULT_SPAWN, ServerMessage, CHUNK_SIZE } from '@nookstead/shared';
+import { ServerMessage, CHUNK_SIZE } from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Type aliases for readability                                      */
@@ -204,7 +204,7 @@ describe('ChunkRoom', () => {
   /*  INT-1: Join Flow Integration                                    */
   /* ================================================================ */
   describe('onJoin integration', () => {
-    it('AC5.1: new player with no saved position is placed at default spawn and added to World', async () => {
+    it('AC5.1: new player with no saved position is placed at spawn and added to World', async () => {
       // Arrange
       mockLoadPosition.mockResolvedValue(null);
 
@@ -213,7 +213,8 @@ describe('ChunkRoom', () => {
         email: 'new@test.com',
       };
 
-      room.onCreate({ chunkId: 'city:capital' });
+      // New player with no saved position gets targetChunkId = 'player:user-new'
+      room.onCreate({ chunkId: 'player:user-new' });
 
       // Act
       await room.onJoin(mockClient as never, {}, authData);
@@ -221,20 +222,16 @@ describe('ChunkRoom', () => {
       // Verify: loadPosition was called with the db instance and userId
       expect(mockLoadPosition).toHaveBeenCalledWith({}, 'user-new');
 
-      // Verify: World.addPlayer was called with a ServerPlayer at default spawn
+      // Verify: World.addPlayer was called with a ServerPlayer at computed spawn
       expect(mockWorld.addPlayer).toHaveBeenCalledTimes(1);
       const addedPlayer = mockWorld.addPlayer.mock.calls[0][0];
-      expect(addedPlayer.worldX).toBe(DEFAULT_SPAWN.worldX);
-      expect(addedPlayer.worldY).toBe(DEFAULT_SPAWN.worldY);
-      expect(addedPlayer.chunkId).toBe(DEFAULT_SPAWN.chunkId);
+      expect(addedPlayer.chunkId).toBe('player:user-new');
       expect(addedPlayer.userId).toBe('user-new');
       expect(addedPlayer.id).toBe('test-session-id');
 
       // Verify: schema has the player with correct values
       const chunkPlayer = room.state.players.get('test-session-id');
       expect(chunkPlayer).toBeDefined();
-      expect(chunkPlayer?.worldX).toBe(DEFAULT_SPAWN.worldX);
-      expect(chunkPlayer?.worldY).toBe(DEFAULT_SPAWN.worldY);
       expect(chunkPlayer?.direction).toBe('down');
     });
 
@@ -252,7 +249,8 @@ describe('ChunkRoom', () => {
         email: 'ret@test.com',
       };
 
-      room.onCreate({ chunkId: 'city:capital' });
+      // Room chunkId must match saved position's chunkId to avoid redirect
+      room.onCreate({ chunkId: 'world:7:4' });
 
       // Act
       await room.onJoin(mockClient as never, {}, authData);
@@ -524,7 +522,8 @@ describe('ChunkRoom', () => {
         email: 'mapnew@test.com',
       };
 
-      room.onCreate({ chunkId: 'city:capital' });
+      // New player with no saved position gets targetChunkId = 'player:user-map-new'
+      room.onCreate({ chunkId: 'player:user-map-new' });
 
       // Act
       await room.onJoin(mockClient as never, {}, authData);
@@ -572,6 +571,14 @@ describe('ChunkRoom', () => {
       };
       mockLoadMap.mockResolvedValue(savedMap);
 
+      // Must also have a saved position so targetChunkId matches the room
+      mockLoadPosition.mockResolvedValue({
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'city:capital',
+        direction: 'down',
+      });
+
       const authData: AuthData = {
         userId: 'user-map-returning',
         email: 'mapret@test.com',
@@ -618,7 +625,8 @@ describe('ChunkRoom', () => {
           /* suppress output */
         });
 
-      room.onCreate({ chunkId: 'city:capital' });
+      // New player with no saved position gets targetChunkId = 'player:user-map-error'
+      room.onCreate({ chunkId: 'player:user-map-error' });
 
       // Act: should NOT throw
       await expect(
@@ -642,7 +650,7 @@ describe('ChunkRoom', () => {
 
     it('onAuth with duplicate session: calls checkAndKick with userId', async () => {
       // Arrange: configure verifyNextAuthToken to return a valid payload
-      const mockVerify = verifyNextAuthToken as jest.Mock;
+      const mockVerify = verifyNextAuthToken as jest.MockedFunction<typeof verifyNextAuthToken>;
       mockVerify.mockResolvedValue({
         userId: 'user-dup-session',
         email: 'dup@test.com',

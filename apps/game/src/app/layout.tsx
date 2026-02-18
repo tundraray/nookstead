@@ -1,10 +1,21 @@
 import './global.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import type { Metadata } from 'next';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Nookstead — Pixel Art MMO',
   description:
     'Build your homestead in a living world populated by AI-driven NPCs. A 2D pixel art MMO farming RPG.',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    title: 'Nookstead — Pixel Art MMO',
+    description:
+      'Build your homestead in a living world populated by AI-driven NPCs.',
+    images: [{ url: '/pics_logo.png', width: 1569, height: 1569 }],
+  },
 };
 
 export default function RootLayout({

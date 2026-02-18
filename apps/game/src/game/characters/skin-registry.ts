@@ -11,6 +11,10 @@ export interface SkinDefinition {
   sheetPath: string;
   /** Phaser texture key used when loading and referencing this spritesheet. */
   sheetKey: string;
+  /** Skin type: 'preset' for built-in scouts, 'custom' for character generator skins. */
+  type: 'preset' | 'custom';
+  /** Spritesheet width in pixels (927 for scouts, 896 for custom). */
+  textureWidth: number;
 }
 
 /**
@@ -24,52 +28,103 @@ const SKIN_REGISTRY: readonly SkinDefinition[] = [
     key: 'scout_1',
     sheetPath: 'characters/scout_1.png',
     sheetKey: 'scout_1',
+    type: 'preset',
+    textureWidth: 927,
   },
   {
     key: 'scout_2',
     sheetPath: 'characters/scout_2.png',
     sheetKey: 'scout_2',
+    type: 'preset',
+    textureWidth: 927,
   },
   {
     key: 'scout_3',
     sheetPath: 'characters/scout_3.png',
     sheetKey: 'scout_3',
+    type: 'preset',
+    textureWidth: 927,
   },
   {
     key: 'scout_4',
     sheetPath: 'characters/scout_4.png',
     sheetKey: 'scout_4',
+    type: 'preset',
+    textureWidth: 927,
   },
   {
     key: 'scout_5',
     sheetPath: 'characters/scout_5.png',
     sheetKey: 'scout_5',
+    type: 'preset',
+    textureWidth: 927,
   },
   {
     key: 'scout_6',
     sheetPath: 'characters/scout_6.png',
     sheetKey: 'scout_6',
+    type: 'preset',
+    textureWidth: 927,
   },
 ];
 
+/** Custom skin key used in Phaser's TextureManager. */
+export const CUSTOM_SKIN_KEY = 'custom-skin';
+
+/** Custom skin texture width (896px, 56 columns). */
+export const CUSTOM_SKIN_TEXTURE_WIDTH = 896;
+
+/** Mutable custom skin slot (set by custom-skin-loader). */
+let customSkin: SkinDefinition | null = null;
+
 /**
- * Returns a copy of all registered character skins.
+ * Register a custom skin definition.
+ * Called by custom-skin-loader after loading from localStorage.
+ */
+export function registerCustomSkin(skin: SkinDefinition): void {
+  customSkin = skin;
+}
+
+/**
+ * Clear the registered custom skin.
+ */
+export function clearCustomSkin(): void {
+  customSkin = null;
+}
+
+/**
+ * Returns the active custom skin, or null if none registered.
+ */
+export function getCustomSkin(): SkinDefinition | null {
+  return customSkin;
+}
+
+/**
+ * Returns a copy of all registered preset character skins.
  */
 export function getSkins(): SkinDefinition[] {
   return [...SKIN_REGISTRY];
 }
 
 /**
- * Returns the default character skin (first entry in the registry).
+ * Returns the active skin: custom if registered, otherwise default preset.
+ */
+export function getActiveSkin(): SkinDefinition {
+  return customSkin ?? SKIN_REGISTRY[0];
+}
+
+/**
+ * Returns the default character skin (first preset entry).
  */
 export function getDefaultSkin(): SkinDefinition {
   return SKIN_REGISTRY[0];
 }
 
 /**
- * Look up a skin definition by its key (e.g., 'scout_3').
+ * Look up a skin definition by its key (e.g., 'scout_3' or 'custom-skin').
  * Returns undefined if no skin matches.
  */
 export function getSkinByKey(key: string): SkinDefinition | undefined {
+  if (customSkin && customSkin.key === key) return customSkin;
   return SKIN_REGISTRY.find((s) => s.key === key);
 }

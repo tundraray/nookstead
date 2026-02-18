@@ -30,6 +30,8 @@ describe('skin-registry', () => {
         key: 'scout_1',
         sheetPath: 'characters/scout_1.png',
         sheetKey: 'scout_1',
+        type: 'preset',
+        textureWidth: 927,
       });
     });
 
@@ -66,6 +68,8 @@ describe('skin-registry', () => {
       expect(defaultSkin).toHaveProperty('key');
       expect(defaultSkin).toHaveProperty('sheetPath');
       expect(defaultSkin).toHaveProperty('sheetKey');
+      expect(defaultSkin).toHaveProperty('type');
+      expect(defaultSkin).toHaveProperty('textureWidth');
     });
 
     it('should return the first entry in the registry', () => {

@@ -61,13 +61,13 @@ describe('registerAnimations', () => {
     consoleInfoSpy.mockRestore();
   });
 
-  it('should register exactly 27 animations', () => {
-    expect(createdAnims).toHaveLength(27);
+  it('should register exactly 31 animations', () => {
+    expect(createdAnims).toHaveLength(31);
   });
 
   it('should have unique keys for all registered animations', () => {
     const keys = createdAnims.map((a) => a.key);
-    expect(new Set(keys).size).toBe(27);
+    expect(new Set(keys).size).toBe(31);
   });
 
   it('should produce keys matching sheetKey_state_direction format', () => {
@@ -78,11 +78,11 @@ describe('registerAnimations', () => {
   });
 
   describe('repeat values', () => {
-    it('should set repeat=-1 for idle animations (loop)', () => {
+    it('should set repeat=0 for idle animations (static frame)', () => {
       const idleAnims = createdAnims.filter((a) => a.key.includes('_idle_'));
       expect(idleAnims).toHaveLength(4);
       for (const anim of idleAnims) {
-        expect(anim.repeat).toBe(-1);
+        expect(anim.repeat).toBe(0);
       }
     });
 
@@ -140,10 +140,10 @@ describe('registerAnimations', () => {
   });
 
   describe('frame counts', () => {
-    it('should have 6 frames per idle animation', () => {
+    it('should have 1 frame per idle animation (static)', () => {
       const idleAnims = createdAnims.filter((a) => a.key.includes('_idle_'));
       for (const anim of idleAnims) {
-        expect(anim.frames).toHaveLength(6);
+        expect(anim.frames).toHaveLength(1);
       }
     });
 
@@ -154,7 +154,7 @@ describe('registerAnimations', () => {
       }
     });
 
-    it('should have 6 frames per waiting animation (reuses idle)', () => {
+    it('should have 6 frames per waiting animation (reuses wait)', () => {
       const waitAnims = createdAnims.filter((a) =>
         a.key.includes('_waiting_')
       );
@@ -230,10 +230,10 @@ describe('registerAnimations', () => {
       expect(consoleInfoSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('should include sheetKey and columns-per-row in log message', () => {
+    it('should include sheetKey and texture dimensions in log message', () => {
       const logMessage = consoleInfoSpy.mock.calls[0][0] as string;
       expect(logMessage).toContain(SHEET_KEY);
-      expect(logMessage).toContain('57'); // floor(927/16) = 57
+      expect(logMessage).toContain(String(TEXTURE_WIDTH));
     });
   });
 });

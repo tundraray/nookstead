@@ -20,7 +20,7 @@ import { StateMachine, type State } from './StateMachine';
 import { InputController } from '../input/InputController';
 import { IdleState, WalkState } from './states';
 import { type Direction, animKey } from '../characters/frame-map';
-import { getDefaultSkin } from '../characters/skin-registry';
+import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
 import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
@@ -55,7 +55,7 @@ export class Player extends Phaser.GameObjects.Sprite {
     y: number,
     mapData: GeneratedMap,
   ) {
-    const skin = getDefaultSkin();
+    const skin = getActiveSkin();
     super(scene, x, y, skin.sheetKey);
 
     this.sheetKey = skin.sheetKey;

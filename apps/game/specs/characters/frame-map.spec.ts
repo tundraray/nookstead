@@ -59,13 +59,13 @@ describe('getAnimationDefs', () => {
     defs = getAnimationDefs('scout', 'char-scout');
   });
 
-  it('should return exactly 27 animation definitions', () => {
-    expect(defs).toHaveLength(27);
+  it('should return exactly 31 animation definitions', () => {
+    expect(defs).toHaveLength(31);
   });
 
   it('should have unique keys for all definitions', () => {
     const keys = defs.map((d) => d.key);
-    expect(new Set(keys).size).toBe(27);
+    expect(new Set(keys).size).toBe(31);
   });
 
   it('should use ANIMATION_FPS for all frameRate values', () => {
@@ -74,46 +74,91 @@ describe('getAnimationDefs', () => {
     }
   });
 
-  // --- idle (row 1, 6 frames per direction, standard order) ---
+  // --- idle (row 1, 1 static frame per direction with stride=6, standard order) ---
   describe('idle animations', () => {
-    // base = 1 * COLS = 57
+    // base = 1 * COLS = 57, stride = 6
 
-    it('should have idle_right frames [57..62]', () => {
+    it('should have idle_right frame [57]', () => {
       const def = defined(
         defs.find((d) => d.key === 'char-scout_idle_right'),
         'idle_right'
       );
-      expect(def.frames).toEqual([57, 58, 59, 60, 61, 62]);
+      expect(def.frames).toEqual([57]);
     });
 
-    it('should have idle_up frames [63..68]', () => {
+    it('should have idle_up frame [63]', () => {
       const def = defined(
         defs.find((d) => d.key === 'char-scout_idle_up'),
         'idle_up'
       );
-      expect(def.frames).toEqual([63, 64, 65, 66, 67, 68]);
+      expect(def.frames).toEqual([63]);
     });
 
-    it('should have idle_left frames [69..74]', () => {
+    it('should have idle_left frame [69]', () => {
       const def = defined(
         defs.find((d) => d.key === 'char-scout_idle_left'),
         'idle_left'
       );
-      expect(def.frames).toEqual([69, 70, 71, 72, 73, 74]);
+      expect(def.frames).toEqual([69]);
     });
 
-    it('should have idle_down frames [75..80]', () => {
+    it('should have idle_down frame [75]', () => {
       const def = defined(
         defs.find((d) => d.key === 'char-scout_idle_down'),
         'idle_down'
       );
-      expect(def.frames).toEqual([75, 76, 77, 78, 79, 80]);
+      expect(def.frames).toEqual([75]);
     });
 
-    it('should loop idle animations (repeat = -1)', () => {
+    it('should play idle once (repeat = 0, static frame)', () => {
       const idleDefs = defs.filter((d) => d.key.includes('_idle_'));
       expect(idleDefs).toHaveLength(4);
       for (const def of idleDefs) {
+        expect(def.repeat).toBe(0);
+      }
+    });
+  });
+
+  // --- wait (row 1, 6 frames per direction, animated loop) ---
+  describe('wait animations', () => {
+    // base = 1 * COLS = 57
+
+    it('should have wait_right frames [57..62]', () => {
+      const def = defined(
+        defs.find((d) => d.key === 'char-scout_wait_right'),
+        'wait_right'
+      );
+      expect(def.frames).toEqual([57, 58, 59, 60, 61, 62]);
+    });
+
+    it('should have wait_up frames [63..68]', () => {
+      const def = defined(
+        defs.find((d) => d.key === 'char-scout_wait_up'),
+        'wait_up'
+      );
+      expect(def.frames).toEqual([63, 64, 65, 66, 67, 68]);
+    });
+
+    it('should have wait_left frames [69..74]', () => {
+      const def = defined(
+        defs.find((d) => d.key === 'char-scout_wait_left'),
+        'wait_left'
+      );
+      expect(def.frames).toEqual([69, 70, 71, 72, 73, 74]);
+    });
+
+    it('should have wait_down frames [75..80]', () => {
+      const def = defined(
+        defs.find((d) => d.key === 'char-scout_wait_down'),
+        'wait_down'
+      );
+      expect(def.frames).toEqual([75, 76, 77, 78, 79, 80]);
+    });
+
+    it('should loop wait animations (repeat = -1)', () => {
+      const waitDefs = defs.filter((d) => d.key.includes('_wait_'));
+      expect(waitDefs).toHaveLength(4);
+      for (const def of waitDefs) {
         expect(def.repeat).toBe(-1);
       }
     });
@@ -164,36 +209,36 @@ describe('getAnimationDefs', () => {
     });
   });
 
-  // --- waiting (same frames as idle, repeat = -1) ---
+  // --- waiting (same frames as wait, repeat = -1) ---
   describe('waiting animations', () => {
-    it('should have waiting_left with same frames as idle_left', () => {
-      const waitDef = defined(
+    it('should have waiting_left with same frames as wait_left', () => {
+      const waitingDef = defined(
         defs.find((d) => d.key === 'char-scout_waiting_left'),
         'waiting_left'
       );
-      const idleDef = defined(
-        defs.find((d) => d.key === 'char-scout_idle_left'),
-        'idle_left'
+      const waitDef = defined(
+        defs.find((d) => d.key === 'char-scout_wait_left'),
+        'wait_left'
       );
-      expect(waitDef.frames).toEqual(idleDef.frames);
+      expect(waitingDef.frames).toEqual(waitDef.frames);
     });
 
-    it('should have waiting_down with same frames as idle_down', () => {
-      const waitDef = defined(
+    it('should have waiting_down with same frames as wait_down', () => {
+      const waitingDef = defined(
         defs.find((d) => d.key === 'char-scout_waiting_down'),
         'waiting_down'
       );
-      const idleDef = defined(
-        defs.find((d) => d.key === 'char-scout_idle_down'),
-        'idle_down'
+      const waitDef = defined(
+        defs.find((d) => d.key === 'char-scout_wait_down'),
+        'wait_down'
       );
-      expect(waitDef.frames).toEqual(idleDef.frames);
+      expect(waitingDef.frames).toEqual(waitDef.frames);
     });
 
     it('should loop waiting animations (repeat = -1)', () => {
-      const waitDefs = defs.filter((d) => d.key.includes('_waiting_'));
-      expect(waitDefs).toHaveLength(4);
-      for (const def of waitDefs) {
+      const waitingDefs = defs.filter((d) => d.key.includes('_waiting_'));
+      expect(waitingDefs).toHaveLength(4);
+      for (const def of waitingDefs) {
         expect(def.repeat).toBe(-1);
       }
     });
@@ -378,26 +423,27 @@ describe('getAnimationDefs', () => {
 
   // --- cross-cutting checks ---
   describe('cross-cutting checks', () => {
-    it('should have no duplicate frame indices across non-waiting animations', () => {
-      // waiting reuses idle frames by design, so exclude it from uniqueness check
-      const nonWaitingDefs = defs.filter(
-        (d) => !d.key.includes('_waiting_')
+    it('should have no duplicate frame indices across unique-frame animations', () => {
+      // idle frames are a subset of wait frames, and waiting reuses wait frames,
+      // so exclude idle and waiting from the uniqueness check
+      const uniqueFrameDefs = defs.filter(
+        (d) => !d.key.includes('_waiting_') && !d.key.includes('_idle_')
       );
-      const allFrames = nonWaitingDefs.flatMap((d) => d.frames);
+      const allFrames = uniqueFrameDefs.flatMap((d) => d.frames);
       expect(new Set(allFrames).size).toBe(allFrames.length);
     });
 
-    it('should have waiting frames identical to idle frames', () => {
+    it('should have waiting frames identical to wait frames', () => {
       for (const dir of ['left', 'up', 'right', 'down']) {
-        const waitDef = defined(
+        const waitingDef = defined(
           defs.find((d) => d.key === `char-scout_waiting_${dir}`),
           `waiting_${dir}`
         );
-        const idleDef = defined(
-          defs.find((d) => d.key === `char-scout_idle_${dir}`),
-          `idle_${dir}`
+        const waitDef = defined(
+          defs.find((d) => d.key === `char-scout_wait_${dir}`),
+          `wait_${dir}`
         );
-        expect(waitDef.frames).toEqual(idleDef.frames);
+        expect(waitingDef.frames).toEqual(waitDef.frames);
       }
     });
 
@@ -411,7 +457,7 @@ describe('getAnimationDefs', () => {
     });
 
     it('should count animations per state correctly', () => {
-      const states = ['idle', 'walk', 'waiting', 'sit', 'hit', 'punch'];
+      const states = ['idle', 'wait', 'walk', 'waiting', 'sit', 'hit', 'punch'];
       for (const state of states) {
         const stateDefs = defs.filter((d) =>
           d.key.match(new RegExp(`_${state}_`))
@@ -423,9 +469,9 @@ describe('getAnimationDefs', () => {
       expect(hurtDefs).toHaveLength(3);
     });
 
-    it('should have correct total: 6*4 + 1*3 = 27', () => {
-      // 6 states with 4 directions + 1 state (hurt) with 3 directions
-      expect(defs.length).toBe(6 * 4 + 1 * 3);
+    it('should have correct total: 7*4 + 1*3 = 31', () => {
+      // 7 states with 4 directions + 1 state (hurt) with 3 directions
+      expect(defs.length).toBe(7 * 4 + 1 * 3);
     });
   });
 });

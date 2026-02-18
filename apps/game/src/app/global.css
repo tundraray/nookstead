@@ -133,26 +133,12 @@ button {
     animation: float 4s ease-in-out infinite;
   }
 
-  & .landing-page__logo {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2.5rem;
-    color: #48c7aa;
-    letter-spacing: 4px;
-    animation: glow-pulse 3s ease-in-out infinite;
+  & .landing-page__logo-img {
+    width: 400px;
+    height: auto;
+    filter: drop-shadow(0 0 12px rgba(72, 199, 170, 0.4))
+      drop-shadow(0 0 24px rgba(72, 199, 170, 0.2));
     user-select: none;
-  }
-
-  & .landing-page__logo-shadow {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2.5rem;
-    color: #1a3a2e;
-    letter-spacing: 4px;
-    z-index: -1;
-    user-select: none;
-    pointer-events: none;
   }
 
   & .landing-page__tagline {
@@ -196,16 +182,8 @@ button {
 
 @media (max-width: 480px) {
   .landing-page {
-    & .landing-page__logo {
-      font-size: 1.5rem;
-      letter-spacing: 2px;
-    }
-
-    & .landing-page__logo-shadow {
-      font-size: 1.5rem;
-      letter-spacing: 2px;
-      top: 3px;
-      left: 3px;
+    & .landing-page__logo-img {
+      width: 260px;
     }
 
     & .landing-page__tagline {
@@ -221,16 +199,8 @@ button {
 
 @media (min-width: 768px) {
   .landing-page {
-    & .landing-page__logo {
-      font-size: 3.5rem;
-      letter-spacing: 6px;
-    }
-
-    & .landing-page__logo-shadow {
-      font-size: 3.5rem;
-      letter-spacing: 6px;
-      top: 5px;
-      left: 5px;
+    & .landing-page__logo-img {
+      width: 500px;
     }
 
     & .landing-page__tagline {
