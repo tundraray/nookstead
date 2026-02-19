@@ -19,6 +19,15 @@ import { createBrushTool } from './tools/brush-tool';
 import { createFillTool } from './tools/fill-tool';
 import { createRectangleTool } from './tools/rectangle-tool';
 import { createEraserTool } from './tools/eraser-tool';
+import {
+  computeRectBounds,
+  clampBounds,
+  isSimplePolygon,
+  toZoneVertices,
+  type TilePos,
+} from './zone-drawing';
+import type { ZoneBounds, ZoneVertex } from '@nookstead/map-lib';
+import { drawZoneOverlay } from './zone-overlay';
 
 const TILE_SIZE = 16;
 const MIN_ZOOM = 0.25;
@@ -44,6 +53,18 @@ interface MapEditorCanvasProps {
   showGrid?: boolean;
   /** Callback when grid toggle is requested. Required when showGrid prop is provided. */
   onToggleGrid?: () => void;
+  /** Called when zone-rect drawing completes. Provides clamped bounds. */
+  onZoneRectComplete?: (bounds: ZoneBounds) => void;
+  /** Called when zone-poly drawing completes. Provides validated vertices. */
+  onZonePolyComplete?: (vertices: ZoneVertex[]) => void;
+  /** Zones to render as overlay. */
+  zones?: import('@nookstead/map-lib').ZoneData[];
+  /** Currently selected zone ID for highlighted border. */
+  selectedZoneId?: string | null;
+  /** Whether zone overlay is visible. */
+  zoneVisibility?: boolean;
+  /** Whether walkability overlay is visible. */
+  showWalkability?: boolean;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -63,6 +84,12 @@ export function MapEditorCanvas({
   onCameraChange,
   showGrid: controlledShowGrid,
   onToggleGrid,
+  onZoneRectComplete,
+  onZonePolyComplete,
+  zones: zonesProp,
+  selectedZoneId,
+  zoneVisibility,
+  showWalkability,
 }: MapEditorCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -114,6 +141,13 @@ export function MapEditorCanvas({
   // Tool drawing refs
   const isDrawingRef = useRef(false);
 
+  // Zone drawing refs
+  const zoneRectStartRef = useRef<TilePos | null>(null);
+  const zoneRectPreviewRef = useRef<ZoneBounds | null>(null);
+  const polyVerticesRef = useRef<TilePos[]>([]);
+  const polyCursorRef = useRef<TilePos | null>(null);
+  const isClosingPolyRef = useRef(false);
+
   // Track container size with ResizeObserver
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -162,6 +196,13 @@ export function MapEditorCanvas({
 
   // Create tool handlers based on active tool
   const toolHandlers = useMemo((): ToolHandlers => {
+    const noop = () => { /* no-op for tools handled elsewhere */ };
+    const noopHandlers: ToolHandlers = {
+      onMouseDown: noop,
+      onMouseMove: noop,
+      onMouseUp: noop,
+    };
+
     switch (state.activeTool) {
       case 'brush':
         return createBrushTool(state, dispatch);
@@ -171,12 +212,45 @@ export function MapEditorCanvas({
         return createRectangleTool(state, dispatch, setPreviewRect);
       case 'eraser':
         return createEraserTool(state, dispatch);
+      case 'zone-rect':
+        return {
+          onMouseDown: (tile) => {
+            zoneRectStartRef.current = tile;
+            zoneRectPreviewRef.current = null;
+          },
+          onMouseMove: (tile) => {
+            if (zoneRectStartRef.current) {
+              zoneRectPreviewRef.current = computeRectBounds(
+                zoneRectStartRef.current,
+                tile
+              );
+            }
+          },
+          onMouseUp: (tile) => {
+            if (zoneRectStartRef.current) {
+              const bounds = clampBounds(
+                computeRectBounds(zoneRectStartRef.current, tile),
+                state.width,
+                state.height
+              );
+              zoneRectStartRef.current = null;
+              zoneRectPreviewRef.current = null;
+              onZoneRectComplete?.(bounds);
+            }
+          },
+        };
+      case 'zone-poly':
+        return noopHandlers;
     }
-  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state]);
+  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
 
-  // Clear preview rect when tool changes
+  // Clear previews when tool changes
   useEffect(() => {
     setPreviewRect(null);
+    zoneRectStartRef.current = null;
+    zoneRectPreviewRef.current = null;
+    polyVerticesRef.current = [];
+    polyCursorRef.current = null;
   }, [state.activeTool]);
 
   // Canvas rendering config
@@ -184,8 +258,9 @@ export function MapEditorCanvas({
     () => ({
       tileSize: TILE_SIZE,
       showGrid,
+      showWalkability: showWalkability ?? false,
     }),
-    [showGrid]
+    [showGrid, showWalkability]
   );
 
   // Render function
@@ -210,7 +285,63 @@ export function MapEditorCanvas({
       cursorTile,
       previewRect
     );
-  }, [state, tilesetImages, camera, config, cursorTile, previewRect, containerSize]);
+
+    // Zone visibility overlay (existing zones)
+    if (zoneVisibility && zonesProp && zonesProp.length > 0) {
+      drawZoneOverlay({
+        ctx,
+        zones: zonesProp,
+        selectedZoneId: selectedZoneId ?? null,
+        tileSize: TILE_SIZE,
+        camera,
+      });
+    }
+
+    // Zone-rect preview overlay
+    const zrp = zoneRectPreviewRef.current;
+    if (state.activeTool === 'zone-rect' && zrp) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(76, 175, 80, 0.3)';
+      ctx.strokeStyle = 'rgba(76, 175, 80, 0.8)';
+      ctx.lineWidth = 1;
+      const px = (zrp.x * TILE_SIZE - camera.x) * camera.zoom;
+      const py = (zrp.y * TILE_SIZE - camera.y) * camera.zoom;
+      const pw = zrp.width * TILE_SIZE * camera.zoom;
+      const ph = zrp.height * TILE_SIZE * camera.zoom;
+      ctx.fillRect(px, py, pw, ph);
+      ctx.strokeRect(px, py, pw, ph);
+      ctx.restore();
+    }
+
+    // Zone-poly preview overlay
+    const pv = polyVerticesRef.current;
+    if (state.activeTool === 'zone-poly' && pv.length > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(233, 30, 99, 0.3)';
+      ctx.strokeStyle = 'rgba(233, 30, 99, 0.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      const firstX = (pv[0].x * TILE_SIZE - camera.x) * camera.zoom;
+      const firstY = (pv[0].y * TILE_SIZE - camera.y) * camera.zoom;
+      ctx.moveTo(firstX, firstY);
+      for (let i = 1; i < pv.length; i++) {
+        const vx = (pv[i].x * TILE_SIZE - camera.x) * camera.zoom;
+        const vy = (pv[i].y * TILE_SIZE - camera.y) * camera.zoom;
+        ctx.lineTo(vx, vy);
+      }
+      // Line to cursor
+      const cursor = polyCursorRef.current;
+      if (cursor) {
+        const cx = (cursor.x * TILE_SIZE - camera.x) * camera.zoom;
+        const cy = (cursor.y * TILE_SIZE - camera.y) * camera.zoom;
+        ctx.lineTo(cx, cy);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }, [state, tilesetImages, camera, config, cursorTile, previewRect, containerSize, zoneVisibility, zonesProp, selectedZoneId]);
 
   // requestAnimationFrame render loop
   useEffect(() => {
@@ -245,8 +376,37 @@ export function MapEditorCanvas({
 
       // Left-click: tool interaction
       if (e.button === 0) {
-        isDrawingRef.current = true;
         const tile = pixelToTile(e.clientX, e.clientY);
+
+        // Zone-poly: click adds vertex, double-click closes
+        if (state.activeTool === 'zone-poly') {
+          if (isClosingPolyRef.current) return;
+          if (e.detail >= 2) {
+            // Double-click: close polygon
+            isClosingPolyRef.current = true;
+            const verts = polyVerticesRef.current;
+            if (verts.length < 3) {
+              polyVerticesRef.current = [];
+              polyCursorRef.current = null;
+              isClosingPolyRef.current = false;
+            } else if (!isSimplePolygon(verts)) {
+              polyVerticesRef.current = [];
+              polyCursorRef.current = null;
+              isClosingPolyRef.current = false;
+            } else {
+              const vertices = toZoneVertices(verts);
+              polyVerticesRef.current = [];
+              polyCursorRef.current = null;
+              isClosingPolyRef.current = false;
+              onZonePolyComplete?.(vertices);
+            }
+          } else {
+            polyVerticesRef.current = [...polyVerticesRef.current, tile];
+          }
+          return;
+        }
+
+        isDrawingRef.current = true;
         toolHandlers.onMouseDown(tile);
         canvas.setPointerCapture(e.pointerId);
       }
@@ -276,6 +436,11 @@ export function MapEditorCanvas({
 
       const tile = pixelToTile(e.clientX, e.clientY);
       setCursorTile(tile);
+
+      // Zone-poly: update cursor for preview line
+      if (state.activeTool === 'zone-poly' && polyVerticesRef.current.length > 0) {
+        polyCursorRef.current = tile;
+      }
 
       // Tool drag
       if (isDrawingRef.current) {
@@ -354,7 +519,7 @@ export function MapEditorCanvas({
     return () => wrapper.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  // Keyboard handler for grid toggle
+  // Keyboard handler for grid toggle + zone polygon close/cancel
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'g' || e.key === 'G') {
@@ -362,10 +527,29 @@ export function MapEditorCanvas({
           toggleGrid();
         }
       }
+
+      // Zone polygon: Enter = close, Escape = cancel
+      if (state.activeTool === 'zone-poly') {
+        if (e.key === 'Enter') {
+          const verts = polyVerticesRef.current;
+          if (verts.length >= 3 && isSimplePolygon(verts)) {
+            const vertices = toZoneVertices(verts);
+            polyVerticesRef.current = [];
+            polyCursorRef.current = null;
+            onZonePolyComplete?.(vertices);
+          } else {
+            polyVerticesRef.current = [];
+            polyCursorRef.current = null;
+          }
+        } else if (e.key === 'Escape') {
+          polyVerticesRef.current = [];
+          polyCursorRef.current = null;
+        }
+      }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleGrid]);
+  }, [toggleGrid, state.activeTool, onZonePolyComplete]);
 
   return (
     <div

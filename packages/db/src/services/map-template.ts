@@ -25,6 +25,7 @@ export interface UpdateTemplateData {
   layers?: unknown;
   zones?: unknown;
   version?: number;
+  isPublished?: boolean;
 }
 
 export interface ListTemplatesParams {

@@ -11,6 +11,7 @@ export interface Camera {
 export interface CanvasConfig {
   tileSize: number;
   showGrid: boolean;
+  showWalkability: boolean;
 }
 
 /** Rectangle preview for the rectangle fill tool. */
@@ -120,6 +121,19 @@ export function renderMapCanvas(
       ctx.moveTo(startX * tileSize, y * tileSize);
       ctx.lineTo(endX * tileSize, y * tileSize);
       ctx.stroke();
+    }
+  }
+
+  // Walkability overlay
+  if (config.showWalkability && state.walkable) {
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const walkable = state.walkable[y]?.[x];
+        ctx.fillStyle = walkable
+          ? 'rgba(76, 175, 80, 0.25)'
+          : 'rgba(244, 67, 54, 0.25)';
+        ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+      }
     }
   }
 

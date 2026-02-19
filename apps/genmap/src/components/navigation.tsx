@@ -9,6 +9,7 @@ const navItems = [
   { href: '/sprites', label: 'Sprites' },
   { href: '/objects', label: 'Objects' },
   { href: '/maps', label: 'Maps' },
+  { href: '/templates', label: 'Templates' },
 ];
 
 export function Navigation() {

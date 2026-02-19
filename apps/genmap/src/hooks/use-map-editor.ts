@@ -103,10 +103,12 @@ function createInitialState(): MapEditorState {
     activeTerrainKey: DEFAULT_TERRAIN_KEY,
     undoStack: [],
     redoStack: [],
+    metadata: {},
     isDirty: false,
     isSaving: false,
     lastSavedAt: null,
     zones: [],
+    zoneVisibility: true,
   };
 }
 
@@ -246,12 +248,14 @@ export function mapEditorReducer(
         grid: map.grid,
         layers: editorLayers,
         walkable: map.walkable,
+        metadata: (map.metadata as Record<string, string>) ?? {},
         activeLayerIndex: 0,
         undoStack: [],
         redoStack: [],
         isDirty: false,
         isSaving: false,
         zones: map.zones ?? [],
+        zoneVisibility: true,
       };
     }
 
@@ -260,6 +264,9 @@ export function mapEditorReducer(
 
     case 'SET_SEED':
       return { ...state, seed: action.seed, isDirty: true };
+
+    case 'SET_METADATA':
+      return { ...state, metadata: action.metadata, isDirty: true };
 
     case 'RESIZE_MAP': {
       const { newWidth, newHeight } = action;
@@ -430,20 +437,34 @@ export function mapEditorReducer(
       };
     }
 
-    // Paint stubs -- implemented in Tasks 12-15
-    case 'PAINT_CELL':
-    case 'PAINT_CELLS':
-    case 'FILL':
-    case 'RECTANGLE_FILL':
-    case 'ERASE_CELL':
-      return state;
+    case 'SET_ZONES':
+      return { ...state, zones: action.zones };
 
-    // Zone stubs -- deferred to Batch 4
     case 'ADD_ZONE':
+      return {
+        ...state,
+        zones: [...state.zones, action.zone],
+        isDirty: true,
+      };
+
     case 'UPDATE_ZONE':
+      return {
+        ...state,
+        zones: state.zones.map((z) =>
+          z.id === action.zoneId ? { ...z, ...action.data } : z
+        ),
+        isDirty: true,
+      };
+
     case 'DELETE_ZONE':
+      return {
+        ...state,
+        zones: state.zones.filter((z) => z.id !== action.zoneId),
+        isDirty: true,
+      };
+
     case 'TOGGLE_ZONE_VISIBILITY':
-      return state;
+      return { ...state, zoneVisibility: !state.zoneVisibility };
 
     default:
       return state;
@@ -488,6 +509,7 @@ export function useMapEditor() {
           layers: state.layers,
           walkable: state.walkable,
           seed: state.seed,
+          metadata: state.metadata,
         }),
       });
       if (!res.ok) {
@@ -509,6 +531,7 @@ export function useMapEditor() {
     state.layers,
     state.walkable,
     state.seed,
+    state.metadata,
   ]);
 
   /** Load a map from the API by ID and dispatch LOAD_MAP. */

@@ -230,6 +230,17 @@ export function MapPropertiesPanel({
         />
       </div>
 
+      {/* Metadata */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">Metadata</Label>
+        <MetadataEditor
+          metadata={state.metadata}
+          onChange={(metadata) =>
+            dispatch({ type: 'SET_METADATA', metadata })
+          }
+        />
+      </div>
+
       {/* Resize Dialog */}
       <ResizeDialog
         open={showResizeDialog}
@@ -238,6 +249,84 @@ export function MapPropertiesPanel({
         currentHeight={state.height}
         onConfirm={handleResize}
       />
+    </div>
+  );
+}
+
+/** Key-value metadata editor. */
+function MetadataEditor({
+  metadata,
+  onChange,
+}: {
+  metadata: Record<string, string>;
+  onChange: (metadata: Record<string, string>) => void;
+}) {
+  const [newKey, setNewKey] = useState('');
+
+  const entries = Object.entries(metadata);
+
+  function handleAdd() {
+    const key = newKey.trim();
+    if (!key || key in metadata) return;
+    onChange({ ...metadata, [key]: '' });
+    setNewKey('');
+  }
+
+  function handleRemove(key: string) {
+    const next = { ...metadata };
+    delete next[key];
+    onChange(next);
+  }
+
+  function handleValueChange(key: string, value: string) {
+    onChange({ ...metadata, [key]: value });
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.length === 0 && (
+        <p className="text-xs text-muted-foreground">No metadata</p>
+      )}
+      {entries.map(([key, value]) => (
+        <div key={key} className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground truncate min-w-0 flex-shrink-0 max-w-[60px]" title={key}>
+            {key}
+          </span>
+          <Input
+            value={value}
+            onChange={(e) => handleValueChange(key, e.target.value)}
+            className="h-6 text-xs flex-1"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 text-xs text-muted-foreground hover:text-destructive"
+            onClick={() => handleRemove(key)}
+          >
+            x
+          </Button>
+        </div>
+      ))}
+      <div className="flex items-center gap-1">
+        <Input
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleAdd();
+          }}
+          placeholder="New key"
+          className="h-6 text-xs flex-1"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-6 text-xs px-2"
+          onClick={handleAdd}
+          disabled={!newKey.trim() || newKey.trim() in metadata}
+        >
+          +
+        </Button>
+      </div>
     </div>
   );
 }

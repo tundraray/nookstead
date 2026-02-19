@@ -19,6 +19,8 @@ interface MapEditorToolbarProps {
   onCameraChange: (camera: Camera) => void;
   showGrid: boolean;
   onToggleGrid: () => void;
+  showWalkability: boolean;
+  onToggleWalkability: () => void;
 }
 
 const MIN_ZOOM = 0.25;
@@ -30,11 +32,16 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-const TOOLS = [
+const PAINT_TOOLS = [
   { key: 'brush' as const, label: 'Brush', shortcut: 'B' },
   { key: 'fill' as const, label: 'Fill', shortcut: 'F' },
   { key: 'rectangle' as const, label: 'Rect', shortcut: 'R' },
   { key: 'eraser' as const, label: 'Eraser', shortcut: 'E' },
+] as const;
+
+const ZONE_TOOLS = [
+  { key: 'zone-rect' as const, label: 'Zone Rect', shortcut: 'Z' },
+  { key: 'zone-poly' as const, label: 'Zone Poly', shortcut: 'P' },
 ] as const;
 
 /**
@@ -49,6 +56,8 @@ export function MapEditorToolbar({
   onCameraChange,
   showGrid,
   onToggleGrid,
+  showWalkability,
+  onToggleWalkability,
 }: MapEditorToolbarProps) {
   // Track "Saved" momentary label state
   const [showSavedLabel, setShowSavedLabel] = useState(false);
@@ -97,12 +106,21 @@ export function MapEditorToolbar({
         case 'e':
           dispatch({ type: 'SET_TOOL', tool: 'eraser' });
           break;
+        case 'z':
+          dispatch({ type: 'SET_TOOL', tool: 'zone-rect' });
+          break;
+        case 'p':
+          dispatch({ type: 'SET_TOOL', tool: 'zone-poly' });
+          break;
+        case 'w':
+          onToggleWalkability();
+          break;
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [dispatch]);
+  }, [dispatch, onToggleWalkability]);
 
   const handleZoomOut = () => {
     onCameraChange({
@@ -133,9 +151,36 @@ export function MapEditorToolbar({
   return (
     <TooltipProvider>
       <div className="flex items-center gap-1 flex-wrap mb-2 text-xs">
-        {/* Tool selection buttons */}
+        {/* Paint tool buttons */}
         <div className="flex items-center gap-0.5">
-          {TOOLS.map((tool) => (
+          {PAINT_TOOLS.map((tool) => (
+            <Tooltip key={tool.key}>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={
+                    state.activeTool === tool.key ? 'secondary' : 'ghost'
+                  }
+                  size="sm"
+                  className="h-7 text-xs px-2"
+                  onClick={() =>
+                    dispatch({ type: 'SET_TOOL', tool: tool.key })
+                  }
+                >
+                  {tool.label}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {tool.label} ({tool.shortcut})
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
+
+        <div className="w-px h-5 bg-border" />
+
+        {/* Zone tool buttons */}
+        <div className="flex items-center gap-0.5">
+          {ZONE_TOOLS.map((tool) => (
             <Tooltip key={tool.key}>
               <TooltipTrigger asChild>
                 <Button
@@ -294,6 +339,21 @@ export function MapEditorToolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent>Toggle Grid (G)</TooltipContent>
+        </Tooltip>
+
+        {/* Walkability overlay toggle */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={showWalkability ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs px-2"
+              onClick={onToggleWalkability}
+            >
+              Walk
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Toggle Walkability Overlay (W)</TooltipContent>
         </Tooltip>
       </div>
     </TooltipProvider>

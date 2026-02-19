@@ -20,9 +20,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useEditorMaps, type MapTypeFilter } from '@/hooks/use-editor-maps';
 import { toast } from 'sonner';
+
+interface PlayerMapEntry {
+  userId: string;
+  seed: number;
+  updatedAt: string;
+  userName: string | null;
+  userEmail: string;
+}
 
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr);
@@ -64,6 +79,11 @@ export default function MapsPage() {
   } = useEditorMaps();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [playerMaps, setPlayerMaps] = useState<PlayerMapEntry[]>([]);
+  const [isLoadingPlayerMaps, setIsLoadingPlayerMaps] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -93,13 +113,62 @@ export default function MapsPage() {
     }
   }
 
+  async function openImportDialog() {
+    setImportDialogOpen(true);
+    setSelectedUserId(null);
+    setIsLoadingPlayerMaps(true);
+    try {
+      const res = await fetch('/api/player-maps');
+      if (!res.ok) throw new Error('Failed to load player maps');
+      const data = await res.json();
+      setPlayerMaps(data);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to load player maps'
+      );
+      setImportDialogOpen(false);
+    } finally {
+      setIsLoadingPlayerMaps(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!selectedUserId) return;
+    setIsImporting(true);
+    try {
+      const res = await fetch('/api/player-maps/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to import map');
+      }
+      setImportDialogOpen(false);
+      toast.success('Player map imported');
+      refetch();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to import map'
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Maps</h1>
-        <Button asChild>
-          <Link href="/maps/new">New Map</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openImportDialog}>
+            Import Player Map
+          </Button>
+          <Button asChild>
+            <Link href="/maps/new">New Map</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="mb-4">
@@ -232,6 +301,74 @@ export default function MapsPage() {
           </p>
         }
       />
+
+      <Dialog
+        open={importDialogOpen}
+        onOpenChange={(open) => !open && setImportDialogOpen(false)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import Player Map</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {isLoadingPlayerMaps ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </div>
+            ) : playerMaps.length === 0 ? (
+              <p className="text-muted-foreground">
+                No player maps found.
+              </p>
+            ) : (
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {playerMaps.map((pm) => (
+                  <button
+                    key={pm.userId}
+                    type="button"
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                      selectedUserId === pm.userId
+                        ? 'bg-primary text-primary-foreground'
+                        : 'hover:bg-muted'
+                    }`}
+                    onClick={() => setSelectedUserId(pm.userId)}
+                  >
+                    <div className="font-medium">
+                      {pm.userName ?? pm.userEmail}
+                    </div>
+                    <div
+                      className={`text-xs ${
+                        selectedUserId === pm.userId
+                          ? 'text-primary-foreground/70'
+                          : 'text-muted-foreground'
+                      }`}
+                    >
+                      Seed: {pm.seed} &middot; Updated:{' '}
+                      {formatDate(pm.updatedAt)}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setImportDialogOpen(false)}
+              disabled={isImporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImport}
+              disabled={!selectedUserId || isImporting}
+            >
+              {isImporting ? 'Importing...' : 'Import'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

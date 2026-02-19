@@ -79,6 +79,7 @@ export {
   type UpdateMapZoneData,
 } from './services/map-zone';
 export {
+  listPlayerMaps,
   importPlayerMap,
   exportToPlayerMap,
   editPlayerMapDirect,

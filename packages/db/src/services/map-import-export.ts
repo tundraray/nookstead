@@ -1,8 +1,34 @@
 import { eq } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import { maps } from '../schema/maps';
+import { users } from '../schema/users';
 import { editorMaps } from '../schema/editor-maps';
 import type { EditorMap } from '../schema/editor-maps';
+
+export async function listPlayerMaps(
+  db: DrizzleClient
+): Promise<
+  Array<{
+    userId: string;
+    seed: number;
+    updatedAt: Date;
+    userName: string | null;
+    userEmail: string;
+  }>
+> {
+  const rows = await db
+    .select({
+      userId: maps.userId,
+      seed: maps.seed,
+      updatedAt: maps.updatedAt,
+      userName: users.name,
+      userEmail: users.email,
+    })
+    .from(maps)
+    .innerJoin(users, eq(maps.userId, users.id));
+
+  return rows;
+}
 
 export async function importPlayerMap(
   db: DrizzleClient,

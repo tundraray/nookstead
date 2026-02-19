@@ -7,7 +7,9 @@ export type EditorTool =
   | 'brush'
   | 'fill'
   | 'rectangle'
-  | 'eraser';
+  | 'eraser'
+  | 'zone-rect'
+  | 'zone-poly';
 
 /** A single layer in the editor. */
 export interface EditorLayer {
@@ -42,13 +44,17 @@ export interface MapEditorState {
   undoStack: EditorCommand[];
   redoStack: EditorCommand[];
 
+  // Metadata
+  metadata: Record<string, string>;
+
   // Status
   isDirty: boolean;
   isSaving: boolean;
   lastSavedAt: string | null;
 
-  // Zone stubs (UI deferred to Batch 4)
-  zones: unknown[];
+  // Zones
+  zones: ZoneData[];
+  zoneVisibility: boolean;
 }
 
 /** Action types for the editor reducer. */
@@ -63,6 +69,7 @@ export type MapEditorAction =
   | { type: 'SET_NAME'; name: string }
   | { type: 'SET_SEED'; seed: number }
   | { type: 'RESIZE_MAP'; newWidth: number; newHeight: number }
+  | { type: 'SET_METADATA'; metadata: Record<string, string> }
 
   // Status actions
   | { type: 'SET_SAVING'; isSaving: boolean }
@@ -80,14 +87,8 @@ export type MapEditorAction =
   | { type: 'REDO' }
   | { type: 'PUSH_COMMAND'; command: EditorCommand }
 
-  // Paint stubs (implemented in Tasks 12-15)
-  | { type: 'PAINT_CELL'; x: number; y: number }
-  | { type: 'PAINT_CELLS'; cells: Array<{ x: number; y: number }> }
-  | { type: 'FILL'; x: number; y: number }
-  | { type: 'RECTANGLE_FILL'; x1: number; y1: number; x2: number; y2: number }
-  | { type: 'ERASE_CELL'; x: number; y: number }
-
-  // Zone stubs (UI deferred to Batch 4)
+  // Zone actions
+  | { type: 'SET_ZONES'; zones: ZoneData[] }
   | { type: 'ADD_ZONE'; zone: ZoneData }
   | { type: 'UPDATE_ZONE'; zoneId: string; data: Partial<ZoneData> }
   | { type: 'DELETE_ZONE'; zoneId: string }
@@ -105,5 +106,5 @@ export interface LoadMapPayload {
   layers: EditorLayer[] | unknown[];
   walkable: boolean[][];
   metadata?: unknown;
-  zones?: unknown[];
+  zones?: ZoneData[];
 }
