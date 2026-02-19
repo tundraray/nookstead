@@ -204,6 +204,12 @@ importers:
       '@nookstead/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@nookstead/map-lib':
+        specifier: workspace:*
+        version: link:../../packages/map-lib
+      '@nookstead/map-renderer':
+        specifier: workspace:*
+        version: link:../../packages/map-renderer
       '@nookstead/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -288,6 +294,9 @@ importers:
       '@nookstead/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@nookstead/map-lib':
+        specifier: workspace:*
+        version: link:../../packages/map-lib
       '@nookstead/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -316,6 +325,33 @@ importers:
       drizzle-kit:
         specifier: ^0.30.0
         version: 0.30.6
+
+  packages/map-lib:
+    dependencies:
+      '@nookstead/shared':
+        specifier: workspace:*
+        version: link:../shared
+      alea:
+        specifier: ^1.0.1
+        version: 1.0.1
+      simplex-noise:
+        specifier: ^4.0.3
+        version: 4.0.3
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+
+  packages/map-renderer:
+    dependencies:
+      '@nookstead/map-lib':
+        specifier: workspace:*
+        version: link:../map-lib
+      phaser:
+        specifier: ^3.80.0
+        version: 3.90.0
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
 
   packages/shared:
     dependencies:

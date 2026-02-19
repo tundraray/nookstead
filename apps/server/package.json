@@ -83,6 +83,7 @@
   },
   "dependencies": {
     "@nookstead/db": "workspace:*",
+    "@nookstead/map-lib": "workspace:*",
     "@nookstead/shared": "workspace:*",
     "alea": "^1.0.1",
     "simplex-noise": "^4.0.3"

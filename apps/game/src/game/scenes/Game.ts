@@ -1,7 +1,7 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
-import { EMPTY_FRAME } from '../autotile';
+import { EMPTY_FRAME } from '@nookstead/map-lib';
 import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';

@@ -8,7 +8,7 @@
  * No Phaser dependency -- framework-agnostic logic.
  */
 
-import { getSurfaceProperties } from '../terrain-properties';
+import { getSurfaceProperties } from '@nookstead/map-lib';
 import type { Grid } from '@nookstead/shared';
 
 /** Input parameters for a single movement calculation. */
