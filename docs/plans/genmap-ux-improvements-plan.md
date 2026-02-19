@@ -1,6 +1,7 @@
 # Work Plan: Genmap Editor UX Improvements
 
 Created Date: 2026-02-18
+Status: SUPERSEDED (replaced by texture-atlas-refactor-plan.md)
 Type: feature
 Estimated Duration: 3 days
 Estimated Impact: 8 new files, 7 modified files (15 total)
