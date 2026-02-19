@@ -73,11 +73,15 @@ export default function NewObjectPage() {
     fetch('/api/objects/suggestions?field=category')
       .then((r) => r.json())
       .then(setCategorySuggestions)
-      .catch(() => {});
+      .catch(() => {
+        // Suggestions are non-critical; silently ignore fetch failures
+      });
     fetch('/api/objects/suggestions?field=objectType')
       .then((r) => r.json())
       .then(setTypeSuggestions)
-      .catch(() => {});
+      .catch(() => {
+        // Suggestions are non-critical; silently ignore fetch failures
+      });
   }, []);
 
   useKeyboardShortcuts({

@@ -100,11 +100,15 @@ export default function ObjectEditPage() {
     fetch('/api/objects/suggestions?field=category')
       .then((r) => r.json())
       .then(setCategorySuggestions)
-      .catch(() => {});
+      .catch(() => {
+        // Suggestions are non-critical; silently ignore fetch failures
+      });
     fetch('/api/objects/suggestions?field=objectType')
       .then((r) => r.json())
       .then(setTypeSuggestions)
-      .catch(() => {});
+      .catch(() => {
+        // Suggestions are non-critical; silently ignore fetch failures
+      });
   }, []);
 
   useKeyboardShortcuts({
@@ -155,7 +159,6 @@ export default function ObjectEditPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   async function loadLayersWithSpriteUrls(

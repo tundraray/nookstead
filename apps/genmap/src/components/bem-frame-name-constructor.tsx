@@ -63,7 +63,9 @@ export function BemFrameNameConstructor({
     fetch('/api/frames/search?q=')
       .then((r) => r.json())
       .then((data: string[]) => setServerFilenames(data))
-      .catch(() => {});
+      .catch(() => {
+        // Frame suggestions are non-critical; silently ignore fetch failures
+      });
   }, []);
 
   // Merge local + server filenames, deduplicated

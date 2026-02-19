@@ -8,6 +8,7 @@ import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help';
 const navItems = [
   { href: '/sprites', label: 'Sprites' },
   { href: '/objects', label: 'Objects' },
+  { href: '/maps', label: 'Maps' },
 ];
 
 export function Navigation() {
