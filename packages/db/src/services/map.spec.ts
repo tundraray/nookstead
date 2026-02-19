@@ -22,6 +22,7 @@ function createMockDb() {
   const selectFrom = jest.fn().mockReturnValue({ where: selectWhere });
   const select = jest.fn().mockReturnValue({ from: selectFrom });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = { insert, select } as any;
 
   return {
