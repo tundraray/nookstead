@@ -48,3 +48,39 @@ export {
   type CreateGameObjectData,
   type UpdateGameObjectData,
 } from './services/game-object';
+export {
+  createEditorMap,
+  getEditorMap,
+  listEditorMaps,
+  updateEditorMap,
+  deleteEditorMap,
+  type CreateEditorMapData,
+  type ListEditorMapsParams,
+  type UpdateEditorMapData,
+} from './services/editor-map';
+export {
+  createTemplate,
+  getTemplate,
+  listTemplates,
+  updateTemplate,
+  deleteTemplate,
+  publishTemplate,
+  getPublishedTemplates,
+  type CreateTemplateData,
+  type UpdateTemplateData,
+  type ListTemplatesParams,
+} from './services/map-template';
+export {
+  createMapZone,
+  getZonesForMap,
+  updateMapZone,
+  deleteMapZone,
+  type CreateMapZoneData,
+  type UpdateMapZoneData,
+} from './services/map-zone';
+export {
+  importPlayerMap,
+  exportToPlayerMap,
+  editPlayerMapDirect,
+  savePlayerMapDirect,
+} from './services/map-import-export';

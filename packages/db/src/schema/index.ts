@@ -5,3 +5,6 @@ export * from './maps';
 export * from './sprites';
 export * from './atlas-frames';
 export * from './game-objects';
+export * from './editor-maps';
+export * from './map-templates';
+export * from './map-zones';
