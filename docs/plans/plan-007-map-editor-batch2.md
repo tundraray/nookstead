@@ -1,6 +1,8 @@
 # Work Plan: Map Editor Batch 2 -- DB Schema + Services
 
 Created Date: 2026-02-19
+Status: complete
+Completed Date: 2026-02-19
 Type: feature
 Estimated Duration: 2 days
 Estimated Impact: 12 files (5 new service files, 3 new schema files, 2 modified index files, 1 migration, 4 test files)
@@ -185,7 +187,7 @@ graph TD
 
 #### Tasks
 
-- [ ] **Task 1**: Create `editor_maps` Drizzle schema at `packages/db/src/schema/editor-maps.ts`
+- [x] **Task 1**: Create `editor_maps` Drizzle schema at `packages/db/src/schema/editor-maps.ts`
   - **Input files**:
     - `packages/db/src/schema/game-objects.ts` (pattern reference: uuid PK, JSONB, timestamps)
     - `packages/db/src/schema/maps.ts` (pattern reference: JSONB grid/layers/walkable)
@@ -200,7 +202,7 @@ graph TD
     - File compiles without TypeScript errors
     - Follows `game-objects.ts` pattern: `uuid('id').defaultRandom().primaryKey()`
 
-- [ ] **Task 2**: Create `map_templates` Drizzle schema at `packages/db/src/schema/map-templates.ts`
+- [x] **Task 2**: Create `map_templates` Drizzle schema at `packages/db/src/schema/map-templates.ts`
   - **Input files**:
     - Design Doc Section 2.1 (exact schema definition)
   - **Output files**:
@@ -213,7 +215,7 @@ graph TD
     - `version` defaults to 1, `isPublished` defaults to false
     - File compiles without TypeScript errors
 
-- [ ] **Task 3**: Create `map_zones` Drizzle schema at `packages/db/src/schema/map-zones.ts`
+- [x] **Task 3**: Create `map_zones` Drizzle schema at `packages/db/src/schema/map-zones.ts`
   - **Input files**:
     - `packages/db/src/schema/editor-maps.ts` (FK reference)
     - Design Doc Section 2.1 (exact schema definition)
@@ -228,7 +230,7 @@ graph TD
     - `zIndex` defaults to 0
     - File compiles without TypeScript errors
 
-- [ ] **Task 4**: Update `packages/db/src/schema/index.ts` to export new schemas
+- [x] **Task 4**: Update `packages/db/src/schema/index.ts` to export new schemas
   - **Input files**:
     - `packages/db/src/schema/index.ts` (currently exports 7 schemas)
   - **Output files**:
@@ -246,7 +248,7 @@ graph TD
     - `EditorMap`, `NewEditorMap`, `MapTemplateRecord`, `NewMapTemplateRecord`, `MapZone`, `NewMapZone` types are accessible via `import { ... } from '@nookstead/db'`
     - File compiles without errors
 
-- [ ] **Task 5**: Generate migration via `drizzle-kit generate`
+- [x] **Task 5**: Generate migration via `drizzle-kit generate`
   - **Input files**:
     - All schema files in `packages/db/src/schema/`
     - `packages/db/drizzle.config.ts` (Drizzle Kit config)
@@ -270,12 +272,12 @@ graph TD
 
 #### Phase Completion Criteria
 
-- [ ] `packages/db/src/schema/editor-maps.ts` exists with correct columns and types
-- [ ] `packages/db/src/schema/map-templates.ts` exists with correct columns and types
-- [ ] `packages/db/src/schema/map-zones.ts` exists with FK and cascade delete
-- [ ] `packages/db/src/schema/index.ts` exports all new schemas
-- [ ] Migration file generated and reviewed
-- [ ] `pnpm nx typecheck db` passes (if available) or no TypeScript errors in schema files
+- [x] `packages/db/src/schema/editor-maps.ts` exists with correct columns and types
+- [x] `packages/db/src/schema/map-templates.ts` exists with correct columns and types
+- [x] `packages/db/src/schema/map-zones.ts` exists with FK and cascade delete
+- [x] `packages/db/src/schema/index.ts` exports all new schemas
+- [x] Migration file generated and reviewed
+- [x] `pnpm nx typecheck db` passes (if available) or no TypeScript errors in schema files
 
 #### Operational Verification Procedures
 
@@ -295,7 +297,7 @@ graph TD
 
 #### Tasks
 
-- [ ] **Task 6**: Create editor-map service at `packages/db/src/services/editor-map.ts`
+- [x] **Task 6**: Create editor-map service at `packages/db/src/services/editor-map.ts`
   - **Input files**:
     - `packages/db/src/services/map.ts` (pattern reference)
     - `packages/db/src/services/game-object.ts` (pattern reference: full CRUD with list/update/delete)
@@ -319,7 +321,7 @@ graph TD
     - `listEditorMaps` supports filtering by `mapType` and `createdBy`, ordered by `updatedAt` desc
     - File compiles without TypeScript errors
 
-- [ ] **Task 7**: Create map-template service at `packages/db/src/services/map-template.ts`
+- [x] **Task 7**: Create map-template service at `packages/db/src/services/map-template.ts`
   - **Input files**:
     - Design Doc Section 2.3 (exact service implementation)
   - **Output files**:
@@ -341,7 +343,7 @@ graph TD
     - `getPublishedTemplates` filters by both `mapType` and `isPublished = true`
     - File compiles without TypeScript errors
 
-- [ ] **Task 8**: Create map-zone service at `packages/db/src/services/map-zone.ts`
+- [x] **Task 8**: Create map-zone service at `packages/db/src/services/map-zone.ts`
   - **Input files**:
     - Design Doc Section 2.3 (exact service implementation)
   - **Output files**:
@@ -361,7 +363,7 @@ graph TD
     - `updateMapZone` sets `updatedAt: new Date()`
     - File compiles without TypeScript errors
 
-- [ ] **Task 9**: Update `packages/db/src/index.ts` to export new services
+- [x] **Task 9**: Update `packages/db/src/index.ts` to export new services
   - **Input files**:
     - `packages/db/src/index.ts` (currently exports 6 service groups)
   - **Output files**:
@@ -408,12 +410,12 @@ graph TD
 
 #### Phase Completion Criteria
 
-- [ ] `packages/db/src/services/editor-map.ts` exists with 5 functions and 3 interfaces
-- [ ] `packages/db/src/services/map-template.ts` exists with 7 functions and 3 interfaces
-- [ ] `packages/db/src/services/map-zone.ts` exists with 4 functions and 2 interfaces
-- [ ] `packages/db/src/index.ts` exports all new services
-- [ ] All service files compile without TypeScript errors
-- [ ] Services follow established patterns: `DrizzleClient` first param, fail-fast error propagation
+- [x] `packages/db/src/services/editor-map.ts` exists with 5 functions and 3 interfaces
+- [x] `packages/db/src/services/map-template.ts` exists with 7 functions and 3 interfaces
+- [x] `packages/db/src/services/map-zone.ts` exists with 4 functions and 2 interfaces
+- [x] `packages/db/src/index.ts` exports all new services
+- [x] All service files compile without TypeScript errors
+- [x] Services follow established patterns: `DrizzleClient` first param, fail-fast error propagation
 
 #### Operational Verification Procedures
 
@@ -432,7 +434,7 @@ graph TD
 
 #### Tasks
 
-- [ ] **Task 10**: Create import/export service at `packages/db/src/services/map-import-export.ts`
+- [x] **Task 10**: Create import/export service at `packages/db/src/services/map-import-export.ts`
   - **Input files**:
     - `packages/db/src/schema/maps.ts` (player maps table)
     - `packages/db/src/schema/editor-maps.ts` (editor maps table)
@@ -475,11 +477,11 @@ graph TD
 
 #### Phase Completion Criteria
 
-- [ ] `packages/db/src/services/map-import-export.ts` exists with 4 functions
-- [ ] `importPlayerMap` creates a copy with correct transformation rules per PRD FR-2.7
-- [ ] `exportToPlayerMap` writes only the specified fields (not editor metadata)
-- [ ] `editPlayerMapDirect` and `savePlayerMapDirect` provide direct editing without copying
-- [ ] All functions exported from `packages/db/src/index.ts`
+- [x] `packages/db/src/services/map-import-export.ts` exists with 4 functions
+- [x] `importPlayerMap` creates a copy with correct transformation rules per PRD FR-2.7
+- [x] `exportToPlayerMap` writes only the specified fields (not editor metadata)
+- [x] `editPlayerMapDirect` and `savePlayerMapDirect` provide direct editing without copying
+- [x] All functions exported from `packages/db/src/index.ts`
 
 #### Operational Verification Procedures
 
@@ -498,7 +500,7 @@ graph TD
 
 #### Tasks
 
-- [ ] **Task 11**: Create unit tests for editor-map service at `packages/db/src/services/editor-map.spec.ts`
+- [x] **Task 11**: Create unit tests for editor-map service at `packages/db/src/services/editor-map.spec.ts`
   - **Input files**:
     - `packages/db/src/services/editor-map.ts` (service under test)
     - `packages/db/src/services/game-object.spec.ts` (test pattern reference: mock Drizzle client with full CRUD chain)
@@ -521,7 +523,7 @@ graph TD
     - Tests verify return value mapping (record or null)
     - No database connection required (fully mocked)
 
-- [ ] **Task 12**: Create unit tests for map-template service at `packages/db/src/services/map-template.spec.ts`
+- [x] **Task 12**: Create unit tests for map-template service at `packages/db/src/services/map-template.spec.ts`
   - **Input files**:
     - `packages/db/src/services/map-template.ts` (service under test)
     - `packages/db/src/services/game-object.spec.ts` (test pattern reference)
@@ -544,7 +546,7 @@ graph TD
     - `publishTemplate` test verifies version increment (e.g., version 1 -> 2)
     - `getPublishedTemplates` test verifies both conditions in the `where` clause
 
-- [ ] **Task 13**: Create unit tests for map-zone service at `packages/db/src/services/map-zone.spec.ts`
+- [x] **Task 13**: Create unit tests for map-zone service at `packages/db/src/services/map-zone.spec.ts`
   - **Input files**:
     - `packages/db/src/services/map-zone.ts` (service under test)
   - **Output files**:
@@ -562,7 +564,7 @@ graph TD
     - Error case test verifies the exact error message
     - `getZonesForMap` test verifies `orderBy(asc(mapZones.zIndex))`
 
-- [ ] **Task 14**: Create unit tests for import/export service at `packages/db/src/services/map-import-export.spec.ts`
+- [x] **Task 14**: Create unit tests for import/export service at `packages/db/src/services/map-import-export.spec.ts`
   - **Input files**:
     - `packages/db/src/services/map-import-export.ts` (service under test)
     - `packages/db/src/services/map.spec.ts` (test pattern reference: mock for `maps` table)
@@ -588,13 +590,13 @@ graph TD
 
 #### Phase Completion Criteria
 
-- [ ] `packages/db/src/services/editor-map.spec.ts` -- 8 tests passing
-- [ ] `packages/db/src/services/map-template.spec.ts` -- 10 tests passing
-- [ ] `packages/db/src/services/map-zone.spec.ts` -- 6 tests passing
-- [ ] `packages/db/src/services/map-import-export.spec.ts` -- 8 tests passing
-- [ ] Total: 32 test cases passing
-- [ ] All tests use mock Drizzle client (no database required)
-- [ ] Test coverage for all service functions and error paths
+- [x] `packages/db/src/services/editor-map.spec.ts` -- 8 tests passing
+- [x] `packages/db/src/services/map-template.spec.ts` -- 10 tests passing
+- [x] `packages/db/src/services/map-zone.spec.ts` -- 6 tests passing
+- [x] `packages/db/src/services/map-import-export.spec.ts` -- 8 tests passing
+- [x] Total: 32 test cases passing
+- [x] All tests use mock Drizzle client (no database required)
+- [x] Test coverage for all service functions and error paths
 
 #### Operational Verification Procedures
 
@@ -614,7 +616,7 @@ graph TD
 
 #### Tasks
 
-- [ ] **Task 15**: Run typecheck and lint
+- [x] **Task 15**: Run typecheck and lint
   - **Input files**: All TypeScript files in `packages/db/`
   - **Output files**: None (verification only)
   - **Description**: Execute quality checks:
@@ -632,7 +634,7 @@ graph TD
     - Zero ESLint errors across all db package files
     - No cross-project type errors from the new schema additions
 
-- [ ] **Task 16**: Run all db package tests
+- [x] **Task 16**: Run all db package tests
   - **Input files**: All test files in `packages/db/src/services/`
   - **Output files**: None (verification only)
   - **Description**: Execute the full test suite for the db package:
@@ -649,11 +651,11 @@ graph TD
 
 #### Phase Completion Criteria
 
-- [ ] `pnpm nx typecheck` -- zero errors in db package
-- [ ] `pnpm nx lint` -- zero errors in db package
-- [ ] `pnpm nx test db` -- all tests pass (existing + 32 new)
-- [ ] No regressions in existing service tests
-- [ ] All FR-2.x acceptance criteria verified
+- [x] `pnpm nx typecheck` -- zero errors in db package
+- [x] `pnpm nx lint` -- zero errors in db package
+- [x] `pnpm nx test db` -- all tests pass (existing + 32 new)
+- [x] No regressions in existing service tests
+- [x] All FR-2.x acceptance criteria verified
 
 #### Operational Verification Procedures
 
@@ -666,18 +668,18 @@ graph TD
 
 ## Quality Checklist
 
-- [ ] Design Doc and PRD consistency verification (FR-2.1 through FR-2.7 addressed)
-- [ ] Phase dependencies correctly mapped (Schema -> Services -> Import/Export -> Tests -> QA)
-- [ ] All requirements converted to tasks with correct phase assignment
-- [ ] Quality assurance exists in Phase 5
-- [ ] Schema follows existing patterns (`game-objects.ts`: uuid PK, JSONB, timestamps)
-- [ ] Services follow existing patterns (`map.ts`: DrizzleClient first param, fail-fast errors)
-- [ ] Tests follow existing patterns (`map.spec.ts`, `game-object.spec.ts`: mock Drizzle client)
-- [ ] Foreign key with cascade delete defined for `map_zones.map_id`
-- [ ] Migration is additive-only (no ALTER/DROP on existing tables)
-- [ ] Import/export transformation rules match PRD FR-2.7 specification
-- [ ] All new service functions and types exported from `packages/db/src/index.ts`
-- [ ] No naming conflicts with existing exports
+- [x] Design Doc and PRD consistency verification (FR-2.1 through FR-2.7 addressed)
+- [x] Phase dependencies correctly mapped (Schema -> Services -> Import/Export -> Tests -> QA)
+- [x] All requirements converted to tasks with correct phase assignment
+- [x] Quality assurance exists in Phase 5
+- [x] Schema follows existing patterns (`game-objects.ts`: uuid PK, JSONB, timestamps)
+- [x] Services follow existing patterns (`map.ts`: DrizzleClient first param, fail-fast errors)
+- [x] Tests follow existing patterns (`map.spec.ts`, `game-object.spec.ts`: mock Drizzle client)
+- [x] Foreign key with cascade delete defined for `map_zones.map_id`
+- [x] Migration is additive-only (no ALTER/DROP on existing tables)
+- [x] Import/export transformation rules match PRD FR-2.7 specification
+- [x] All new service functions and types exported from `packages/db/src/index.ts`
+- [x] No naming conflicts with existing exports
 
 ## Files Summary
 
@@ -707,41 +709,41 @@ graph TD
 
 ## Completion Criteria
 
-- [ ] All 5 phases completed
-- [ ] Each phase's operational verification procedures executed
-- [ ] Design Doc acceptance criteria satisfied (FR-2.1 through FR-2.7)
-- [ ] All quality checks completed (zero TypeScript and ESLint errors)
-- [ ] All 32 new tests pass
-- [ ] All existing db package tests pass (no regressions)
-- [ ] Necessary documentation updated (this plan checkboxes)
-- [ ] Migration file reviewed and ready for database apply
+- [x] All 5 phases completed
+- [x] Each phase's operational verification procedures executed
+- [x] Design Doc acceptance criteria satisfied (FR-2.1 through FR-2.7)
+- [x] All quality checks completed (zero TypeScript and ESLint errors)
+- [x] All 32 new tests pass
+- [x] All existing db package tests pass (no regressions)
+- [x] Necessary documentation updated (this plan checkboxes)
+- [x] Migration file reviewed and ready for database apply
 
 ## Progress Tracking
 
 ### Phase 1: Schema Creation
-- Start:
-- Complete:
-- Notes:
+- Start: 2026-02-19
+- Complete: 2026-02-19
+- Notes: All 3 schemas + migration + barrel exports done
 
 ### Phase 2: CRUD Services
-- Start:
-- Complete:
-- Notes:
+- Start: 2026-02-19
+- Complete: 2026-02-19
+- Notes: 5+7+4 service functions + barrel exports done. Fixed listEditorMaps/listTemplates query builder chain order.
 
 ### Phase 3: Import/Export + Direct Editing
-- Start:
-- Complete:
-- Notes:
+- Start: 2026-02-19
+- Complete: 2026-02-19
+- Notes: 4 import/export functions done
 
 ### Phase 4: Unit Tests
-- Start:
-- Complete:
-- Notes:
+- Start: 2026-02-19
+- Complete: 2026-02-19
+- Notes: 32 new tests (8+10+6+8), all passing. 74 total tests in db package.
 
 ### Phase 5: Quality Assurance
-- Start:
-- Complete:
-- Notes:
+- Start: 2026-02-19
+- Complete: 2026-02-19
+- Notes: typecheck 0 errors, lint 0 errors, all 74 tests pass
 
 ## Notes
 
