@@ -86,3 +86,6 @@ export {
   editPlayerMapDirect,
   savePlayerMapDirect,
 } from './services/map-import-export';
+export * from './services/material';
+export * from './services/tileset';
+export * from './services/tileset-tag';

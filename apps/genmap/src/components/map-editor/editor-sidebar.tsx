@@ -11,7 +11,7 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { MapEditorState, MapEditorAction, SidebarTab } from '@/hooks/map-editor-types';
 import type { UseZonesReturn } from '@/hooks/use-zones';
-import { TerrainPalette } from './terrain-palette';
+import { TerrainPalette, type PaletteTileset } from './terrain-palette';
 import { LayerPanel } from './layer-panel';
 import { MapPropertiesPanel } from './map-properties-panel';
 import { ZonePanel } from './zone-panel';
@@ -43,6 +43,7 @@ export interface EditorSidebarProps {
   state: MapEditorState;
   dispatch: Dispatch<MapEditorAction>;
   tilesetImages: Map<string, HTMLImageElement>;
+  tilesets: PaletteTileset[];
   zoneState: UseZonesReturn;
   onObjectSelect: (objectId: string) => void;
 }
@@ -103,6 +104,7 @@ export function EditorSidebar({
   state,
   dispatch,
   tilesetImages,
+  tilesets,
   zoneState,
   onObjectSelect,
 }: EditorSidebarProps) {
@@ -146,6 +148,7 @@ export function EditorSidebar({
             state={state}
             dispatch={dispatch}
             tilesetImages={tilesetImages}
+            tilesets={tilesets}
           />
         );
       case 'layers':

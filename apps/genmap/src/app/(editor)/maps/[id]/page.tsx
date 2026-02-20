@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { useMapEditor } from '@/hooks/use-map-editor';
 import { useTilesetImages } from '@/components/map-editor/use-tileset-images';
+import { useTilesets } from '@/hooks/use-tilesets';
 import { MapEditorCanvas } from '@/components/map-editor/map-editor-canvas';
 import { EditorOptionsBar } from '@/components/map-editor/editor-options-bar';
 import { EditorStatusBar } from '@/components/map-editor/editor-status-bar';
@@ -337,6 +338,9 @@ export default function MapEditorPage() {
     totalCount,
   } = useTilesetImages();
 
+  // Fetch tileset records from API for the terrain palette grouping/naming
+  const { tilesets: apiTilesets } = useTilesets();
+
   const fetchMap = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -484,6 +488,7 @@ export default function MapEditorPage() {
           state={state}
           dispatch={dispatch}
           tilesetImages={tilesetImages}
+          tilesets={apiTilesets}
           zoneState={zoneState}
           onObjectSelect={handleObjectSelect}
         />

@@ -7,7 +7,9 @@ import { KeyboardShortcutsHelp } from './keyboard-shortcuts-help';
 
 const navItems = [
   { href: '/sprites', label: 'Sprites' },
+  { href: '/tilesets', label: 'Tilesets' },
   { href: '/objects', label: 'Objects' },
+  { href: '/materials', label: 'Materials' },
   { href: '/maps', label: 'Maps' },
   { href: '/templates', label: 'Templates' },
 ];

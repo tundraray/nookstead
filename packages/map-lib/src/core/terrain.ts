@@ -16,6 +16,10 @@ export interface TerrainType {
   relationship?: TilesetRelationship;
 }
 
+/**
+ * @deprecated Use database-driven tileset records from GET /api/tilesets instead.
+ * Kept for backward compatibility with apps/game.
+ */
 export const TERRAIN_NAMES = [
   'dirt_light_grass',       // 01
   'orange_grass',           // 02
@@ -47,6 +51,10 @@ export const TERRAIN_NAMES = [
 
 import { SOLID_FRAME } from './autotile';
 
+/**
+ * @deprecated Use database-driven tileset records from GET /api/tilesets instead.
+ * Kept for backward compatibility with apps/game.
+ */
 export const TERRAINS: TerrainType[] = TERRAIN_NAMES.map((name, i) => {
   const num = String(i + 1).padStart(2, '0');
   return {
@@ -120,7 +128,11 @@ export function getTilesetsForTerrain(terrainType: string): TerrainType[] {
 /** Helper: get terrain by 1-based number. */
 function t(n: number) { return TERRAINS[n - 1]; }
 
-/** Named tileset collections. Keys match TERRAIN_NAMES exactly. */
+/**
+ * Named tileset collections. Keys match TERRAIN_NAMES exactly.
+ * @deprecated Use database-driven tileset records from GET /api/tilesets instead.
+ * Tilesets are now grouped by tags in the database. Kept for backward compatibility with apps/game.
+ */
 export const TILESETS = {
   grassland: {
     name: 'grassland',

@@ -20,6 +20,10 @@ export interface SurfaceProperties {
   damaging: boolean;
 }
 
+/**
+ * @deprecated Use database-driven material records from GET /api/materials instead.
+ * Surface properties are now stored in the materials table. Kept for backward compatibility with apps/game.
+ */
 export const SURFACE_PROPERTIES: Record<TerrainCellType, SurfaceProperties> = {
   // --- Base terrain types (existing 3) ---
   deep_water: {

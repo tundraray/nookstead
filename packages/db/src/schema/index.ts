@@ -8,3 +8,6 @@ export * from './game-objects';
 export * from './editor-maps';
 export * from './map-templates';
 export * from './map-zones';
+export * from './materials';
+export * from './tilesets';
+export * from './tileset-tags';

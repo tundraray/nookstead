@@ -25,7 +25,7 @@ importers:
         version: 4.1.18
       colyseus:
         specifier: ^0.17.8
-        version: 0.17.8(@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1))(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/core@0.17.36)(@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/uwebsockets-transport@0.17.16(@colyseus/core@0.17.36))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+        version: 0.17.8(@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1))(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/core@0.17.36)(@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/uwebsockets-transport@0.17.16(@colyseus/core@0.17.36))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       express:
         specifier: ^5.2.1
         version: 5.2.1
@@ -12580,7 +12580,7 @@ snapshots:
 
   '@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       '@types/jsonwebtoken': 9.0.10
       connect-redis: 7.1.1(express-session@1.19.0)
       express: 5.2.1
@@ -12602,7 +12602,7 @@ snapshots:
 
   '@colyseus/clock@2.0.3': {}
 
-  '@colyseus/core@0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
+  '@colyseus/core@0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
     dependencies:
       '@colyseus/better-call': 1.3.1(zod@4.3.6)
       '@colyseus/greeting-banner': 3.0.8
@@ -12622,9 +12622,9 @@ snapshots:
 
   '@colyseus/greeting-banner@3.0.8': {}
 
-  '@colyseus/monitor@0.17.7(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(zod@4.3.6)':
+  '@colyseus/monitor@0.17.7(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(zod@4.3.6)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       express: 5.2.1
       node-os-utils: 2.0.1
     transitivePeerDependencies:
@@ -12643,13 +12643,13 @@ snapshots:
     dependencies:
       '@colyseus/auth': 0.17.6(@colyseus/core@0.17.36)(express@5.2.1)
       '@colyseus/better-call': 1.3.1(zod@4.3.6)
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       express: 5.2.1
       zod: 4.3.6
 
-  '@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
+  '@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       ioredis: 5.9.3
     transitivePeerDependencies:
       - '@colyseus/better-call'
@@ -12660,9 +12660,9 @@ snapshots:
       - supports-color
       - zod
 
-  '@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
+  '@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       ioredis: 5.9.3
     transitivePeerDependencies:
       - '@colyseus/better-call'
@@ -12686,7 +12686,7 @@ snapshots:
       tslib: 2.8.1
       ws: 8.19.0
     optionalDependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - typescript
@@ -12701,9 +12701,9 @@ snapshots:
     dependencies:
       '@colyseus/clock': 2.0.3
 
-  '@colyseus/tools@0.17.18(@colyseus/core@0.17.36)(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))':
+  '@colyseus/tools@0.17.18(@colyseus/core@0.17.36)(@colyseus/ws-transport@0.17.9)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       '@colyseus/ws-transport': 0.17.9(@colyseus/core@0.17.36)(express@5.2.1)
       '@pm2/io': 6.1.0
       dotenv: 16.6.1
@@ -12712,12 +12712,12 @@ snapshots:
 
   '@colyseus/uwebsockets-transport@0.17.16(@colyseus/core@0.17.36)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       uWebSockets.js: https://codeload.github.com/uNetworking/uWebSockets.js/tar.gz/fcfc622a4286909593b7f390056d89e0ca3b56b9
 
   '@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1)':
     dependencies:
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       '@types/ws': 8.18.1
       ws: 8.19.0
     optionalDependencies:
@@ -18087,16 +18087,16 @@ snapshots:
       strip-ansi: 6.0.1
       wcwidth: 1.0.1
 
-  colyseus@0.17.8(@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1))(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/core@0.17.36)(@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/uwebsockets-transport@0.17.16(@colyseus/core@0.17.36))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6):
+  colyseus@0.17.8(@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1))(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/core@0.17.36)(@colyseus/redis-driver@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/redis-presence@0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/uwebsockets-transport@0.17.16(@colyseus/core@0.17.36))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6):
     dependencies:
       '@colyseus/auth': 0.17.6(@colyseus/core@0.17.36)(express@5.2.1)
-      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
-      '@colyseus/monitor': 0.17.7(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(zod@4.3.6)
+      '@colyseus/core': 0.17.36(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/monitor': 0.17.7(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(zod@4.3.6)
       '@colyseus/playground': 0.17.10(@colyseus/auth@0.17.6(@colyseus/core@0.17.36)(express@5.2.1))(@colyseus/core@0.17.36)(express@5.2.1)(zod@4.3.6)
-      '@colyseus/redis-driver': 0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
-      '@colyseus/redis-presence': 0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/redis-driver': 0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
+      '@colyseus/redis-presence': 0.17.6(@colyseus/better-call@1.3.1(zod@4.3.6))(@colyseus/schema@4.0.12(typescript@5.9.3))(@colyseus/ws-transport@0.17.9)(@pm2/io@6.1.0)(express@5.2.1)(zod@4.3.6)
       '@colyseus/schema': 4.0.12(typescript@5.9.3)
-      '@colyseus/tools': 0.17.18(@colyseus/core@0.17.36)(@colyseus/ws-transport@0.17.9(@colyseus/core@0.17.36)(express@5.2.1))
+      '@colyseus/tools': 0.17.18(@colyseus/core@0.17.36)(@colyseus/ws-transport@0.17.9)
       '@colyseus/uwebsockets-transport': 0.17.16(@colyseus/core@0.17.36)
       '@colyseus/ws-transport': 0.17.9(@colyseus/core@0.17.36)(express@5.2.1)
     transitivePeerDependencies:
