@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,18 +23,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Breadcrumb } from '@/components/breadcrumb';
 import { useMapEditor } from '@/hooks/use-map-editor';
 import { useTilesetImages } from '@/components/map-editor/use-tileset-images';
 import { MapEditorCanvas } from '@/components/map-editor/map-editor-canvas';
-import { MapEditorToolbar } from '@/components/map-editor/map-editor-toolbar';
-import { TerrainPalette } from '@/components/map-editor/terrain-palette';
-import { MapPropertiesPanel } from '@/components/map-editor/map-properties-panel';
-import { LayerPanel } from '@/components/map-editor/layer-panel';
-import { ZonePanel } from '@/components/map-editor/zone-panel';
+import { EditorOptionsBar } from '@/components/map-editor/editor-options-bar';
+import { EditorStatusBar } from '@/components/map-editor/editor-status-bar';
 import { ZoneCreationDialog } from '@/components/map-editor/zone-creation-dialog';
+import { EditorHeader } from '@/components/map-editor/editor-header';
+import { ActivityBar } from '@/components/map-editor/activity-bar';
+import { EditorSidebar } from '@/components/map-editor/editor-sidebar';
 import { useZones } from '@/hooks/use-zones';
 import { useZoneApi } from '@/hooks/use-zone-api';
+import { SIDEBAR_TABS } from '@/hooks/map-editor-types';
+import type { SidebarTab, PlacedObject } from '@/hooks/map-editor-types';
 import type { Camera } from '@/components/map-editor/canvas-renderer';
 import type { ZoneBounds, ZoneVertex, ZoneType } from '@nookstead/map-lib';
 
@@ -50,11 +50,109 @@ export default function MapEditorPage() {
   const [showGrid, setShowGrid] = useState(true);
   const toggleGrid = useCallback(() => setShowGrid((prev) => !prev), []);
   const [showWalkability, setShowWalkability] = useState(false);
-  const toggleWalkability = useCallback(() => setShowWalkability((prev) => !prev), []);
+  const toggleWalkability = useCallback(
+    () => setShowWalkability((prev) => !prev),
+    []
+  );
+
+  // Cursor position state for status bar
+  const [cursorPosition, setCursorPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const { state, dispatch, save, load } = useMapEditor();
   const zoneState = useZones(state, dispatch);
   const { loadZones, saveZones, trackZoneSnapshot } = useZoneApi();
+
+  // Sidebar tab state with localStorage persistence
+  const storedTab =
+    typeof window !== 'undefined'
+      ? (localStorage.getItem('genmap-editor-sidebar-tab') as SidebarTab | null)
+      : null;
+  const [activeTab, setActiveTab] = useState<SidebarTab | null>(
+    SIDEBAR_TABS.includes(storedTab as SidebarTab)
+      ? (storedTab as SidebarTab)
+      : null
+  );
+
+  useEffect(() => {
+    if (activeTab !== null) {
+      localStorage.setItem('genmap-editor-sidebar-tab', activeTab);
+    } else {
+      localStorage.removeItem('genmap-editor-sidebar-tab');
+    }
+  }, [activeTab]);
+
+  // Keyboard shortcuts for sidebar tabs (1-6) and Escape to close
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const digit = parseInt(e.key);
+      if (digit >= 1 && digit <= 6) {
+        const tab = SIDEBAR_TABS[digit - 1];
+        setActiveTab((prev) => (prev === tab ? null : tab));
+      }
+      if (e.key === 'Escape') {
+        if (state.activeTool === 'object-place') {
+          setSelectedObjectId(null);
+          dispatch({ type: 'SET_TOOL', tool: 'brush' });
+        } else {
+          setActiveTab(null);
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [state.activeTool, dispatch]);
+
+  // Object placement state
+  const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
+
+  const handleObjectSelect = useCallback(
+    (objectId: string) => {
+      setSelectedObjectId(objectId);
+      dispatch({ type: 'SET_TOOL', tool: 'object-place' });
+    },
+    [dispatch]
+  );
+
+  const handleObjectPlace = useCallback(
+    (gridX: number, gridY: number) => {
+      if (!selectedObjectId) return;
+
+      const activeLayer = state.layers[state.activeLayerIndex];
+      if (
+        !activeLayer ||
+        (activeLayer as unknown as { type: string }).type !== 'object'
+      ) {
+        toast.error('Select an object layer to place objects');
+        return;
+      }
+
+      const newObject: PlacedObject = {
+        id: crypto.randomUUID(),
+        objectId: selectedObjectId,
+        objectName: '',
+        gridX,
+        gridY,
+        rotation: 0,
+        flipX: false,
+        flipY: false,
+      };
+      dispatch({
+        type: 'PLACE_OBJECT',
+        layerIndex: state.activeLayerIndex,
+        object: newObject,
+      });
+    },
+    [selectedObjectId, state.layers, state.activeLayerIndex, dispatch]
+  );
 
   // Zone creation dialog state
   const [pendingZone, setPendingZone] = useState<{
@@ -143,18 +241,33 @@ export default function MapEditorPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as Record<string, string>).error ?? 'Failed to save template');
+        throw new Error(
+          (body as Record<string, string>).error ?? 'Failed to save template'
+        );
       }
       toast.success('Saved as template');
       setShowTemplateDialog(false);
       setTemplateName('');
       setTemplateDesc('');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save template');
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to save template'
+      );
     } finally {
       setIsSavingTemplate(false);
     }
-  }, [state.mapId, state.name, state.mapType, state.width, state.height, state.grid, state.layers, state.zones, templateName, templateDesc]);
+  }, [
+    state.mapId,
+    state.name,
+    state.mapType,
+    state.width,
+    state.height,
+    state.grid,
+    state.layers,
+    state.zones,
+    templateName,
+    templateDesc,
+  ]);
 
   const handleExport = useCallback(async () => {
     if (!state.mapId || !selectedUserId) return;
@@ -167,7 +280,9 @@ export default function MapEditorPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error((body as Record<string, string>).error ?? 'Export failed');
+        throw new Error(
+          (body as Record<string, string>).error ?? 'Export failed'
+        );
       }
       toast.success('Map exported to player');
       setShowExportDialog(false);
@@ -178,17 +293,49 @@ export default function MapEditorPage() {
     }
   }, [state.mapId, selectedUserId]);
 
+  // Save status tracking for EditorStatusBar
+  type SaveStatus = 'unsaved' | 'dirty' | 'saving' | 'saved';
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(
+    state.mapId ? 'saved' : 'unsaved'
+  );
+  const [savedAt, setSavedAt] = useState<Date | null>(
+    state.lastSavedAt ? new Date(state.lastSavedAt) : null
+  );
+
+  // Derive active layer name for EditorStatusBar
+  const activeLayerName =
+    state.layers[state.activeLayerIndex]?.name ?? null;
+
   const handleSave = useCallback(async () => {
-    await save();
-    if (state.mapId) {
-      const ok = await saveZones(state.mapId, state.zones);
-      if (ok) {
-        trackZoneSnapshot(state.zones);
+    setSaveStatus('saving');
+    try {
+      await save();
+      if (state.mapId) {
+        const ok = await saveZones(state.mapId, state.zones);
+        if (ok) {
+          trackZoneSnapshot(state.zones);
+        }
       }
+      setSaveStatus('saved');
+      setSavedAt(new Date());
+    } catch {
+      setSaveStatus('dirty');
     }
   }, [save, saveZones, state.mapId, state.zones, trackZoneSnapshot]);
-  const { images: tilesetImages, isLoading: tilesetLoading, loadedCount, totalCount } =
-    useTilesetImages();
+
+  // Sync saveStatus with isDirty from reducer
+  useEffect(() => {
+    if (state.isDirty && saveStatus === 'saved') {
+      setSaveStatus('dirty');
+    }
+  }, [state.isDirty, saveStatus]);
+
+  const {
+    images: tilesetImages,
+    isLoading: tilesetLoading,
+    loadedCount,
+    totalCount,
+  } = useTilesetImages();
 
   const fetchMap = useCallback(async () => {
     setIsLoading(true);
@@ -239,24 +386,35 @@ export default function MapEditorPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [state.isDirty]);
 
+  // Handler for EditorHeader inline name editing
+  const handleNameChange = useCallback(
+    (name: string) => {
+      dispatch({ type: 'SET_NAME', name });
+    },
+    [dispatch]
+  );
+
+  // Handler for opening the template dialog from the header
+  const handleOpenTemplate = useCallback(() => {
+    setTemplateName(state.name);
+    setShowTemplateDialog(true);
+  }, [state.name]);
+
   if (isLoading) {
     return (
       <div>
         <Skeleton className="h-6 w-48 mb-4" />
         <div className="flex gap-4 h-[calc(100vh-12rem)]">
-          {/* Left sidebar skeleton */}
           <div className="w-[200px] flex-shrink-0 space-y-3">
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-8 w-full" />
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-24 w-full" />
           </div>
-          {/* Center canvas skeleton */}
           <div className="flex-1 space-y-3">
             <Skeleton className="h-6 w-48" />
             <Skeleton className="h-full w-full" />
           </div>
-          {/* Right sidebar skeleton */}
           <div className="w-[200px] flex-shrink-0 space-y-3">
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-48 w-full" />
@@ -291,112 +449,85 @@ export default function MapEditorPage() {
   if (!state.mapId) return null;
 
   return (
-    <div>
-      <Breadcrumb
-        items={[
-          { label: 'Maps', href: '/maps' },
-          { label: state.name || 'Untitled' },
-        ]}
+    <div
+      className="editor-page flex flex-col h-screen overflow-hidden"
+    >
+      {/* Compact header: 36px (h-9) */}
+      <EditorHeader
+        mapName={state.name || 'Untitled'}
+        isDirty={state.isDirty}
+        onNameChange={handleNameChange}
+        onExport={handleOpenExport}
+        onSaveAsTemplate={handleOpenTemplate}
       />
 
-      {/* Three-column editor layout */}
-      <div className="flex gap-4 h-[calc(100vh-12rem)]">
-        {/* Left sidebar: Properties and Layers */}
-        <div className="w-[200px] flex-shrink-0 border rounded-lg p-3 space-y-4 overflow-y-auto">
-          <div>
-            <h3 className="font-semibold text-sm mb-2">Properties</h3>
-            <MapPropertiesPanel state={state} dispatch={dispatch} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm mb-2">Layers</h3>
-            <LayerPanel state={state} dispatch={dispatch} />
-          </div>
-          <div>
-            <h3 className="font-semibold text-sm mb-2">Zones</h3>
-            <ZonePanel zoneState={zoneState} />
-          </div>
-        </div>
+      {/* Options Bar */}
+      <EditorOptionsBar
+        state={state}
+        dispatch={dispatch}
+        save={handleSave}
+        camera={camera}
+        onCameraChange={setCamera}
+        showGrid={showGrid}
+        onToggleGrid={toggleGrid}
+        showWalkability={showWalkability}
+        onToggleWalkability={toggleWalkability}
+      />
 
-        {/* Center: Canvas area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="flex items-center gap-3 mb-1">
-            <h1 className="text-xl font-bold">{state.name || 'Untitled'}</h1>
-            <Badge variant="secondary">
-              {state.width} x {state.height}
-            </Badge>
-            {state.mapType && (
-              <Badge variant="outline">{state.mapType}</Badge>
-            )}
-            <div className="ml-auto flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={() => {
-                  setTemplateName(state.name);
-                  setShowTemplateDialog(true);
-                }}
-              >
-                Save as Template
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                onClick={handleOpenExport}
-              >
-                Export to Player
-              </Button>
-            </div>
-          </div>
-          <MapEditorToolbar
-            state={state}
-            dispatch={dispatch}
-            save={handleSave}
-            camera={camera}
-            onCameraChange={setCamera}
-            showGrid={showGrid}
-            onToggleGrid={toggleGrid}
-            showWalkability={showWalkability}
-            onToggleWalkability={toggleWalkability}
-          />
+      {/* Editor body: ActivityBar + Sidebar + Canvas */}
+      <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        <ActivityBar activeTab={activeTab} onTabChange={setActiveTab} />
+
+        <EditorSidebar
+          activeTab={activeTab}
+          onClose={() => setActiveTab(null)}
+          state={state}
+          dispatch={dispatch}
+          tilesetImages={tilesetImages}
+          zoneState={zoneState}
+          onObjectSelect={handleObjectSelect}
+        />
+
+        {/* Canvas area */}
+        <div className="flex-1 min-w-0 relative">
           {tilesetLoading ? (
-            <div className="flex-1 bg-muted/30 border border-dashed rounded-lg flex items-center justify-center">
+            <div className="h-full bg-muted/30 border border-dashed rounded-lg flex items-center justify-center">
               <p className="text-muted-foreground text-sm">
                 Loading tilesets... ({loadedCount}/{totalCount})
               </p>
             </div>
           ) : (
-            <div className="flex-1">
-              <MapEditorCanvas
-                state={state}
-                dispatch={dispatch}
-                tilesetImages={tilesetImages}
-                camera={camera}
-                onCameraChange={setCamera}
-                showGrid={showGrid}
-                onToggleGrid={toggleGrid}
-                onZoneRectComplete={handleZoneRectComplete}
-                onZonePolyComplete={handleZonePolyComplete}
-                zones={zoneState.zones}
-                selectedZoneId={zoneState.selectedZoneId}
-                zoneVisibility={zoneState.zoneVisibility}
-                showWalkability={showWalkability}
-              />
-            </div>
+            <MapEditorCanvas
+              state={state}
+              dispatch={dispatch}
+              tilesetImages={tilesetImages}
+              camera={camera}
+              onCameraChange={setCamera}
+              showGrid={showGrid}
+              onToggleGrid={toggleGrid}
+              onZoneRectComplete={handleZoneRectComplete}
+              onZonePolyComplete={handleZonePolyComplete}
+              zones={zoneState.zones}
+              selectedZoneId={zoneState.selectedZoneId}
+              zoneVisibility={zoneState.zoneVisibility}
+              showWalkability={showWalkability}
+              onObjectPlace={handleObjectPlace}
+              onCursorMove={setCursorPosition}
+              selectedObjectId={selectedObjectId}
+            />
           )}
         </div>
-
-        {/* Right sidebar: Terrain palette */}
-        <div className="w-[200px] flex-shrink-0 border rounded-lg p-3 overflow-y-auto">
-          <h3 className="font-semibold text-sm mb-2">Terrain</h3>
-          <TerrainPalette
-            state={state}
-            dispatch={dispatch}
-            tilesetImages={tilesetImages}
-          />
-        </div>
       </div>
+
+      {/* Status Bar */}
+      <EditorStatusBar
+        zoom={camera.zoom}
+        onZoomChange={(z) => setCamera((prev) => ({ ...prev, zoom: z }))}
+        cursorPosition={cursorPosition}
+        activeLayerName={activeLayerName}
+        saveStatus={saveStatus}
+        savedAt={savedAt}
+      />
 
       {/* Zone creation dialog */}
       <ZoneCreationDialog
@@ -439,10 +570,7 @@ export default function MapEditorPage() {
             >
               Cancel
             </Button>
-            <Button
-              onClick={handleSaveAsTemplate}
-              disabled={isSavingTemplate}
-            >
+            <Button onClick={handleSaveAsTemplate} disabled={isSavingTemplate}>
               {isSavingTemplate ? 'Saving...' : 'Save Template'}
             </Button>
           </DialogFooter>
@@ -494,7 +622,9 @@ export default function MapEditorPage() {
             </Button>
             <Button
               onClick={handleExport}
-              disabled={!selectedUserId || isExporting || playerMaps.length === 0}
+              disabled={
+                !selectedUserId || isExporting || playerMaps.length === 0
+              }
             >
               {isExporting ? 'Exporting...' : 'Export'}
             </Button>

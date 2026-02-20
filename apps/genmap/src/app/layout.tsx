@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="font-sans antialiased">
         <Navigation />
-        <main className="container mx-auto px-6 py-6">{children}</main>
+        <main>{children}</main>
         <Toaster position="bottom-right" richColors />
       </body>
     </html>

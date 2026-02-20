@@ -96,6 +96,17 @@ export async function searchFrameFilenames(
   return rows.map((r) => r.filename);
 }
 
+export async function getFramesByFilename(
+  db: DrizzleClient,
+  filename: string
+): Promise<(typeof atlasFrames.$inferSelect)[]> {
+  return db
+    .select()
+    .from(atlasFrames)
+    .where(eq(atlasFrames.filename, filename))
+    .orderBy(atlasFrames.frameX, atlasFrames.frameY);
+}
+
 export async function listDistinctFilenames(
   db: DrizzleClient,
   limit = 500

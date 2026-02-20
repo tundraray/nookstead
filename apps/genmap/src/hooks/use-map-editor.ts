@@ -9,6 +9,8 @@ import type {
   EditorTool,
   EditorLayer,
   LoadMapPayload,
+  PlacedObject,
+  ObjectLayer,
 } from './map-editor-types';
 import type { MapType } from '@nookstead/map-lib';
 
@@ -77,13 +79,14 @@ function createDefaultLayer(
   terrainKey: string = DEFAULT_TERRAIN_KEY
 ): EditorLayer {
   return {
+    type: 'tile',
     id: crypto.randomUUID(),
     name,
     terrainKey,
     visible: true,
     opacity: 1,
     frames: createEmptyFrames(width, height),
-  };
+  } as EditorLayer;
 }
 
 /** Build the initial editor state. */
@@ -192,7 +195,44 @@ function resizeWalkable(
   return resized;
 }
 
-/** Convert API layer data to EditorLayer format. */
+/**
+ * Normalize a single raw layer from the API into an EditorLayer.
+ *
+ * Layers without a `type` field (or with `type: 'tile'`) are treated as
+ * TileLayer (backward compatible with existing saved maps). Layers with
+ * `type: 'object'` are treated as ObjectLayer.
+ */
+function normalizeLayer(
+  raw: unknown,
+  width: number,
+  height: number
+): EditorLayer {
+  const l = raw as Record<string, unknown>;
+
+  if (l.type === 'object') {
+    return {
+      type: 'object',
+      id: (l.id as string) || crypto.randomUUID(),
+      name: (l.name as string) || 'objects',
+      visible: l.visible !== undefined ? (l.visible as boolean) : true,
+      opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
+      objects: (l.objects as PlacedObject[]) ?? [],
+    } as unknown as EditorLayer;
+  }
+
+  // Default: TileLayer (backward compatible -- existing maps have no `type` field)
+  return {
+    type: 'tile',
+    id: (l.id as string) || crypto.randomUUID(),
+    name: (l.name as string) || 'untitled',
+    terrainKey: (l.terrainKey as string) || DEFAULT_TERRAIN_KEY,
+    visible: l.visible !== undefined ? (l.visible as boolean) : true,
+    opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
+    frames: (l.frames as number[][]) || createEmptyFrames(width, height),
+  } as EditorLayer;
+}
+
+/** Convert API layer data to EditorLayer format with normalization. */
 function toEditorLayers(
   layers: EditorLayer[] | unknown[],
   width: number,
@@ -202,17 +242,7 @@ function toEditorLayers(
     return [createDefaultLayer(width, height)];
   }
 
-  return layers.map((layer) => {
-    const l = layer as Record<string, unknown>;
-    return {
-      id: (l.id as string) || crypto.randomUUID(),
-      name: (l.name as string) || 'untitled',
-      terrainKey: (l.terrainKey as string) || DEFAULT_TERRAIN_KEY,
-      visible: l.visible !== undefined ? (l.visible as boolean) : true,
-      opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
-      frames: (l.frames as number[][]) || createEmptyFrames(width, height),
-    };
-  });
+  return layers.map((layer) => normalizeLayer(layer, width, height));
 }
 
 /** The core reducer for the map editor. */
@@ -277,16 +307,22 @@ export function mapEditorReducer(
         newWidth,
         newHeight
       );
-      const resizedLayers = state.layers.map((layer) => ({
-        ...layer,
-        frames: resizeFrames(
-          layer.frames,
-          state.width,
-          state.height,
-          newWidth,
-          newHeight
-        ),
-      }));
+      const resizedLayers = state.layers.map((layer) => {
+        // Object layers have no frames to resize
+        if ((layer as unknown as { type: string }).type === 'object') {
+          return layer;
+        }
+        return {
+          ...layer,
+          frames: resizeFrames(
+            layer.frames,
+            state.width,
+            state.height,
+            newWidth,
+            newHeight
+          ),
+        };
+      });
       const resizedWalkable = resizeWalkable(
         state.walkable,
         state.width,
@@ -465,6 +501,98 @@ export function mapEditorReducer(
 
     case 'TOGGLE_ZONE_VISIBILITY':
       return { ...state, zoneVisibility: !state.zoneVisibility };
+
+    case 'MARK_DIRTY':
+      return { ...state, isDirty: true };
+
+    case 'ADD_OBJECT_LAYER':
+      return {
+        ...state,
+        layers: [
+          ...state.layers,
+          {
+            type: 'object' as const,
+            id: crypto.randomUUID(),
+            name: action.name,
+            visible: true,
+            opacity: 1,
+            objects: [],
+          } as unknown as EditorLayer,
+        ],
+        isDirty: true,
+      };
+
+    case 'PLACE_OBJECT': {
+      const targetLayer = state.layers[action.layerIndex];
+      if (
+        !targetLayer ||
+        (targetLayer as unknown as { type: string }).type !== 'object'
+      ) {
+        return state;
+      }
+      const objectLayer = targetLayer as unknown as ObjectLayer;
+      const updatedLayer = {
+        ...objectLayer,
+        objects: [...objectLayer.objects, action.object],
+      } as unknown as EditorLayer;
+      return {
+        ...state,
+        layers: state.layers.map((l, i) =>
+          i === action.layerIndex ? updatedLayer : l
+        ),
+        isDirty: true,
+      };
+    }
+
+    case 'REMOVE_OBJECT': {
+      const removeTarget = state.layers[action.layerIndex];
+      if (
+        !removeTarget ||
+        (removeTarget as unknown as { type: string }).type !== 'object'
+      ) {
+        return state;
+      }
+      const removeObjLayer = removeTarget as unknown as ObjectLayer;
+      const filteredLayer = {
+        ...removeObjLayer,
+        objects: removeObjLayer.objects.filter(
+          (obj) => obj.id !== action.objectId
+        ),
+      } as unknown as EditorLayer;
+      return {
+        ...state,
+        layers: state.layers.map((l, i) =>
+          i === action.layerIndex ? filteredLayer : l
+        ),
+        isDirty: true,
+      };
+    }
+
+    case 'MOVE_OBJECT': {
+      const moveTarget = state.layers[action.layerIndex];
+      if (
+        !moveTarget ||
+        (moveTarget as unknown as { type: string }).type !== 'object'
+      ) {
+        return state;
+      }
+      const moveObjLayer = moveTarget as unknown as ObjectLayer;
+      const movedLayer = {
+        ...moveObjLayer,
+        objects: moveObjLayer.objects.map((obj) =>
+          obj.id === action.objectId
+            ? { ...obj, gridX: action.gridX, gridY: action.gridY }
+            : obj
+        ),
+      } as unknown as EditorLayer;
+      return {
+        ...state,
+        layers: state.layers.map((l, i) =>
+          i === action.layerIndex ? movedLayer : l
+        ),
+        isDirty: true,
+      };
+    }
 
     default:
       return state;

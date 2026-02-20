@@ -8,12 +8,14 @@ import {
   useMemo,
   type Dispatch,
 } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction, PlacedObject } from '@/hooks/map-editor-types';
 import {
   renderMapCanvas,
+  drawGhostPreview,
   type Camera,
   type CanvasConfig,
   type PreviewRect,
+  type ObjectRenderEntry,
 } from './canvas-renderer';
 import { createBrushTool } from './tools/brush-tool';
 import { createFillTool } from './tools/fill-tool';
@@ -65,6 +67,16 @@ interface MapEditorCanvasProps {
   zoneVisibility?: boolean;
   /** Whether walkability overlay is visible. */
   showWalkability?: boolean;
+  /** Called on mouse move with tile coordinates, or null when mouse leaves canvas. */
+  onCursorMove?: (position: { x: number; y: number } | null) => void;
+  /** Placed objects to render on the canvas. */
+  placedObjects?: PlacedObject[];
+  /** Called when an object is placed on the canvas in object-place mode. */
+  onObjectPlace?: (gridX: number, gridY: number) => void;
+  /** Render data for placed objects keyed by objectId. */
+  objectRenderData?: Map<string, ObjectRenderEntry>;
+  /** Currently selected object ID for ghost preview in object-place mode. */
+  selectedObjectId?: string | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -90,6 +102,11 @@ export function MapEditorCanvas({
   selectedZoneId,
   zoneVisibility,
   showWalkability,
+  onCursorMove,
+  placedObjects,
+  onObjectPlace,
+  objectRenderData,
+  selectedObjectId,
 }: MapEditorCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -241,6 +258,9 @@ export function MapEditorCanvas({
         };
       case 'zone-poly':
         return noopHandlers;
+      case 'object-place':
+        // Object placement handled by onObjectPlace callback in handlePointerDown
+        return noopHandlers;
     }
   }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
 
@@ -283,8 +303,27 @@ export function MapEditorCanvas({
       camera,
       config,
       cursorTile,
-      previewRect
+      previewRect,
+      objectRenderData
     );
+
+    // Ghost preview: render selected object at cursor grid-snapped position
+    if (
+      state.activeTool === 'object-place' &&
+      selectedObjectId &&
+      objectRenderData &&
+      cursorTile
+    ) {
+      drawGhostPreview(
+        ctx,
+        objectRenderData,
+        selectedObjectId,
+        cursorTile.x,
+        cursorTile.y,
+        TILE_SIZE,
+        camera
+      );
+    }
 
     // Zone visibility overlay (existing zones)
     if (zoneVisibility && zonesProp && zonesProp.length > 0) {
@@ -341,7 +380,7 @@ export function MapEditorCanvas({
       ctx.stroke();
       ctx.restore();
     }
-  }, [state, tilesetImages, camera, config, cursorTile, previewRect, containerSize, zoneVisibility, zonesProp, selectedZoneId]);
+  }, [state, tilesetImages, camera, config, cursorTile, previewRect, containerSize, zoneVisibility, zonesProp, selectedZoneId, objectRenderData, selectedObjectId]);
 
   // requestAnimationFrame render loop
   useEffect(() => {
@@ -378,6 +417,12 @@ export function MapEditorCanvas({
       if (e.button === 0) {
         const tile = pixelToTile(e.clientX, e.clientY);
 
+        // Object-place mode: place object at grid position instead of painting
+        if (state.activeTool === 'object-place') {
+          onObjectPlace?.(tile.x, tile.y);
+          return;
+        }
+
         // Zone-poly: click adds vertex, double-click closes
         if (state.activeTool === 'zone-poly') {
           if (isClosingPolyRef.current) return;
@@ -411,7 +456,7 @@ export function MapEditorCanvas({
         canvas.setPointerCapture(e.pointerId);
       }
     },
-    [camera, pixelToTile, toolHandlers]
+    [camera, pixelToTile, toolHandlers, onObjectPlace]
   );
 
   const handlePointerMove = useCallback(
@@ -437,6 +482,15 @@ export function MapEditorCanvas({
       const tile = pixelToTile(e.clientX, e.clientY);
       setCursorTile(tile);
 
+      // Report tile coordinates to parent via callback
+      if (onCursorMove) {
+        if (!isNaN(tile.x) && !isNaN(tile.y)) {
+          onCursorMove({ x: tile.x, y: tile.y });
+        } else {
+          onCursorMove(null);
+        }
+      }
+
       // Zone-poly: update cursor for preview line
       if (state.activeTool === 'zone-poly' && polyVerticesRef.current.length > 0) {
         polyCursorRef.current = tile;
@@ -447,7 +501,7 @@ export function MapEditorCanvas({
         toolHandlers.onMouseMove(tile);
       }
     },
-    [pixelToTile, toolHandlers]
+    [pixelToTile, toolHandlers, onCursorMove]
   );
 
   const handlePointerUp = useCallback(
@@ -472,7 +526,8 @@ export function MapEditorCanvas({
 
   const handlePointerLeave = useCallback(() => {
     setCursorTile(null);
-  }, []);
+    if (onCursorMove) onCursorMove(null);
+  }, [onCursorMove]);
 
   const handleContextMenu = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {

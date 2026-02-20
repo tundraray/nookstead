@@ -9,9 +9,72 @@ export type EditorTool =
   | 'rectangle'
   | 'eraser'
   | 'zone-rect'
-  | 'zone-poly';
+  | 'zone-poly'
+  | 'object-place';
 
-/** A single layer in the editor. */
+/** Sidebar tab identifiers for the Activity Bar and EditorSidebar. */
+export type SidebarTab =
+  | 'terrain'
+  | 'layers'
+  | 'properties'
+  | 'zones'
+  | 'frames'
+  | 'game-objects';
+
+/** All sidebar tab values as a runtime-accessible constant array. */
+export const SIDEBAR_TABS: SidebarTab[] = [
+  'terrain',
+  'layers',
+  'properties',
+  'zones',
+  'frames',
+  'game-objects',
+];
+
+/** Common fields shared by all layer types. */
+export interface BaseLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+}
+
+/** A tile-based layer with terrain data and autotile frames. */
+export interface TileLayer extends BaseLayer {
+  type: 'tile';
+  terrainKey: string;
+  /** 2D array of autotile frame indices matching the map dimensions [y][x]. */
+  frames: number[][];
+}
+
+/** An object representing a game object placed on the map. */
+export interface PlacedObject {
+  id: string;
+  objectId: string;
+  objectName: string;
+  gridX: number;
+  gridY: number;
+  rotation: number;
+  flipX: boolean;
+  flipY: boolean;
+}
+
+/** A layer containing placed game objects. */
+export interface ObjectLayer extends BaseLayer {
+  type: 'object';
+  objects: PlacedObject[];
+}
+
+/**
+ * A single layer in the editor.
+ *
+ * Existing code that only works with tile layers can continue to use
+ * EditorLayer directly. The discriminated union allows narrowing via
+ * the `type` field when both layer kinds need to be handled.
+ *
+ * Backward compatibility: layers loaded from the DB without a `type`
+ * field are normalized to TileLayer in the LOAD_MAP handler.
+ */
 export interface EditorLayer {
   id: string;
   name: string;
@@ -74,6 +137,7 @@ export type MapEditorAction =
   // Status actions
   | { type: 'SET_SAVING'; isSaving: boolean }
   | { type: 'MARK_SAVED' }
+  | { type: 'MARK_DIRTY' }
 
   // Layer actions
   | { type: 'ADD_LAYER'; name: string; terrainKey: string }
@@ -81,6 +145,18 @@ export type MapEditorAction =
   | { type: 'TOGGLE_LAYER_VISIBILITY'; index: number }
   | { type: 'SET_LAYER_OPACITY'; index: number; opacity: number }
   | { type: 'REORDER_LAYERS'; fromIndex: number; toIndex: number }
+
+  // Object layer actions
+  | { type: 'ADD_OBJECT_LAYER'; name: string }
+  | { type: 'PLACE_OBJECT'; layerIndex: number; object: PlacedObject }
+  | { type: 'REMOVE_OBJECT'; layerIndex: number; objectId: string }
+  | {
+      type: 'MOVE_OBJECT';
+      layerIndex: number;
+      objectId: string;
+      gridX: number;
+      gridY: number;
+    }
 
   // Undo/redo
   | { type: 'UNDO' }

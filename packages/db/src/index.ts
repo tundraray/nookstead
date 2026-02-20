@@ -32,6 +32,7 @@ export {
 export {
   batchSaveFrames,
   getFramesBySprite,
+  getFramesByFilename,
   deleteFramesBySprite,
   searchFrameFilenames,
   listDistinctFilenames,

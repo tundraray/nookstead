@@ -1,4 +1,4 @@
-import type { MapEditorState } from '@/hooks/map-editor-types';
+import type { MapEditorState, PlacedObject } from '@/hooks/map-editor-types';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -22,6 +22,15 @@ export interface PreviewRect {
   height: number;
 }
 
+/** Render data for a single game object sprite frame. */
+export interface ObjectRenderEntry {
+  image: HTMLImageElement;
+  frameX: number;
+  frameY: number;
+  frameW: number;
+  frameH: number;
+}
+
 /**
  * Core canvas rendering function.
  * Renders the terrain grid using tileset sprite sheets loaded as HTMLImageElement.
@@ -34,7 +43,8 @@ export function renderMapCanvas(
   camera: Camera,
   config: CanvasConfig,
   cursorTile: { x: number; y: number } | null,
-  previewRect: PreviewRect | null
+  previewRect: PreviewRect | null,
+  objectRenderData?: Map<string, ObjectRenderEntry>
 ): void {
   const { tileSize } = config;
   const canvasWidth = ctx.canvas.width;
@@ -71,32 +81,61 @@ export function renderMapCanvas(
   ctx.fillStyle = '#16213e';
   ctx.fillRect(0, 0, state.width * tileSize, state.height * tileSize);
 
-  // Render each visible layer
+  // Render each visible layer (supports both tile and object layers)
   for (const layer of state.layers) {
     if (!layer.visible) continue;
     ctx.globalAlpha = layer.opacity;
-    const img = tilesetImages.get(layer.terrainKey);
-    if (!img) continue;
 
-    for (let y = startY; y < endY; y++) {
-      for (let x = startX; x < endX; x++) {
-        const frame = layer.frames[y][x];
-        if (frame === 0) continue; // EMPTY_FRAME, skip
+    // Determine layer type: layers without a `type` field are treated as tile layers
+    // for backward compatibility with maps saved before the discriminated union was added.
+    const layerType = (layer as { type?: string }).type ?? 'tile';
 
-        // Calculate source position in tileset (12 cols, 16x16 frames)
-        const srcX = (frame % 12) * 16;
-        const srcY = Math.floor(frame / 12) * 16;
+    if (layerType === 'tile') {
+      // TileLayer rendering
+      const img = tilesetImages.get(layer.terrainKey);
+      if (!img) continue;
+
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          const frame = layer.frames[y][x];
+          if (frame === 0) continue; // EMPTY_FRAME, skip
+
+          // Calculate source position in tileset (12 cols, 16x16 frames)
+          const srcX = (frame % 12) * 16;
+          const srcY = Math.floor(frame / 12) * 16;
+
+          ctx.drawImage(
+            img,
+            srcX,
+            srcY,
+            16,
+            16,
+            x * tileSize,
+            y * tileSize,
+            tileSize,
+            tileSize
+          );
+        }
+      }
+    } else if (layerType === 'object' && objectRenderData) {
+      // ObjectLayer rendering: draw each placed object using its sprite data
+      const objects = (layer as { objects?: PlacedObject[] }).objects;
+      if (!objects) continue;
+
+      for (const obj of objects) {
+        const entry = objectRenderData.get(obj.objectId);
+        if (!entry || !entry.image.complete) continue;
 
         ctx.drawImage(
-          img,
-          srcX,
-          srcY,
-          16,
-          16,
-          x * tileSize,
-          y * tileSize,
-          tileSize,
-          tileSize
+          entry.image,
+          entry.frameX,
+          entry.frameY,
+          entry.frameW,
+          entry.frameH,
+          obj.gridX * tileSize,
+          obj.gridY * tileSize,
+          entry.frameW,
+          entry.frameH
         );
       }
     }
@@ -182,4 +221,47 @@ export function renderMapCanvas(
   }
 
   ctx.restore();
+}
+
+/**
+ * Draw a semi-transparent ghost preview of the selected object at the cursor's
+ * grid-snapped position. Called between renderMapCanvas and zone overlays so the
+ * ghost appears above terrain/objects but below zone overlays.
+ *
+ * Uses screen coordinates (called after ctx.restore in the render pipeline).
+ */
+export function drawGhostPreview(
+  ctx: CanvasRenderingContext2D,
+  objectRenderData: Map<string, ObjectRenderEntry>,
+  ghostObjectId: string,
+  ghostGridX: number,
+  ghostGridY: number,
+  tileSize: number,
+  camera: Camera
+): void {
+  const entry = objectRenderData.get(ghostObjectId);
+  if (!entry || !entry.image.complete) return;
+
+  const screenX = (ghostGridX * tileSize - camera.x) * camera.zoom;
+  const screenY = (ghostGridY * tileSize - camera.y) * camera.zoom;
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 0.5;
+  try {
+    ctx.drawImage(
+      entry.image,
+      entry.frameX,
+      entry.frameY,
+      entry.frameW,
+      entry.frameH,
+      screenX,
+      screenY,
+      entry.frameW * camera.zoom,
+      entry.frameH * camera.zoom
+    );
+  } finally {
+    ctx.globalAlpha = 1.0;
+    ctx.restore();
+  }
 }

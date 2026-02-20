@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useRef, useCallback, type Dispatch } from 'react';
-import { EyeIcon, EyeOffIcon, GripVerticalIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import {
+  EyeIcon,
+  EyeOffIcon,
+  Grid3X3Icon,
+  GripVerticalIcon,
+  PackageIcon,
+  PlusIcon,
+  Trash2Icon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,21 +21,37 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type {
+  MapEditorState,
+  MapEditorAction,
+  EditorLayer,
+  ObjectLayer,
+} from '@/hooks/map-editor-types';
 
 interface LayerPanelProps {
   state: MapEditorState;
   dispatch: Dispatch<MapEditorAction>;
 }
 
-/** Check if a layer has any non-zero (painted) frame data. */
-function layerHasData(frames: number[][]): boolean {
-  for (const row of frames) {
+/** Check if a layer has any data (painted frames for TileLayer, objects for ObjectLayer). */
+function layerHasData(layer: EditorLayer): boolean {
+  const layerType = (layer as unknown as { type: string }).type;
+  if (layerType === 'object') {
+    const objLayer = layer as unknown as ObjectLayer;
+    return objLayer.objects.length > 0;
+  }
+  // TileLayer: check for non-zero frame data
+  for (const row of layer.frames) {
     for (const frame of row) {
       if (frame !== 0) return true;
     }
   }
   return false;
+}
+
+/** Get the layer type, defaulting to 'tile' for backward compatibility. */
+function getLayerType(layer: EditorLayer): 'tile' | 'object' {
+  return ((layer as unknown as { type: string }).type as 'tile' | 'object') ?? 'tile';
 }
 
 /**
@@ -44,6 +68,7 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
   const [removeIndex, setRemoveIndex] = useState<number | null>(null);
   const [newLayerName, setNewLayerName] = useState('');
   const [newTerrainKey, setNewTerrainKey] = useState('');
+  const [newLayerType, setNewLayerType] = useState<'tile' | 'object'>('tile');
 
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -56,18 +81,26 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
 
   const handleAddLayer = useCallback(() => {
     const trimmedName = newLayerName.trim();
-    const trimmedKey = newTerrainKey.trim();
-    if (!trimmedName || !trimmedKey) return;
-    dispatch({ type: 'ADD_LAYER', name: trimmedName, terrainKey: trimmedKey });
+    if (!trimmedName) return;
+
+    if (newLayerType === 'object') {
+      dispatch({ type: 'ADD_OBJECT_LAYER', name: trimmedName });
+    } else {
+      const trimmedKey = newTerrainKey.trim();
+      if (!trimmedKey) return;
+      dispatch({ type: 'ADD_LAYER', name: trimmedName, terrainKey: trimmedKey });
+    }
+
     setNewLayerName('');
     setNewTerrainKey('');
+    setNewLayerType('tile');
     setAddDialogOpen(false);
-  }, [newLayerName, newTerrainKey, dispatch]);
+  }, [newLayerName, newTerrainKey, newLayerType, dispatch]);
 
   const handleRemoveClick = useCallback(
     (index: number) => {
       const layer = state.layers[index];
-      if (layer && layerHasData(layer.frames)) {
+      if (layer && layerHasData(layer)) {
         setRemoveIndex(index);
         setRemoveDialogOpen(true);
       } else {
@@ -193,7 +226,16 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                 <GripVerticalIcon className="h-3.5 w-3.5 text-muted-foreground" />
               </div>
 
-              {/* Layer name and terrain key */}
+              {/* Layer type icon */}
+              <div className="flex-shrink-0">
+                {getLayerType(layer) === 'object' ? (
+                  <PackageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <Grid3X3Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+              </div>
+
+              {/* Layer name and metadata */}
               <div
                 className="flex-1 min-w-0 cursor-pointer"
                 onClick={() =>
@@ -202,7 +244,9 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
               >
                 <div className="truncate font-medium">{layer.name}</div>
                 <div className="text-muted-foreground truncate text-[10px]">
-                  {layer.terrainKey}
+                  {getLayerType(layer) === 'object'
+                    ? `${(layer as unknown as ObjectLayer).objects.length} object${(layer as unknown as ObjectLayer).objects.length !== 1 ? 's' : ''}`
+                    : layer.terrainKey}
                 </div>
               </div>
 
@@ -243,31 +287,32 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
         })}
       </div>
 
-      {/* Opacity slider for active layer */}
-      {state.layers[state.activeLayerIndex] && (
-        <div className="pt-1 border-t">
-          <Label className="text-xs text-muted-foreground">
-            Opacity:{' '}
-            {Math.round(state.layers[state.activeLayerIndex].opacity * 100)}%
-          </Label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={Math.round(
-              state.layers[state.activeLayerIndex].opacity * 100
-            )}
-            onChange={(e) =>
-              dispatch({
-                type: 'SET_LAYER_OPACITY',
-                index: state.activeLayerIndex,
-                opacity: Number(e.target.value) / 100,
-              })
-            }
-            className="w-full h-1.5 accent-primary"
-          />
-        </div>
-      )}
+      {/* Opacity slider and terrain key -- only for TileLayer */}
+      {state.layers[state.activeLayerIndex] &&
+        getLayerType(state.layers[state.activeLayerIndex]) === 'tile' && (
+          <div className="pt-1 border-t">
+            <Label className="text-xs text-muted-foreground">
+              Opacity:{' '}
+              {Math.round(state.layers[state.activeLayerIndex].opacity * 100)}%
+            </Label>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={Math.round(
+                state.layers[state.activeLayerIndex].opacity * 100
+              )}
+              onChange={(e) =>
+                dispatch({
+                  type: 'SET_LAYER_OPACITY',
+                  index: state.activeLayerIndex,
+                  opacity: Number(e.target.value) / 100,
+                })
+              }
+              className="w-full h-1.5 accent-primary"
+            />
+          </div>
+        )}
 
       {/* Add layer button */}
       <Button
@@ -286,10 +331,43 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
           <DialogHeader>
             <DialogTitle>Add Layer</DialogTitle>
             <DialogDescription>
-              Create a new terrain layer for the map.
+              Create a new layer for the map.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            {/* Layer type selector */}
+            <div className="space-y-1.5">
+              <Label className="text-sm">Layer Type</Label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs transition-colors',
+                    newLayerType === 'tile'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted',
+                  ].join(' ')}
+                  onClick={() => setNewLayerType('tile')}
+                >
+                  <Grid3X3Icon className="h-3.5 w-3.5" />
+                  Tile Layer
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs transition-colors',
+                    newLayerType === 'object'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted',
+                  ].join(' ')}
+                  onClick={() => setNewLayerType('object')}
+                >
+                  <PackageIcon className="h-3.5 w-3.5" />
+                  Object Layer
+                </button>
+              </div>
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="layer-name" className="text-sm">
                 Layer Name
@@ -298,21 +376,27 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                 id="layer-name"
                 value={newLayerName}
                 onChange={(e) => setNewLayerName(e.target.value)}
-                placeholder="e.g. roads"
+                placeholder={
+                  newLayerType === 'object' ? 'e.g. decorations' : 'e.g. roads'
+                }
                 autoFocus
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="terrain-key" className="text-sm">
-                Terrain Key
-              </Label>
-              <Input
-                id="terrain-key"
-                value={newTerrainKey}
-                onChange={(e) => setNewTerrainKey(e.target.value)}
-                placeholder="e.g. terrain-25"
-              />
-            </div>
+
+            {/* Terrain key -- only for tile layers */}
+            {newLayerType === 'tile' && (
+              <div className="space-y-1.5">
+                <Label htmlFor="terrain-key" className="text-sm">
+                  Terrain Key
+                </Label>
+                <Input
+                  id="terrain-key"
+                  value={newTerrainKey}
+                  onChange={(e) => setNewTerrainKey(e.target.value)}
+                  placeholder="e.g. terrain-25"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -325,7 +409,10 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
             <Button
               size="sm"
               onClick={handleAddLayer}
-              disabled={!newLayerName.trim() || !newTerrainKey.trim()}
+              disabled={
+                !newLayerName.trim() ||
+                (newLayerType === 'tile' && !newTerrainKey.trim())
+              }
             >
               Add
             </Button>
@@ -339,8 +426,10 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
           <DialogHeader>
             <DialogTitle>Remove Layer</DialogTitle>
             <DialogDescription>
-              This layer has painted cells. Removing it will delete all terrain
-              data for this layer. This cannot be undone.
+              {removeIndex !== null &&
+              getLayerType(state.layers[removeIndex]) === 'object'
+                ? 'This layer has placed objects. Removing it will delete all object data for this layer. This cannot be undone.'
+                : 'This layer has painted cells. Removing it will delete all terrain data for this layer. This cannot be undone.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
