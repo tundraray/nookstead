@@ -204,7 +204,7 @@ export async function getTransitionMatrix(db: DrizzleClient) {
       fromId: tilesets.fromMaterialId,
       toId: tilesets.toMaterialId,
       count: count(),
-      representativeId: sql<string>`MIN(${tilesets.id})`,
+      representativeId: sql<string>`MIN(${tilesets.id}::text)::uuid`,
     })
     .from(tilesets)
     .where(

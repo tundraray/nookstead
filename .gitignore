@@ -53,3 +53,4 @@ nul
 *.local
 docs/plans/tasks/*
 tmp/*
+next-env.d.ts
