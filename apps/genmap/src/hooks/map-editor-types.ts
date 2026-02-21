@@ -1,6 +1,7 @@
 import type { Cell } from '@nookstead/map-lib';
 import type { MapType, ZoneData } from '@nookstead/map-lib';
 import type { EditorCommand } from './map-editor-commands';
+import type { TilesetInfo, MaterialInfo } from './autotile-utils';
 
 /** Editor tool types. */
 export type EditorTool =
@@ -98,6 +99,10 @@ export interface MapEditorState {
   layers: EditorLayer[];
   walkable: boolean[][];
 
+  // Tileset / material runtime config (used by autotile computation)
+  tilesets: ReadonlyArray<TilesetInfo>;
+  materials: ReadonlyMap<string, MaterialInfo>;
+
   // Editor UI state
   activeLayerIndex: number;
   activeTool: EditorTool;
@@ -162,6 +167,10 @@ export type MapEditorAction =
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'PUSH_COMMAND'; command: EditorCommand }
+
+  // Tileset / material config
+  | { type: 'SET_TILESETS'; tilesets: ReadonlyArray<TilesetInfo> }
+  | { type: 'SET_MATERIALS'; materials: ReadonlyMap<string, MaterialInfo> }
 
   // Zone actions
   | { type: 'SET_ZONES'; zones: ZoneData[] }

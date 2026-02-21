@@ -3,7 +3,30 @@ import {
   getTerrainSpeedModifier,
   type MovementInput,
 } from '../../src/game/systems/movement';
-import type { Grid, Cell } from '../../src/game/mapgen/types';
+import type { Grid, Cell } from '@nookstead/shared';
+
+/**
+ * Mock the material-cache module so getMaterialProperties returns
+ * terrain-specific speed modifiers without requiring a live API.
+ */
+jest.mock('../../src/game/services/material-cache', () => {
+  const SPEED_MODIFIERS: Record<string, number> = {
+    grass: 1.0,
+    water: 0.5,
+    deep_water: 0.0,
+  };
+
+  return {
+    getMaterialProperties: (terrainKey: string) => ({
+      walkable: terrainKey !== 'deep_water',
+      speedModifier: SPEED_MODIFIERS[terrainKey] ?? 1.0,
+      swimRequired: terrainKey === 'water' || terrainKey === 'deep_water',
+      damaging: false,
+    }),
+    isMaterialWalkable: (terrainKey: string) => terrainKey !== 'deep_water',
+    loadMaterialCache: jest.fn(),
+  };
+});
 
 /**
  * Helper: create a Cell with the given terrain type.

@@ -33,14 +33,6 @@ export {
   INTERPOLATION_SPEED,
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
-  NOISE_OCTAVES,
-  NOISE_LACUNARITY,
-  NOISE_PERSISTENCE,
-  NOISE_SCALE,
-  ELEVATION_EXPONENT,
-  DEEP_WATER_THRESHOLD,
-  WATER_THRESHOLD,
-  MIN_WATER_BORDER,
 } from './constants';
 export type { SkinKey } from './constants';
 // Spawn system
@@ -54,8 +46,6 @@ export type {
   Grid,
   LayerData,
   GeneratedMap,
-  GenerationPass,
-  LayerPass,
   SerializedCell,
   SerializedGrid,
   SerializedLayer,

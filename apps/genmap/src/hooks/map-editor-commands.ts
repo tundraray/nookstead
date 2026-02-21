@@ -75,14 +75,16 @@ export function applyDeltas(
   const recomputedLayers = recomputeAutotileLayers(
     newGrid,
     newLayers,
-    affectedCells
+    affectedCells,
+    state.tilesets
   );
 
   // Recompute walkability for the entire grid
   const newWalkable = recomputeWalkability(
     newGrid,
     state.width,
-    state.height
+    state.height,
+    state.materials
   );
 
   return {

@@ -198,6 +198,12 @@ importers:
 
   apps/game:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.992.0
+        version: 3.992.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: ^3.992.0
+        version: 3.992.0
       '@colyseus/sdk':
         specifier: ^0.17.33
         version: 0.17.33(@colyseus/core@0.17.36)(typescript@5.9.3)(zod@4.3.6)

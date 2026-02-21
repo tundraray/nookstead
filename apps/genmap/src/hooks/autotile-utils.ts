@@ -3,25 +3,41 @@ import {
   getFrame,
   N, NE, E, SE, S, SW, W, NW,
   EMPTY_FRAME,
-  TERRAINS,
-  isWalkable,
 } from '@nookstead/map-lib';
-import type { TerrainCellType } from '@nookstead/map-lib';
 import type { EditorLayer } from './map-editor-types';
+
+/**
+ * Minimal tileset descriptor needed for terrain-key-to-name lookups.
+ * Matches the shape available from both the DB Tileset type and
+ * the legacy TERRAINS array.
+ */
+export interface TilesetInfo {
+  key: string;
+  name: string;
+}
+
+/**
+ * Minimal material descriptor needed for walkability lookups.
+ * Keyed by terrain name (e.g. "deep_water", "grass").
+ */
+export interface MaterialInfo {
+  walkable: boolean;
+}
 
 /**
  * Check if a terrain cell type belongs to a layer's terrain key.
  *
- * Looks up the TERRAINS entry matching the given terrainKey and checks
+ * Looks up the tilesets entry matching the given terrainKey and checks
  * if the cell's terrain name matches the entry's name. For example,
  * terrain key "terrain-03" maps to name "water_grass", so a cell with
  * terrain "water_grass" belongs to that layer.
  */
 export function checkTerrainPresence(
   terrain: string,
-  terrainKey: string
+  terrainKey: string,
+  tilesets: ReadonlyArray<TilesetInfo>
 ): boolean {
-  const entry = TERRAINS.find((t) => t.key === terrainKey);
+  const entry = tilesets.find((t) => t.key === terrainKey);
   if (!entry) return false;
   return terrain === entry.name;
 }
@@ -57,7 +73,8 @@ export function computeNeighborMask(
   y: number,
   width: number,
   height: number,
-  terrainKey: string
+  terrainKey: string,
+  tilesets: ReadonlyArray<TilesetInfo>
 ): number {
   let mask = 0;
 
@@ -71,7 +88,7 @@ export function computeNeighborMask(
       continue;
     }
 
-    if (checkTerrainPresence(grid[ny][nx].terrain, terrainKey)) {
+    if (checkTerrainPresence(grid[ny][nx].terrain, terrainKey, tilesets)) {
       mask |= bit;
     }
   }
@@ -91,7 +108,8 @@ export function computeNeighborMask(
 export function recomputeAutotileLayers(
   grid: Cell[][],
   layers: EditorLayer[],
-  affectedCells: Array<{ x: number; y: number }>
+  affectedCells: Array<{ x: number; y: number }>,
+  tilesets: ReadonlyArray<TilesetInfo>
 ): EditorLayer[] {
   if (affectedCells.length === 0) return layers;
 
@@ -127,7 +145,8 @@ export function recomputeAutotileLayers(
       // Determine if this cell has terrain belonging to this layer
       const isPresent = checkTerrainPresence(
         grid[cy][cx].terrain,
-        layer.terrainKey
+        layer.terrainKey,
+        tilesets
       );
 
       if (!isPresent) {
@@ -142,7 +161,8 @@ export function recomputeAutotileLayers(
         cy,
         width,
         height,
-        layer.terrainKey
+        layer.terrainKey,
+        tilesets
       );
       newFrames[cy][cx] = getFrame(mask);
     }
@@ -154,19 +174,20 @@ export function recomputeAutotileLayers(
 /**
  * Recompute the walkability grid from terrain data.
  *
- * For each cell, checks if the terrain type is walkable using
- * isWalkable() from @nookstead/map-lib.
+ * For each cell, looks up walkability from the provided materials map.
+ * Terrains not found in the map default to walkable (true).
  */
 export function recomputeWalkability(
   grid: Cell[][],
   width: number,
-  height: number
+  height: number,
+  materials: ReadonlyMap<string, MaterialInfo>
 ): boolean[][] {
   const walkable: boolean[][] = [];
   for (let y = 0; y < height; y++) {
     const row: boolean[] = [];
     for (let x = 0; x < width; x++) {
-      row.push(isWalkable(grid[y][x].terrain as TerrainCellType));
+      row.push(materials.get(grid[y][x].terrain)?.walkable ?? true);
     }
     walkable.push(row);
   }

@@ -101,6 +101,8 @@ function createInitialState(): MapEditorState {
     grid: createEmptyGrid(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     layers: [createDefaultLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT)],
     walkable: createEmptyWalkable(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+    tilesets: [],
+    materials: new Map(),
     activeLayerIndex: 0,
     activeTool: 'brush',
     activeTerrainKey: DEFAULT_TERRAIN_KEY,
@@ -504,6 +506,12 @@ export function mapEditorReducer(
 
     case 'MARK_DIRTY':
       return { ...state, isDirty: true };
+
+    case 'SET_TILESETS':
+      return { ...state, tilesets: action.tilesets };
+
+    case 'SET_MATERIALS':
+      return { ...state, materials: action.materials };
 
     case 'ADD_OBJECT_LAYER':
       return {
