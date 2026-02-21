@@ -8,7 +8,7 @@
  * Pure function with no Phaser dependency.
  */
 
-import type { Grid } from '../types/map.js';
+import type { Grid } from '../types/map';
 
 /** Coordinate of a spawn tile in tile-space. */
 export interface SpawnTile {

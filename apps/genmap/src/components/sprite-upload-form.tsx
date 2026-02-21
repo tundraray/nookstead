@@ -12,6 +12,7 @@ interface SpriteUploadFormProps {
 
 export function SpriteUploadForm({ onSuccess }: SpriteUploadFormProps) {
   const [file, setFile] = useState<File | null>(null);
+  const [atlasFile, setAtlasFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -33,7 +34,20 @@ export function SpriteUploadForm({ onSuccess }: SpriteUploadFormProps) {
 
     setError(null);
     setFile(selected);
-    if (!name) setName(selected.name.replace(/\.[^/.]+$/, ''));
+    if (!name) setName(selected.name.replace(/\.[^/.]+$/, '').replace(/_/g, ' '));
+  }
+
+  function handleAtlasChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0];
+    if (!selected) return;
+
+    if (selected.type !== 'application/json' && !selected.name.endsWith('.json')) {
+      setError('Atlas file must be a JSON file');
+      return;
+    }
+
+    setError(null);
+    setAtlasFile(selected);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,6 +61,9 @@ export function SpriteUploadForm({ onSuccess }: SpriteUploadFormProps) {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('name', name);
+      if (atlasFile) {
+        formData.append('atlas', atlasFile);
+      }
 
       const res = await fetch('/api/sprites', {
         method: 'POST',
@@ -77,6 +94,17 @@ export function SpriteUploadForm({ onSuccess }: SpriteUploadFormProps) {
           type="file"
           accept="image/png,image/webp,image/jpeg"
           onChange={handleFileChange}
+        />
+      </div>
+      <div>
+        <Label htmlFor="atlas-file">
+          Atlas JSON (optional — auto-creates frames)
+        </Label>
+        <Input
+          id="atlas-file"
+          type="file"
+          accept=".json,application/json"
+          onChange={handleAtlasChange}
         />
       </div>
       <div>
