@@ -1,8 +1,6 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
-import type { CellDelta } from '@/hooks/map-editor-commands';
-import { PaintCommand } from '@/hooks/map-editor-commands';
-import { bresenhamLine } from './brush-tool';
+import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
+import { bresenhamLine, PaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
 
 /** Default terrain that the eraser sets cells to. */

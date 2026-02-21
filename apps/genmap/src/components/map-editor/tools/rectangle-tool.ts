@@ -1,7 +1,6 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
-import type { CellDelta } from '@/hooks/map-editor-commands';
-import { PaintCommand } from '@/hooks/map-editor-commands';
+import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
+import { rectangleFill, PaintCommand } from '@nookstead/map-lib';
 import type { PreviewRect } from '../canvas-renderer';
 import type { ToolHandlers } from '../map-editor-canvas';
 
@@ -53,34 +52,18 @@ export function createRectangleTool(
       setPreviewRect(null);
 
       const { minX, minY, maxX, maxY } = computeBounds(startTile, tile);
-      const layerIndex = state.activeLayerIndex;
-      const deltas: CellDelta[] = [];
-
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          // Bounds check
-          if (x < 0 || x >= state.width || y < 0 || y >= state.height)
-            continue;
-
-          const oldTerrain = state.grid[y][x].terrain;
-          if (oldTerrain === state.activeTerrainKey) continue;
-
-          const oldFrame =
-            layerIndex >= 0 && layerIndex < state.layers.length
-              ? state.layers[layerIndex].frames[y][x]
-              : 0;
-
-          deltas.push({
-            layerIndex,
-            x,
-            y,
-            oldTerrain,
-            newTerrain: state.activeTerrainKey,
-            oldFrame,
-            newFrame: 0,
-          });
-        }
-      }
+      const deltas: CellDelta[] = rectangleFill({
+        grid: state.grid,
+        minX,
+        minY,
+        maxX,
+        maxY,
+        newTerrain: state.activeTerrainKey,
+        width: state.width,
+        height: state.height,
+        layerIndex: state.activeLayerIndex,
+        layers: state.layers,
+      });
 
       if (deltas.length === 0) return;
 

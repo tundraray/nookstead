@@ -26,7 +26,7 @@ import type {
   MapEditorAction,
   EditorLayer,
   ObjectLayer,
-} from '@/hooks/map-editor-types';
+} from '@nookstead/map-lib';
 
 interface LayerPanelProps {
   state: MapEditorState;

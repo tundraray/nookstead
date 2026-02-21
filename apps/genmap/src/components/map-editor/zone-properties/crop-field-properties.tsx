@@ -3,7 +3,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ZoneData } from '@nookstead/map-lib';
-import { polygonArea } from '../zone-drawing';
+import { polygonArea } from '@nookstead/map-lib';
 
 interface CropFieldPropertiesProps {
   zone: ZoneData;

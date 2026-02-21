@@ -1,4 +1,4 @@
-import type { MapEditorState, PlacedObject } from '@/hooks/map-editor-types';
+import type { MapEditorState, PlacedObject } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {

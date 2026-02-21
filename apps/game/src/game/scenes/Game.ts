@@ -1,7 +1,7 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
-import { EMPTY_FRAME } from '@nookstead/map-lib';
+import { MapRenderer } from '@nookstead/map-renderer';
 import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
@@ -10,7 +10,7 @@ import { findSpawnTile } from '../systems/spawn';
 
 export class Game extends Scene {
   private mapData: GeneratedMap | null = null;
-  private rt!: Phaser.GameObjects.RenderTexture;
+  private mapRenderer?: MapRenderer;
   private hover!: Phaser.GameObjects.Graphics;
   private playerManager!: PlayerManager;
   private player!: Player;
@@ -43,30 +43,12 @@ export class Game extends Scene {
       return;
     }
 
-    const mapPixelW = MAP_WIDTH * TILE_SIZE;
-    const mapPixelH = MAP_HEIGHT * TILE_SIZE;
+    const mapPixelW = this.mapData.width * TILE_SIZE;
+    const mapPixelH = this.mapData.height * TILE_SIZE;
 
-    const tileScale = TILE_SIZE / FRAME_SIZE;
-
-    // Render all layers to a single RenderTexture.
-    this.rt = this.add.renderTexture(0, 0, mapPixelW, mapPixelH);
-    const rt = this.rt;
-    rt.setOrigin(0, 0);
-
-    const stamp = this.add.sprite(0, 0, '').setScale(tileScale).setOrigin(0, 0).setVisible(false);
-
-    for (const layerData of this.mapData.layers) {
-      for (let y = 0; y < MAP_HEIGHT; y++) {
-        for (let x = 0; x < MAP_WIDTH; x++) {
-          const frame = layerData.frames[y][x];
-          if (frame === EMPTY_FRAME) continue;
-
-          stamp.setTexture(layerData.terrainKey, frame);
-          rt.draw(stamp, x * TILE_SIZE, y * TILE_SIZE);
-        }
-      }
-    }
-    stamp.destroy();
+    // Render all layers to a single RenderTexture via MapRenderer.
+    this.mapRenderer = new MapRenderer(this, { tileSize: TILE_SIZE, frameSize: FRAME_SIZE });
+    this.mapRenderer.render(this.mapData);
 
     // Determine spawn position: prefer server-computed, fall back to client-side
     let spawnX: number;

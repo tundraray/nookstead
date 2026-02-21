@@ -22,3 +22,53 @@ export {
   MAP_TYPE_CONSTRAINTS, ZONE_COLORS, ZONE_OVERLAP_ALLOWED,
   validateMapDimensions,
 } from './types/index';
+
+// Material types
+export type { TilesetInfo, MaterialInfo } from './types/material-types';
+
+// Editor types
+export type {
+  EditorTool,
+  SidebarTab,
+  BaseLayer,
+  TileLayer,
+  PlacedObject,
+  ObjectLayer,
+  EditorLayer,
+  CellDelta,
+  EditorCommand,
+  MapEditorState,
+  MapEditorAction,
+  LoadMapPayload,
+} from './types/editor-types';
+export { SIDEBAR_TABS } from './types/editor-types';
+
+// Core algorithm modules (Phase 2)
+export { NEIGHBOR_OFFSETS, computeNeighborMask, checkTerrainPresence } from './core/neighbor-mask';
+export type { NeighborMaskOptions } from './core/neighbor-mask';
+
+export { recomputeAutotileLayers } from './core/autotile-layers';
+
+export { recomputeWalkability } from './core/walkability';
+
+export { bresenhamLine, floodFill, rectangleFill } from './core/drawing-algorithms';
+export type { RectangleFillOptions } from './core/drawing-algorithms';
+
+export { computeRectBounds, clampBounds, isSimplePolygon, polygonArea, toZoneVertices } from './core/zone-geometry';
+export type { TileCoord } from './core/zone-geometry';
+
+export { getZoneTiles, rasterizePolygon, detectZoneOverlap, validateAllZones } from './core/zone-validation';
+export type { OverlapResult, ValidationError } from './core/zone-validation';
+
+// Editor commands (Phase 3)
+export { applyDeltas, PaintCommand, FillCommand } from './core/commands';
+
+// Material resolver (Phase 4)
+export { buildTransitionMap, resolvePaint, createTransitionLayer } from './core/material-resolver';
+export type {
+  TransitionEntry,
+  TransitionMap,
+  TransitionWarning,
+  PaintResult,
+  ResolvePaintOptions,
+} from './core/material-resolver';

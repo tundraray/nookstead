@@ -2,8 +2,9 @@
 
 import { useReducer, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import type { Cell } from '@nookstead/map-lib';
 import type {
+  Cell,
+  MapType,
   MapEditorState,
   MapEditorAction,
   EditorTool,
@@ -11,8 +12,7 @@ import type {
   LoadMapPayload,
   PlacedObject,
   ObjectLayer,
-} from './map-editor-types';
-import type { MapType } from '@nookstead/map-lib';
+} from '@nookstead/map-lib';
 
 const DEFAULT_WIDTH = 32;
 const DEFAULT_HEIGHT = 32;

@@ -35,8 +35,8 @@ import { ActivityBar } from '@/components/map-editor/activity-bar';
 import { EditorSidebar } from '@/components/map-editor/editor-sidebar';
 import { useZones } from '@/hooks/use-zones';
 import { useZoneApi } from '@/hooks/use-zone-api';
-import { SIDEBAR_TABS } from '@/hooks/map-editor-types';
-import type { SidebarTab, PlacedObject } from '@/hooks/map-editor-types';
+import { SIDEBAR_TABS } from '@nookstead/map-lib';
+import type { SidebarTab, PlacedObject } from '@nookstead/map-lib';
 import type { Camera } from '@/components/map-editor/canvas-renderer';
 import type { ZoneBounds, ZoneVertex, ZoneType } from '@nookstead/map-lib';
 

@@ -8,7 +8,7 @@ import {
   useMemo,
   type Dispatch,
 } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 
 /**
  * Minimal tileset shape needed by the terrain palette.

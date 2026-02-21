@@ -16,7 +16,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import type { SidebarTab } from '@/hooks/map-editor-types';
+import type { SidebarTab } from '@nookstead/map-lib';
 
 export interface ActivityBarProps {
   activeTab: SidebarTab | null;

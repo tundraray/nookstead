@@ -8,7 +8,20 @@ import {
   useMemo,
   type Dispatch,
 } from 'react';
-import type { MapEditorState, MapEditorAction, PlacedObject } from '@/hooks/map-editor-types';
+import type {
+  MapEditorState,
+  MapEditorAction,
+  PlacedObject,
+  ZoneBounds,
+  ZoneVertex,
+  TileCoord as TilePos,
+} from '@nookstead/map-lib';
+import {
+  computeRectBounds,
+  clampBounds,
+  isSimplePolygon,
+  toZoneVertices,
+} from '@nookstead/map-lib';
 import {
   renderMapCanvas,
   drawGhostPreview,
@@ -21,14 +34,6 @@ import { createBrushTool } from './tools/brush-tool';
 import { createFillTool } from './tools/fill-tool';
 import { createRectangleTool } from './tools/rectangle-tool';
 import { createEraserTool } from './tools/eraser-tool';
-import {
-  computeRectBounds,
-  clampBounds,
-  isSimplePolygon,
-  toZoneVertices,
-  type TilePos,
-} from './zone-drawing';
-import type { ZoneBounds, ZoneVertex } from '@nookstead/map-lib';
 import { drawZoneOverlay } from './zone-overlay';
 
 const TILE_SIZE = 16;

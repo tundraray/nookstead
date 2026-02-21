@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { MapEditorState, MapEditorAction, SidebarTab } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction, SidebarTab } from '@nookstead/map-lib';
 import type { UseZonesReturn } from '@/hooks/use-zones';
 import { TerrainPalette, type PaletteTileset } from './terrain-palette';
 import { LayerPanel } from './layer-panel';

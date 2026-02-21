@@ -21,7 +21,7 @@ import type {
   MapEditorState,
   MapEditorAction,
   EditorTool,
-} from '@/hooks/map-editor-types';
+} from '@nookstead/map-lib';
 import type { Camera } from './canvas-renderer';
 import type { ZoneType } from '@nookstead/map-lib';
 
