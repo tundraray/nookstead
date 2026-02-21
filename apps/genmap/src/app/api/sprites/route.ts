@@ -1,13 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDb, createSprite, listSprites } from '@nookstead/db';
+import { getDb, createSprite, listSprites, batchSaveFrames } from '@nookstead/db';
+import type { FrameInput } from '@nookstead/db';
 import { uploadToS3, buildS3Url, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '@/lib/s3';
 import { generateS3Key } from '@/lib/validation';
 import { withSignedUrl, withSignedUrls } from '@/lib/sprite-url';
+
+interface AtlasFrame {
+  filename: string;
+  rotated?: boolean;
+  trimmed?: boolean;
+  sourceSize?: { w: number; h: number };
+  spriteSourceSize?: { x: number; y: number; w: number; h: number };
+  frame: { x: number; y: number; w: number; h: number };
+  pivot?: { x: number; y: number };
+}
+
+interface TexturePackerAtlas {
+  textures?: Array<{ frames: AtlasFrame[] }>;
+  frames?: AtlasFrame[];
+}
+
+function toBemName(filename: string): string {
+  // Strip file extension
+  const name = filename.replace(/\.[^/.]+$/, '');
+  const parts = name.split('_');
+  if (parts.length === 0) return name;
+
+  const block = parts[0];
+
+  // Check if the last part is a dimension like "16x16"
+  const lastPart = parts[parts.length - 1];
+  const hasDimension = /^\d+x\d+$/.test(lastPart);
+
+  const elementParts = hasDimension ? parts.slice(1, -1) : parts.slice(1);
+  const modifier = hasDimension ? lastPart : '';
+
+  let result = block;
+  if (elementParts.length > 0) result += `_${elementParts.join('-')}`;
+  if (modifier) result += `--${modifier}`;
+  return result;
+}
+
+function parseAtlasFrames(atlas: TexturePackerAtlas): FrameInput[] {
+  // Support both formats: { textures: [{ frames }] } and { frames }
+  const rawFrames = atlas.textures?.[0]?.frames ?? atlas.frames ?? [];
+
+  return rawFrames.map((f) => ({
+    filename: toBemName(f.filename),
+    frameX: f.frame.x,
+    frameY: f.frame.y,
+    frameW: f.frame.w,
+    frameH: f.frame.h,
+    rotated: f.rotated ?? false,
+    trimmed: f.trimmed ?? false,
+    spriteSourceSizeX: f.spriteSourceSize?.x ?? 0,
+    spriteSourceSizeY: f.spriteSourceSize?.y ?? 0,
+    spriteSourceSizeW: f.spriteSourceSize?.w ?? f.frame.w,
+    spriteSourceSizeH: f.spriteSourceSize?.h ?? f.frame.h,
+    sourceSizeW: f.sourceSize?.w ?? f.frame.w,
+    sourceSizeH: f.sourceSize?.h ?? f.frame.h,
+    pivotX: f.pivot?.x ?? 0.5,
+    pivotY: f.pivot?.y ?? 0.5,
+  }));
+}
 
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const file = formData.get('file') as File | null;
   const name = (formData.get('name') as string | null)?.trim();
+  const atlasFile = formData.get('atlas') as File | null;
 
   if (!file) {
     return NextResponse.json({ error: 'file is required' }, { status: 400 });
@@ -27,6 +88,21 @@ export async function POST(request: NextRequest) {
       { error: `File size exceeds maximum of ${MAX_FILE_SIZE / (1024 * 1024)}MB` },
       { status: 400 }
     );
+  }
+
+  // Parse atlas JSON if provided
+  let atlasFrames: FrameInput[] = [];
+  if (atlasFile) {
+    try {
+      const atlasText = await atlasFile.text();
+      const atlasData = JSON.parse(atlasText) as TexturePackerAtlas;
+      atlasFrames = parseAtlasFrames(atlasData);
+    } catch {
+      return NextResponse.json(
+        { error: 'Invalid atlas JSON file' },
+        { status: 400 }
+      );
+    }
   }
 
   const s3Key = generateS3Key(file.name);
@@ -49,6 +125,11 @@ export async function POST(request: NextRequest) {
     fileSize: file.size,
     mimeType: file.type,
   });
+
+  // Auto-create frames from atlas JSON
+  if (atlasFrames.length > 0) {
+    await batchSaveFrames(db, sprite.id, atlasFrames);
+  }
 
   const signed = await withSignedUrl(sprite);
   return NextResponse.json(signed, { status: 201 });
