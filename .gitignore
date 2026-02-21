@@ -54,4 +54,4 @@ nul
 docs/plans/tasks/*
 tmp/*
 next-env.d.ts
-apps/server/tsconfig.tsbuildinfo
+*.tsbuildinfo

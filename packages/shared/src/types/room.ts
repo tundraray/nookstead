@@ -1,4 +1,4 @@
-import type { LocationType } from '../constants.js';
+import type { LocationType } from '../constants';
 
 export interface PlayerState {
   userId: string;

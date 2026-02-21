@@ -5,14 +5,14 @@ export type {
   ChunkRoomState,
   Location,
   MoveResult,
-} from './types/room.js';
-export { ClientMessage, ServerMessage } from './types/messages.js';
+} from './types/room';
+export { ClientMessage, ServerMessage } from './types/messages';
 export type {
   MovePayload,
   PositionUpdatePayload,
   ClientMessageType,
   ChunkTransitionPayload,
-} from './types/messages.js';
+} from './types/messages';
 export {
   COLYSEUS_PORT,
   TICK_RATE,
@@ -41,11 +41,11 @@ export {
   DEEP_WATER_THRESHOLD,
   WATER_THRESHOLD,
   MIN_WATER_BORDER,
-} from './constants.js';
-export type { SkinKey } from './constants.js';
+} from './constants';
+export type { SkinKey } from './constants';
 // Spawn system
-export type { SpawnTile } from './systems/spawn.js';
-export { findSpawnTile, isValidSpawn } from './systems/spawn.js';
+export type { SpawnTile } from './systems/spawn';
+export { findSpawnTile, isValidSpawn } from './systems/spawn';
 // Map types (from types/map.ts)
 export type {
   TerrainCellType,
@@ -61,4 +61,4 @@ export type {
   SerializedLayer,
   MapDataPayload,
   SessionKickedPayload,
-} from './types/map.js';
+} from './types/map';
