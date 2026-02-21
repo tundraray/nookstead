@@ -1,20 +1,10 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import type { CollisionZone } from '@nookstead/db';
 import type { FramePickerFrame } from '@/components/atlas-frame-picker';
 import type { FrameLayer } from '@/components/object-grid-canvas';
 import type { LayerPreviewData } from '@/components/object-preview';
-
-export interface CollisionZone {
-  id: string;
-  label: string;
-  type: 'collision' | 'walkable';
-  shape: 'rectangle';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 export interface ObjectEditorState {
   layers: FrameLayer[];

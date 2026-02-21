@@ -1,4 +1,4 @@
-import { eq, desc, inArray, sql } from 'drizzle-orm';
+import { eq, desc, inArray, sql, and } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import { gameObjects } from '../schema/game-objects';
 import type { GameObjectLayer, CollisionZone } from '../schema/game-objects';
@@ -44,12 +44,29 @@ export async function getGameObject(db: DrizzleClient, id: string) {
 
 export async function listGameObjects(
   db: DrizzleClient,
-  params?: { limit?: number; offset?: number }
+  params?: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    objectType?: string;
+  }
 ) {
+  const conditions = [];
+  if (params?.category !== undefined) {
+    conditions.push(eq(gameObjects.category, params.category));
+  }
+  if (params?.objectType !== undefined) {
+    conditions.push(eq(gameObjects.objectType, params.objectType));
+  }
+
   const query = db
     .select()
     .from(gameObjects)
     .orderBy(desc(gameObjects.createdAt));
+
+  if (conditions.length > 0) {
+    query.where(and(...conditions));
+  }
   if (params?.limit !== undefined) {
     query.limit(params.limit);
   }

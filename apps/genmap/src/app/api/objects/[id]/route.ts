@@ -6,6 +6,7 @@ import {
   deleteGameObject,
   validateFrameReferences,
 } from '@nookstead/db';
+import { isGameObjectCategory, isGameObjectType } from '@nookstead/shared';
 
 const VALID_ZONE_TYPES = ['collision', 'walkable'];
 
@@ -78,8 +79,8 @@ export async function PATCH(
   }
 
   if (description !== undefined) updates.description = description;
-  if (category !== undefined) updates.category = category;
-  if (objectType !== undefined) updates.objectType = objectType;
+  if (category !== undefined) updates.category = category?.trim().toLowerCase() || null;
+  if (objectType !== undefined) updates.objectType = objectType?.trim().toLowerCase() || null;
   if (collisionZones !== undefined) updates.collisionZones = collisionZones;
   if (tags !== undefined) updates.tags = tags;
   if (metadata !== undefined) updates.metadata = metadata;
@@ -104,6 +105,26 @@ export async function PATCH(
   }
 
   const updated = await updateGameObject(db, id, updates);
+
+  if (updated?.category && !isGameObjectCategory(updated.category)) {
+    console.warn('Non-standard game object category used', {
+      category: updated.category,
+      objectId: updated.id,
+    });
+  }
+  if (
+    updated?.objectType &&
+    updated?.category &&
+    isGameObjectCategory(updated.category) &&
+    !isGameObjectType(updated.category, updated.objectType)
+  ) {
+    console.warn('Non-standard game object type used', {
+      objectType: updated.objectType,
+      category: updated.category,
+      objectId: updated.id,
+    });
+  }
+
   return NextResponse.json(updated);
 }
 

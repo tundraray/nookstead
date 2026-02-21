@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { CollisionZone } from '@/hooks/use-object-editor';
+import type { CollisionZone } from '@nookstead/db';
 
 interface CollisionZonePanelProps {
   zones: CollisionZone[];

@@ -68,3 +68,15 @@ export type {
   SerializedGateData,
   SerializedFenceLayer,
 } from './types/fence-layer';
+// Game object classification types (from types/game-object.ts)
+export {
+  GAME_OBJECT_CATEGORIES,
+  GAME_OBJECT_TYPES,
+  isGameObjectCategory,
+  isGameObjectType,
+  getAllGameObjectTypes,
+} from './types/game-object';
+export type {
+  GameObjectCategory,
+  GameObjectType,
+} from './types/game-object';
