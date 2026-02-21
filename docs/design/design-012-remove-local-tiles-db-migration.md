@@ -8,6 +8,14 @@ Remove all hardcoded terrain definitions (`terrain.ts`, `terrain-properties.ts`)
 - **Design-011:** `design-011-tileset-management.md` — Created the DB services (already implemented)
 - **ADR-0009:** `ADR-0009-tileset-management-architecture.md` — Architecture decisions
 
+## Implementation Status
+
+**Status:** IMPLEMENTED
+**Commit:** `02f625b` on `feature/genmap-editor-and-db-services`
+**Date:** 2026-02-21
+
+All 12 implementation steps completed successfully. Full monorepo verification passed (lint, test, build, typecheck — 8 projects, 264 tests, 0 errors).
+
 ## User Decisions
 
 | Decision | Choice |
@@ -66,6 +74,15 @@ Remove all hardcoded terrain definitions (`terrain.ts`, `terrain-properties.ts`)
 | `apps/server/src/rooms/ChunkRoom.spec.ts` | Update tests for new DB-based map provisioning |
 | `apps/genmap/src/hooks/map-editor-types.ts` | May need type updates if EditorLayer references change |
 
+**Additional files modified during implementation** (not in original scope):
+
+| File | Change |
+|------|--------|
+| `apps/genmap/src/hooks/use-map-editor.ts` | Added `SET_TILESETS` / `SET_MATERIALS` reducer actions + initial state to thread tileset/material data through `MapEditorState` |
+| `apps/game/src/game/constants.ts` | Removed duplicated noise/generation constants (`NOISE_*`, `ELEVATION_*`, etc.) that were also defined in `shared/constants.ts` |
+| `apps/game/specs/systems/movement.spec.ts` | Added `material-cache` mock, fixed import path for movement module |
+| `apps/genmap/specs/index.spec.tsx` | Fixed import path to route group layout, added `next/navigation` mock |
+
 ### Files to CREATE (5 files)
 
 | File | Purpose |
@@ -113,13 +130,18 @@ export async function GET() {
 
 **Updated Preloader.ts flow:**
 ```
-1. Preloader.preload() calls fetch('/api/tilesets')
-2. Response: array of { key, name, s3Url }
+1. Preloader.preload() loads character spritesheets (local paths, sync — Phaser preload is synchronous)
+2. Preloader.create() fetches tileset metadata and material cache in parallel:
+   - const [tilesetRes, _] = await Promise.all([
+       fetch('/api/tilesets'),
+       loadMaterialCache()      // material-cache.ts fetch + populate
+     ])
 3. For each tileset: this.load.spritesheet(key, s3Url, { frameWidth: 16, frameHeight: 16 })
-4. Continue loading character spritesheets as before
+4. this.load.start() — manually triggers Phaser loader (since we are in create(), not preload())
+5. this.load.on('complete', () => this.scene.start('Game')) — manual completion listener
 ```
 
-Note: Phaser's `this.load.spritesheet()` accepts URLs (including cross-origin S3 URLs) natively.
+Note: Phaser's `preload()` is synchronous and does not support async/await. All async data fetching happens in `create()`, with a manual `this.load.start()` and completion listener to bridge back into the Phaser loader lifecycle. `this.load.spritesheet()` accepts URLs (including cross-origin S3 URLs) natively.
 
 ### 2. Material Cache for Movement System
 
@@ -191,7 +213,7 @@ if (editorMaps.length === 0) {
 }
 const template = editorMaps[Math.floor(Math.random() * editorMaps.length)];
 const mapData = {
-  seed: 0,
+  seed: template.seed ?? Math.floor(Math.random() * 0x7fffffff),
   width: template.width,
   height: template.height,
   grid: template.grid,
@@ -209,30 +231,40 @@ await saveMap(db, { userId, ...mapData });
 Reads all material keys from the DB and generates a TypeScript union type:
 
 ```typescript
-import { createDrizzleClient } from '@nookstead/db';
+import { createDrizzleClient, closeDrizzleClient } from '@nookstead/db';
 import { listMaterials } from '@nookstead/db';
 import fs from 'fs';
+import path from 'path';
 
 async function main() {
   const db = createDrizzleClient(process.env.DATABASE_URL!);
-  const materials = await listMaterials(db);
-  const keys = materials.map(m => `'${m.key}'`);
+  try {
+    const materials = await listMaterials(db);
+    const keys = materials.map(m => `'${m.key}'`);
 
-  const content = `// AUTO-GENERATED — do not edit manually.
+    const content = `// AUTO-GENERATED — do not edit manually.
 // Run: pnpm generate:terrain-types
 export type TerrainCellType = ${keys.join(' | ')};
 `;
-  fs.writeFileSync('packages/shared/src/types/terrain-cell-type.generated.ts', content);
-  console.log(`Generated TerrainCellType with ${keys.length} materials`);
-  process.exit(0);
+    const outputPath = path.resolve(__dirname, '../packages/shared/src/types/terrain-cell-type.generated.ts');
+    fs.writeFileSync(outputPath, content);
+    console.log(`Generated TerrainCellType with ${keys.length} materials`);
+  } finally {
+    await closeDrizzleClient(db);
+  }
 }
 main();
 ```
 
-Then `packages/shared/src/types/map.ts` imports:
+Run via `npx tsx scripts/generate-terrain-types.ts` (tsx is not a direct dependency, so `npx` is required).
+
+Then `packages/shared/src/types/map.ts` needs both an import (for local use in the `Cell` interface) and a re-export:
 ```typescript
+import type { TerrainCellType } from './terrain-cell-type.generated';
 export type { TerrainCellType } from './terrain-cell-type.generated';
 ```
+
+Note: Both lines are required because `TerrainCellType` is used locally in the `Cell` interface definition within `map.ts`, and must also be exported for downstream consumers.
 
 ### 5. Genmap autotile-utils Migration
 
@@ -240,14 +272,24 @@ export type { TerrainCellType } from './terrain-cell-type.generated';
 
 **Problem:** This maps tileset key → tileset name → cell terrain. After DB migration, tileset name should match the cell terrain (material key).
 
-**Solution:** The genmap editor already loads tilesets from the API via `useTilesets()` hook. Pass the tilesets array through the full call chain:
+**Solution:** The genmap editor already loads tilesets from the API via `useTilesets()` hook. Pass the tilesets and materials through the full call chain using dedicated exported interfaces and readonly collection types:
 
 ```typescript
+// Exported interfaces for type safety across the call chain:
+export interface TilesetInfo {
+  key: string;
+  name: string;
+}
+
+export interface MaterialInfo {
+  walkable: boolean;
+}
+
 // New signatures (cascade):
 export function checkTerrainPresence(
   terrain: string,
   terrainKey: string,
-  tilesets: Array<{ key: string; name: string }>
+  tilesets: ReadonlyArray<TilesetInfo>
 ): boolean {
   const entry = tilesets.find(t => t.key === terrainKey);
   if (!entry) return false;
@@ -258,18 +300,20 @@ export function computeNeighborMask(
   grid: Cell[][], x: number, y: number,
   width: number, height: number,
   terrainKey: string,
-  tilesets: Array<{ key: string; name: string }>  // NEW param
+  tilesets: ReadonlyArray<TilesetInfo>  // NEW param
 ): number { /* passes tilesets to checkTerrainPresence */ }
 
 export function recomputeAutotileLayers(
   grid: Cell[][],
   layers: EditorLayer[],
   affectedCells: Array<{ x: number; y: number }>,
-  tilesets: Array<{ key: string; name: string }>  // NEW param
+  tilesets: ReadonlyArray<TilesetInfo>  // NEW param
 ): EditorLayer[] { /* passes tilesets to checkTerrainPresence and computeNeighborMask */ }
 ```
 
 All callers of `computeNeighborMask` and `recomputeAutotileLayers` in the map-editor hooks must pass the `tilesets` array (available from `useTilesets()` hook).
+
+**State threading via MapEditorState:** The `use-map-editor.ts` reducer was extended with `SET_TILESETS` and `SET_MATERIALS` actions to store tileset and material data in the editor state, making them available to all autotile and walkability functions without prop drilling through every component.
 
 **For `isWalkable`:** Replace with material data lookup:
 ```typescript
@@ -277,13 +321,13 @@ export function recomputeWalkability(
   grid: Cell[][],
   width: number,
   height: number,
-  materials: Map<string, { walkable: boolean }>  // NEW param
+  materials: ReadonlyMap<string, MaterialInfo>  // NEW param
 ): boolean[][] {
   // Use materials.get(cell.terrain)?.walkable ?? true
 }
 ```
 
-Callers pass a `Map<string, { walkable: boolean }>` built from the materials API response.
+Callers pass a `ReadonlyMap<string, MaterialInfo>` built from the materials API response.
 
 ### 6. map-lib/index.ts Cleanup
 
