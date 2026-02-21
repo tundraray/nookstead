@@ -132,7 +132,7 @@ const mockCreateMapGenerator = jest.fn<(w: number, h: number) => unknown>().mock
   generate: mockGenerate,
 });
 
-jest.mock('../mapgen/index', () => ({
+jest.mock('@nookstead/map-lib', () => ({
   __esModule: true,
   createMapGenerator: mockCreateMapGenerator,
 }));

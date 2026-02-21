@@ -8,7 +8,7 @@ import {
   loadCustomSkinTexture,
 } from '../characters/custom-skin-loader';
 import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
-import { TERRAINS } from '../terrain';
+import { TERRAINS } from '@nookstead/map-lib';
 
 export class Preloader extends Scene {
   constructor() {

@@ -6,7 +6,7 @@ import { world } from '../world/World';
 import { chunkManager } from '../world/ChunkManager';
 import { sessionTracker } from '../sessions';
 import { createServerPlayer } from '../models/Player';
-import { createMapGenerator } from '../mapgen/index';
+import { createMapGenerator } from '@nookstead/map-lib';
 import { getGameDb } from '@nookstead/db/adapters/colyseus';
 import { savePosition, loadPosition, saveMap, loadMap } from '@nookstead/db';
 import {

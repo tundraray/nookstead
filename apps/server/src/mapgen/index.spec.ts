@@ -1,6 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
-import { createMapGenerator } from './index';
-import type { GeneratedMap } from './types';
+import { createMapGenerator } from '@nookstead/map-lib';
+import type { GeneratedMap } from '@nookstead/map-lib';
 
 const MAP_WIDTH = 64;
 const MAP_HEIGHT = 64;

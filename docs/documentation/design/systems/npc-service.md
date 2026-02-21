@@ -62,13 +62,23 @@ Currently the GDD describes NPC logic spread across the game server (movement), 
 
 ### Deployment Model
 
-The NPC Service runs **inside the Colyseus game server process** (not as a separate microservice) for Phase 0. This eliminates network latency between game state and NPC logic. The AI/LLM calls are the only external I/O.
+The NPC Service runs inside the **WorldRuntime simulation layer** (same Node process in MVP, but outside Room lifecycle ownership). Rooms subscribe to simulation output and forward player input to World APIs.
+
+This model enforces:
+
+- no NPC decision/movement ownership inside Room classes
+- chunk simulation independent from player presence
+- clean transition to worker-based simulation later
 
 ```
 apps/server/
   src/
+    world/
+      WorldRuntime.ts             # Owns simulation loops and subsystem orchestration
+      ChunkManager.ts             # Chunk lifecycle: SLEEPING/LOADING/ACTIVE/UNLOADING
+      TransitManager.ts           # Inter-region TravelNode transit resolution
     rooms/
-      TownRoom.ts                 # Colyseus room — delegates to NPC Service
+      ChunkRoom.ts                # Colyseus room — view/snapshot/diff/input forwarding only
     npc-service/
       index.ts                    # NPCService class — main entry point
       lifecycle/
@@ -100,7 +110,7 @@ apps/server/
       data/
         NPCRepository.ts         # PostgreSQL CRUD for npc_agents
         MemoryRepository.ts      # PostgreSQL CRUD for memories (with pgvector)
-        CacheManager.ts          # Redis cache for plans, greetings, state
+        CacheManager.ts          # Redis cache for plans, greetings, state, transit flags
       types/
         npc-types.ts             # All NPC-related TypeScript types
         events.ts                # NPC event types (for Colyseus messages)

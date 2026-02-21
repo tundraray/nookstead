@@ -22,6 +22,41 @@
       "when": 1771310831467,
       "tag": "0002_blue_starhawk",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1771369145914,
+      "tag": "0003_cooing_madame_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771443757060,
+      "tag": "0004_silent_black_cat",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1771454854035,
+      "tag": "0005_living_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1771498250757,
+      "tag": "0006_grey_human_cannonball",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1771569066558,
+      "tag": "0007_tranquil_shocker",
+      "breakpoints": true
     }
   ]
 }

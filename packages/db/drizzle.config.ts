@@ -9,7 +9,7 @@ export default defineConfig({
   schema: './src/schema/index.ts',
   out: './src/migrations',
   dbCredentials: {
-    url: process.env['DATABASE_URL']!,
+    url: process.env['DATABASE_URL'] ?? '',
   },
   verbose: true,
   strict: true,

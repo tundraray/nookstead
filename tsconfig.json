@@ -17,6 +17,15 @@
     },
     {
       "path": "./apps/server"
+    },
+    {
+      "path": "./apps/genmap"
+    },
+    {
+      "path": "./packages/map-renderer"
+    },
+    {
+      "path": "./packages/map-lib"
     }
   ]
 }
