@@ -30,6 +30,13 @@ export const WATER_THRESHOLD = 0.18;
 // Water border
 export const MIN_WATER_BORDER = 5;
 
+// --- Layer depth ordering ---
+// Terrain RenderTexture: depth 0 (Phaser default)
+// Fence RenderTexture: depth 0.5 (above terrain, below hover highlight)
+// Hover highlight: depth 1
+// Player/NPC sprites: depth 2
+export const FENCE_LAYER_DEPTH = 0.5;
+
 // --- Player rendering ---
 export const PLAYER_DEPTH = 2;
 export const PLAYER_SIZE = 32;

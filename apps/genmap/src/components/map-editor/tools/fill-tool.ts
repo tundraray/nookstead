@@ -52,9 +52,13 @@ export function floodFill(
 
     if (grid[y][x].terrain !== targetTerrain) continue;
 
-    const oldFrame =
+    const activeLayer =
       layerIndex >= 0 && layerIndex < layers.length
-        ? layers[layerIndex].frames[y][x]
+        ? layers[layerIndex]
+        : null;
+    const oldFrame =
+      activeLayer && activeLayer.type !== 'object'
+        ? activeLayer.frames[y][x]
         : 0;
 
     deltas.push({

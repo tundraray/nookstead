@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef, useCallback, type Dispatch } from 'react';
+import { useState, useRef, useCallback, useEffect, type Dispatch } from 'react';
 import {
   EyeIcon,
   EyeOffIcon,
+  FenceIcon,
   Grid3X3Icon,
   GripVerticalIcon,
   PackageIcon,
@@ -21,24 +22,44 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import type {
   MapEditorState,
   MapEditorAction,
-  EditorLayer,
-  ObjectLayer,
+  EditorLayerUnion,
 } from '@/hooks/map-editor-types';
+
+/** Minimal fence type shape returned by GET /api/fence-types. */
+interface FenceTypeOption {
+  id: string;
+  name: string;
+  key: string;
+}
 
 interface LayerPanelProps {
   state: MapEditorState;
   dispatch: Dispatch<MapEditorAction>;
 }
 
-/** Check if a layer has any data (painted frames for TileLayer, objects for ObjectLayer). */
-function layerHasData(layer: EditorLayer): boolean {
-  const layerType = (layer as unknown as { type: string }).type;
-  if (layerType === 'object') {
-    const objLayer = layer as unknown as ObjectLayer;
-    return objLayer.objects.length > 0;
+/** Check if a layer has any data (painted frames for TileLayer, objects for ObjectLayer, cells for FenceLayer). */
+function layerHasData(layer: EditorLayerUnion): boolean {
+  if (layer.type === 'object') {
+    return layer.objects.length > 0;
+  }
+  if (layer.type === 'fence') {
+    // FenceLayer: check for non-null cell data
+    for (const row of layer.cells) {
+      for (const cell of row) {
+        if (cell !== null) return true;
+      }
+    }
+    return false;
   }
   // TileLayer: check for non-zero frame data
   for (const row of layer.frames) {
@@ -49,9 +70,9 @@ function layerHasData(layer: EditorLayer): boolean {
   return false;
 }
 
-/** Get the layer type, defaulting to 'tile' for backward compatibility. */
-function getLayerType(layer: EditorLayer): 'tile' | 'object' {
-  return ((layer as unknown as { type: string }).type as 'tile' | 'object') ?? 'tile';
+/** Get the layer type. */
+function getLayerType(layer: EditorLayerUnion): 'tile' | 'object' | 'fence' {
+  return layer.type;
 }
 
 /**
@@ -68,7 +89,42 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
   const [removeIndex, setRemoveIndex] = useState<number | null>(null);
   const [newLayerName, setNewLayerName] = useState('');
   const [newTerrainKey, setNewTerrainKey] = useState('');
-  const [newLayerType, setNewLayerType] = useState<'tile' | 'object'>('tile');
+  const [newLayerType, setNewLayerType] = useState<'tile' | 'object' | 'fence'>('tile');
+  const [selectedFenceTypeKey, setSelectedFenceTypeKey] = useState('');
+
+  // Fence type options fetched from the API
+  const [fenceTypeOptions, setFenceTypeOptions] = useState<FenceTypeOption[]>([]);
+  const [fenceTypesLoading, setFenceTypesLoading] = useState(false);
+
+  // Fetch fence types when the add dialog opens with fence type selected
+  useEffect(() => {
+    if (!addDialogOpen || newLayerType !== 'fence') return;
+    if (fenceTypeOptions.length > 0) return;
+
+    let cancelled = false;
+    setFenceTypesLoading(true);
+
+    fetch('/api/fence-types')
+      .then((res) => res.json())
+      .then((data: FenceTypeOption[]) => {
+        if (!cancelled) {
+          setFenceTypeOptions(data);
+          if (data.length > 0 && !selectedFenceTypeKey) {
+            setSelectedFenceTypeKey(data[0].key);
+          }
+        }
+      })
+      .catch(() => {
+        // Fence types unavailable; user cannot add fence layer
+      })
+      .finally(() => {
+        if (!cancelled) setFenceTypesLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addDialogOpen, newLayerType, fenceTypeOptions.length, selectedFenceTypeKey]);
 
   // Drag state
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -83,7 +139,14 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
     const trimmedName = newLayerName.trim();
     if (!trimmedName) return;
 
-    if (newLayerType === 'object') {
+    if (newLayerType === 'fence') {
+      if (!selectedFenceTypeKey) return;
+      dispatch({
+        type: 'ADD_FENCE_LAYER',
+        name: trimmedName,
+        fenceTypeKey: selectedFenceTypeKey,
+      });
+    } else if (newLayerType === 'object') {
       dispatch({ type: 'ADD_OBJECT_LAYER', name: trimmedName });
     } else {
       const trimmedKey = newTerrainKey.trim();
@@ -93,9 +156,10 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
 
     setNewLayerName('');
     setNewTerrainKey('');
+    setSelectedFenceTypeKey('');
     setNewLayerType('tile');
     setAddDialogOpen(false);
-  }, [newLayerName, newTerrainKey, newLayerType, dispatch]);
+  }, [newLayerName, newTerrainKey, newLayerType, selectedFenceTypeKey, dispatch]);
 
   const handleRemoveClick = useCallback(
     (index: number) => {
@@ -228,7 +292,9 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
 
               {/* Layer type icon */}
               <div className="flex-shrink-0">
-                {getLayerType(layer) === 'object' ? (
+                {getLayerType(layer) === 'fence' ? (
+                  <FenceIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : getLayerType(layer) === 'object' ? (
                   <PackageIcon className="h-3.5 w-3.5 text-muted-foreground" />
                 ) : (
                   <Grid3X3Icon className="h-3.5 w-3.5 text-muted-foreground" />
@@ -244,9 +310,11 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
               >
                 <div className="truncate font-medium">{layer.name}</div>
                 <div className="text-muted-foreground truncate text-[10px]">
-                  {getLayerType(layer) === 'object'
-                    ? `${(layer as unknown as ObjectLayer).objects.length} object${(layer as unknown as ObjectLayer).objects.length !== 1 ? 's' : ''}`
-                    : layer.terrainKey}
+                  {layer.type === 'object'
+                    ? `${layer.objects.length} object${layer.objects.length !== 1 ? 's' : ''}`
+                    : layer.type === 'fence'
+                      ? layer.fenceTypeKey
+                      : layer.terrainKey}
                 </div>
               </div>
 
@@ -287,9 +355,10 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
         })}
       </div>
 
-      {/* Opacity slider and terrain key -- only for TileLayer */}
+      {/* Opacity slider -- for tile and fence layers */}
       {state.layers[state.activeLayerIndex] &&
-        getLayerType(state.layers[state.activeLayerIndex]) === 'tile' && (
+        (getLayerType(state.layers[state.activeLayerIndex]) === 'tile' ||
+          getLayerType(state.layers[state.activeLayerIndex]) === 'fence') && (
           <div className="pt-1 border-t">
             <Label className="text-xs text-muted-foreground">
               Opacity:{' '}
@@ -365,6 +434,19 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                   <PackageIcon className="h-3.5 w-3.5" />
                   Object Layer
                 </button>
+                <button
+                  type="button"
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs transition-colors',
+                    newLayerType === 'fence'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:bg-muted',
+                  ].join(' ')}
+                  onClick={() => setNewLayerType('fence')}
+                >
+                  <FenceIcon className="h-3.5 w-3.5" />
+                  Fence Layer
+                </button>
               </div>
             </div>
 
@@ -377,7 +459,11 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                 value={newLayerName}
                 onChange={(e) => setNewLayerName(e.target.value)}
                 placeholder={
-                  newLayerType === 'object' ? 'e.g. decorations' : 'e.g. roads'
+                  newLayerType === 'fence'
+                    ? 'e.g. Wooden Fence'
+                    : newLayerType === 'object'
+                      ? 'e.g. decorations'
+                      : 'e.g. roads'
                 }
                 autoFocus
               />
@@ -397,6 +483,43 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                 />
               </div>
             )}
+
+            {/* Fence type selector -- only for fence layers */}
+            {newLayerType === 'fence' && (
+              <div className="space-y-1.5">
+                <Label className="text-sm">Fence Type</Label>
+                {fenceTypesLoading ? (
+                  <p className="text-xs text-muted-foreground">Loading fence types...</p>
+                ) : fenceTypeOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    No fence types available. Create fence types first.
+                  </p>
+                ) : (
+                  <Select
+                    value={selectedFenceTypeKey}
+                    onValueChange={(value) => {
+                      setSelectedFenceTypeKey(value);
+                      // Auto-fill layer name from fence type name if empty
+                      const fenceType = fenceTypeOptions.find((ft) => ft.key === value);
+                      if (fenceType && !newLayerName.trim()) {
+                        setNewLayerName(fenceType.name);
+                      }
+                    }}
+                  >
+                    <SelectTrigger size="sm" className="w-full">
+                      <SelectValue placeholder="Select fence type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fenceTypeOptions.map((ft) => (
+                        <SelectItem key={ft.key} value={ft.key}>
+                          {ft.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button
@@ -411,7 +534,8 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
               onClick={handleAddLayer}
               disabled={
                 !newLayerName.trim() ||
-                (newLayerType === 'tile' && !newTerrainKey.trim())
+                (newLayerType === 'tile' && !newTerrainKey.trim()) ||
+                (newLayerType === 'fence' && !selectedFenceTypeKey)
               }
             >
               Add
@@ -429,7 +553,10 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
               {removeIndex !== null &&
               getLayerType(state.layers[removeIndex]) === 'object'
                 ? 'This layer has placed objects. Removing it will delete all object data for this layer. This cannot be undone.'
-                : 'This layer has painted cells. Removing it will delete all terrain data for this layer. This cannot be undone.'}
+                : removeIndex !== null &&
+                    getLayerType(state.layers[removeIndex]) === 'fence'
+                  ? 'This layer has placed fence segments. Removing it will delete all fence data for this layer. This cannot be undone.'
+                  : 'This layer has painted cells. Removing it will delete all terrain data for this layer. This cannot be undone.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

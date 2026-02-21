@@ -21,6 +21,8 @@ import { createBrushTool } from './tools/brush-tool';
 import { createFillTool } from './tools/fill-tool';
 import { createRectangleTool } from './tools/rectangle-tool';
 import { createEraserTool } from './tools/eraser-tool';
+import { createFenceTool, type FencePlacementMode } from './tools/fence-tool';
+import { createFenceEraserTool } from './tools/fence-eraser-tool';
 import {
   computeRectBounds,
   clampBounds,
@@ -77,6 +79,8 @@ interface MapEditorCanvasProps {
   objectRenderData?: Map<string, ObjectRenderEntry>;
   /** Currently selected object ID for ghost preview in object-place mode. */
   selectedObjectId?: string | null;
+  /** Fence placement mode (single, rectangle, line). */
+  fencePlacementMode?: FencePlacementMode;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -107,6 +111,7 @@ export function MapEditorCanvas({
   onObjectPlace,
   objectRenderData,
   selectedObjectId,
+  fencePlacementMode,
 }: MapEditorCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -157,6 +162,9 @@ export function MapEditorCanvas({
 
   // Tool drawing refs
   const isDrawingRef = useRef(false);
+
+  // Shift key tracking for gate toggle
+  const isShiftRef = useRef(false);
 
   // Zone drawing refs
   const zoneRectStartRef = useRef<TilePos | null>(null);
@@ -261,8 +269,18 @@ export function MapEditorCanvas({
       case 'object-place':
         // Object placement handled by onObjectPlace callback in handlePointerDown
         return noopHandlers;
+      case 'fence':
+        return createFenceTool(
+          state,
+          dispatch,
+          fencePlacementMode ?? 'single',
+          setPreviewRect,
+          () => isShiftRef.current
+        );
+      case 'fence-eraser':
+        return createFenceEraserTool(state, dispatch);
     }
-  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
+  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, state.activeFenceTypeKey, fencePlacementMode, dispatch, state, onZoneRectComplete]);
 
   // Clear previews when tool changes
   useEffect(() => {
@@ -605,6 +623,22 @@ export function MapEditorCanvas({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleGrid, state.activeTool, onZonePolyComplete]);
+
+  // Track shift key state for fence gate toggle
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Shift') isShiftRef.current = true;
+    }
+    function handleKeyUp(e: KeyboardEvent) {
+      if (e.key === 'Shift') isShiftRef.current = false;
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   return (
     <div

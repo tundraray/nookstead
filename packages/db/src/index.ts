@@ -89,3 +89,13 @@ export {
 export * from './services/material';
 export * from './services/tileset';
 export * from './services/tileset-tag';
+export {
+  createFenceType,
+  getFenceType,
+  getFenceTypeByKey,
+  listFenceTypes,
+  updateFenceType,
+  deleteFenceType,
+  validateFrameMapping,
+  validateGateFrameMapping,
+} from './services/fence-type';

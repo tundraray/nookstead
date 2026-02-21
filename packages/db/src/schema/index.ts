@@ -11,3 +11,4 @@ export * from './map-zones';
 export * from './materials';
 export * from './tilesets';
 export * from './tileset-tags';
+export * from './fence-types';

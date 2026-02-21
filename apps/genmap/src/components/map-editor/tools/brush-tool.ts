@@ -67,9 +67,13 @@ export function createBrushTool(
     if (oldTerrain === state.activeTerrainKey) return;
 
     const layerIndex = state.activeLayerIndex;
-    const oldFrame =
+    const activeLayer =
       layerIndex >= 0 && layerIndex < state.layers.length
-        ? state.layers[layerIndex].frames[y][x]
+        ? state.layers[layerIndex]
+        : null;
+    const oldFrame =
+      activeLayer && activeLayer.type !== 'object'
+        ? activeLayer.frames[y][x]
         : 0;
 
     paintedCells.set(key, {

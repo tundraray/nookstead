@@ -35,6 +35,8 @@ const TOOL_LABELS: Record<EditorTool, string> = {
   'zone-rect': 'Zone Rect',
   'zone-poly': 'Zone Poly',
   'object-place': 'Object Place',
+  fence: 'Fence',
+  'fence-eraser': 'Fence Eraser',
 };
 
 const ZONE_TYPE_OPTIONS: { value: ZoneType; label: string }[] = [
@@ -72,6 +74,8 @@ export interface EditorOptionsBarProps {
   onToggleGrid: () => void;
   showWalkability: boolean;
   onToggleWalkability: () => void;
+  /** Optional slot for additional tool-specific controls (e.g., fence mode selector). */
+  toolControls?: React.ReactNode;
 }
 
 /* ---------- sub-components ---------- */
@@ -100,6 +104,7 @@ export function EditorOptionsBar({
   onToggleGrid,
   showWalkability,
   onToggleWalkability,
+  toolControls,
 }: EditorOptionsBarProps) {
   const isZoneTool =
     state.activeTool === 'zone-rect' || state.activeTool === 'zone-poly';
@@ -191,7 +196,7 @@ export function EditorOptionsBar({
         <div
           className="flex items-center gap-1.5 overflow-hidden"
           style={{
-            maxWidth: isZoneTool ? 280 : 120,
+            maxWidth: isZoneTool || toolControls ? 400 : 120,
             opacity: 1,
             transition: 'max-width 150ms ease, opacity 150ms ease',
           }}
@@ -199,6 +204,9 @@ export function EditorOptionsBar({
           <span className="text-[11px] font-medium whitespace-nowrap">
             {TOOL_LABELS[state.activeTool]}
           </span>
+
+          {/* Tool-specific controls slot */}
+          {toolControls}
 
           {/* Zone type selector (zone-rect / zone-poly only) */}
           {isZoneTool && (

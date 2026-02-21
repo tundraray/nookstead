@@ -7,7 +7,7 @@ import {
   isWalkable,
 } from '@nookstead/map-lib';
 import type { TerrainCellType } from '@nookstead/map-lib';
-import type { EditorLayer } from './map-editor-types';
+import type { EditorLayerUnion, TileLayer } from './map-editor-types';
 
 /**
  * Check if a terrain cell type belongs to a layer's terrain key.
@@ -87,12 +87,13 @@ export function computeNeighborMask(
  *
  * Returns a new layers array with updated frames (immutable -- creates
  * new array references for changed layers so React detects changes).
+ * Only tile layers are recomputed; object and fence layers are passed through.
  */
 export function recomputeAutotileLayers(
   grid: Cell[][],
-  layers: EditorLayer[],
+  layers: EditorLayerUnion[],
   affectedCells: Array<{ x: number; y: number }>
-): EditorLayer[] {
+): EditorLayerUnion[] {
   if (affectedCells.length === 0) return layers;
 
   const height = grid.length;
@@ -115,9 +116,13 @@ export function recomputeAutotileLayers(
     }
   }
 
-  // Update frames for each layer for each cell in the recalc set
-  return layers.map((layer) => {
-    const newFrames = layer.frames.map((row) => [...row]);
+  // Update frames for each tile layer for each cell in the recalc set.
+  // Non-tile layers (object, fence) are passed through unchanged.
+  return layers.map((layer): EditorLayerUnion => {
+    if (layer.type !== 'tile') return layer;
+
+    const tileLayer = layer as TileLayer;
+    const newFrames = tileLayer.frames.map((row) => [...row]);
 
     for (const key of recalcSet) {
       const [xStr, yStr] = key.split(',');
@@ -127,7 +132,7 @@ export function recomputeAutotileLayers(
       // Determine if this cell has terrain belonging to this layer
       const isPresent = checkTerrainPresence(
         grid[cy][cx].terrain,
-        layer.terrainKey
+        tileLayer.terrainKey
       );
 
       if (!isPresent) {
@@ -142,12 +147,12 @@ export function recomputeAutotileLayers(
         cy,
         width,
         height,
-        layer.terrainKey
+        tileLayer.terrainKey
       );
       newFrames[cy][cx] = getFrame(mask);
     }
 
-    return { ...layer, frames: newFrames };
+    return { ...tileLayer, frames: newFrames };
   });
 }
 

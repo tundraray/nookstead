@@ -62,3 +62,9 @@ export type {
   MapDataPayload,
   SessionKickedPayload,
 } from './types/map';
+// Fence types (from types/fence-layer.ts)
+export type {
+  FenceCellData,
+  SerializedGateData,
+  SerializedFenceLayer,
+} from './types/fence-layer';
