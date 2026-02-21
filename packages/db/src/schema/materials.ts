@@ -1,5 +1,6 @@
 import {
   boolean,
+  integer,
   pgTable,
   real,
   timestamp,
@@ -14,6 +15,7 @@ export const materials = pgTable('materials', {
   color: varchar('color', { length: 7 }).notNull(),
   walkable: boolean('walkable').notNull().default(true),
   speedModifier: real('speed_modifier').notNull().default(1.0),
+  renderPriority: integer('render_priority').notNull().default(0),
   swimRequired: boolean('swim_required').notNull().default(false),
   damaging: boolean('damaging').notNull().default(false),
   createdAt: timestamp('created_at', { withTimezone: true })

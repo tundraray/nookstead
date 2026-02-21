@@ -1,4 +1,5 @@
 import { eq, desc, ilike, and, or, sql, count } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { DrizzleClient } from '../core/client';
 import { tilesets } from '../schema/tilesets';
 import { tilesetTags } from '../schema/tileset-tags';
@@ -234,4 +235,36 @@ export async function getTilesetUsage(
     );
 
   return { maps, count: maps.length };
+}
+
+/**
+ * Return all tilesets with their fromMaterial and toMaterial relations
+ * fully populated. Used to build the TilesetRegistry for the terrain
+ * renderer.
+ *
+ * Uses leftJoin so tilesets without fromMaterial or toMaterial are
+ * still returned (interior solid tilesets have null toMaterial).
+ */
+export async function listTilesetsWithMaterials(db: DrizzleClient) {
+  const fromMat = alias(materials, 'from_mat');
+  const toMat = alias(materials, 'to_mat');
+
+  return db
+    .select({
+      key: tilesets.key,
+      s3Url: tilesets.s3Url,
+      fromMaterial: {
+        key: fromMat.key,
+        renderPriority: fromMat.renderPriority,
+        color: fromMat.color,
+      },
+      toMaterial: {
+        key: toMat.key,
+        renderPriority: toMat.renderPriority,
+        color: toMat.color,
+      },
+    })
+    .from(tilesets)
+    .leftJoin(fromMat, eq(tilesets.fromMaterialId, fromMat.id))
+    .leftJoin(toMat, eq(tilesets.toMaterialId, toMat.id));
 }
