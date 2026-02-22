@@ -101,10 +101,10 @@ export function renderMapCanvas(
           const frame = layer.frames[y][x];
           if (frame === EMPTY_FRAME) continue;
 
-          // Look up the tileset for this specific cell's terrain
+          // Look up the tileset for this specific cell: per-cell key → baseTilesetKey → layer fallback
           const cellTerrain = state.grid[y]?.[x]?.terrain;
           const matInfo = cellTerrain ? state.materials.get(cellTerrain) : undefined;
-          const tilesetKey = matInfo?.baseTilesetKey ?? layer.terrainKey;
+          const tilesetKey = layer.tilesetKeys?.[y]?.[x] || matInfo?.baseTilesetKey || layer.terrainKey;
           const img = tilesetImages.get(tilesetKey);
           if (!img) continue;
 

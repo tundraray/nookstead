@@ -83,6 +83,8 @@ export interface EditorLayer {
   opacity: number;
   /** 2D array of autotile frame indices matching the map dimensions [y][x]. */
   frames: number[][];
+  /** Per-cell tileset key for rendering, determined by material pair at transition boundary [y][x]. */
+  tilesetKeys?: string[][];
 }
 
 /** A cell-level delta entry for undo/redo. */

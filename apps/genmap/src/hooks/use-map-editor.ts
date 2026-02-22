@@ -289,6 +289,8 @@ export function mapEditorReducer(
         editorLayers,
         allCells,
         state.materials,
+        undefined,
+        state.tilesets,
       );
 
       return {

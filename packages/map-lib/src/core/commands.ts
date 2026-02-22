@@ -30,6 +30,7 @@ export function applyDeltas(
   const newLayers = state.layers.map((layer) => ({
     ...layer,
     frames: layer.frames.map((row: number[]) => [...row]),
+    tilesetKeys: layer.tilesetKeys?.map((row: string[]) => [...row]),
   }));
 
   for (const delta of deltas) {
@@ -55,12 +56,20 @@ export function applyDeltas(
   // Collect affected cells for autotile recomputation
   const affectedCells = deltas.map((d) => ({ x: d.x, y: d.y }));
 
+  // Solid Block Rule: when painting forward, directly painted cells are forced
+  // to SOLID_FRAME. On undo, frames are recomputed normally from the mask.
+  const paintedCells = direction === 'forward'
+    ? new Set(deltas.map((d) => `${d.x},${d.y}`))
+    : undefined;
+
   // Recompute autotile frames for affected cells and their 8 neighbors
   const recomputedLayers = recomputeAutotileLayers(
     newGrid,
     newLayers,
     affectedCells,
     state.materials,
+    paintedCells,
+    state.tilesets,
   );
 
   // Recompute walkability for the entire grid
@@ -70,6 +79,39 @@ export function applyDeltas(
     state.height,
     state.materials,
   );
+
+  // --- Debug log: show what was drawn ---
+  if (typeof console !== 'undefined') {
+    const xs = deltas.map((d) => d.x);
+    const ys = deltas.map((d) => d.y);
+    const minX = Math.max(0, Math.min(...xs) - 1);
+    const maxX = Math.min(state.width - 1, Math.max(...xs) + 1);
+    const minY = Math.max(0, Math.min(...ys) - 1);
+    const maxY = Math.min(state.height - 1, Math.max(...ys) + 1);
+
+    const layer = recomputedLayers[state.activeLayerIndex ?? 0];
+    const activeMat = deltas[0] ? (direction === 'forward' ? deltas[0].newTerrain : deltas[0].oldTerrain) : '?';
+    const header = `[paint ${direction}] material="${activeMat}" ${deltas.length} cell(s), area [${minX},${minY}]-[${maxX},${maxY}]`;
+
+    const rows: string[] = [];
+    for (let y = minY; y <= maxY; y++) {
+      const cells: string[] = [];
+      for (let x = minX; x <= maxX; x++) {
+        const terrain = newGrid[y][x].terrain ?? '';
+        const mat = terrain.slice(0, 6).padEnd(6);
+        const frm = String(layer?.frames[y]?.[x] ?? '?').padStart(2);
+        const pairTs = layer?.tilesetKeys?.[y]?.[x] || '';
+        const baseTs = state.materials.get(terrain)?.baseTilesetKey ?? '';
+        const tsLabel = pairTs ? `pair:${pairTs}` : `base:${baseTs || '-'}`;
+        const isPainted = deltas.some((d) => d.x === x && d.y === y);
+        const marker = isPainted ? '*' : ' ';
+        cells.push(`${marker}${mat} f${frm} ${tsLabel.padEnd(16)}`);
+      }
+      rows.push(`  y${String(y).padStart(2)}: ${cells.join(' | ')}`);
+    }
+
+    console.log(`\n${header}\n${rows.join('\n')}\n`);
+  }
 
   return {
     ...state,

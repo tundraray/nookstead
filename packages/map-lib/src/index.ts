@@ -51,7 +51,7 @@ export type {
 export { SIDEBAR_TABS } from './types/editor-types';
 
 // Core algorithm modules (Phase 2)
-export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial, computeNeighborMaskByPriority } from './core/neighbor-mask';
+export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial, computeTransitionMask } from './core/neighbor-mask';
 export type { NeighborMaskOptions } from './core/neighbor-mask';
 
 export { recomputeAutotileLayers } from './core/autotile-layers';

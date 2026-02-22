@@ -1,5 +1,5 @@
-import { computeNeighborMask, computeNeighborMaskByMaterial, computeNeighborMaskByPriority, checkTerrainPresence } from './neighbor-mask';
-import type { TilesetInfo, MaterialInfo } from '../types/material-types';
+import { computeNeighborMask, computeNeighborMaskByMaterial, computeTransitionMask, checkTerrainPresence } from './neighbor-mask';
+import type { TilesetInfo } from '../types/material-types';
 import type { Cell } from '@nookstead/shared';
 import { N, S, E, W, NE, NW, SE, SW } from './autotile';
 
@@ -173,90 +173,94 @@ describe('computeNeighborMaskByMaterial', () => {
   });
 });
 
-function makeMaterial(key: string, renderPriority: number): MaterialInfo {
-  return { key, color: '#000', walkable: true, renderPriority, baseTilesetKey: `tileset-${key}` };
-}
-
-describe('computeNeighborMaskByPriority', () => {
-  it('should treat lower-priority neighbors as matching (water on deep_water = SOLID)', () => {
-    // deep_water (priority=1) surrounded by... center is water (priority=5)
-    const grid = makeGrid(3, 3, 'deep_water');
+describe('computeTransitionMask', () => {
+  it('should match computeNeighborMaskByMaterial when only one foreign material exists', () => {
+    // 3x3: water center, grass everywhere else
+    const grid = makeGrid(3, 3, 'grass');
     grid[1][1] = { terrain: 'water', elevation: 0, meta: {} } as Cell;
 
-    const materials = new Map<string, MaterialInfo>([
-      ['deep_water', makeMaterial('deep_water', 1)],
-      ['water', makeMaterial('water', 5)],
-    ]);
+    // computeNeighborMaskByMaterial: bit=1 where neighbor === 'water' → 0 (no water neighbors)
+    const sameMask = computeNeighborMaskByMaterial(grid, 1, 1, 3, 3, 'water');
 
-    // water (priority=5): deep_water neighbors have priority 1, which is <= 5, so they match
-    const mask = computeNeighborMaskByPriority(grid, 1, 1, 3, 3, 5, materials);
-    expect(mask).toBe(N | NE | E | SE | S | SW | W | NW); // all match → SOLID
+    // computeTransitionMask(target=grass): bit=0 where neighbor === 'grass' → 0 (all are grass)
+    const tMask = computeTransitionMask(grid, 1, 1, 3, 3, 'grass');
+
+    expect(tMask).toBe(sameMask);
+    expect(tMask).toBe(0); // all neighbors are the target → all bits 0
   });
 
-  it('should treat higher-priority neighbors as not matching', () => {
-    // grass (priority=10) surrounded center is deep_water (priority=1)
-    const grid = makeGrid(3, 3, 'grass');
-    grid[1][1] = { terrain: 'deep_water', elevation: 0, meta: {} } as Cell;
+  it('should differ from same-material mask when two foreign materials border the cell', () => {
+    // 1x3 row: [deep_water, deep_sand, sand]
+    const grid: Cell[][] = [[
+      { terrain: 'deep_water', elevation: 0, meta: {} } as Cell,
+      { terrain: 'deep_sand', elevation: 0, meta: {} } as Cell,
+      { terrain: 'sand', elevation: 0, meta: {} } as Cell,
+    ]];
 
-    const materials = new Map<string, MaterialInfo>([
-      ['deep_water', makeMaterial('deep_water', 1)],
-      ['grass', makeMaterial('grass', 10)],
-    ]);
+    // For deep_sand at (1,0):
+    //   same-material mask: bit=1 where neighbor === 'deep_sand'
+    //     W(deep_water) → 0, E(sand) → 0 → both sides 0
+    const sameMask = computeNeighborMaskByMaterial(grid, 1, 0, 3, 1, 'deep_sand');
 
-    // deep_water (priority=1): grass neighbors have priority 10, which is > 1, so they don't match
-    const mask = computeNeighborMaskByPriority(grid, 1, 1, 3, 3, 1, materials);
-    expect(mask).toBe(0); // no match → ISOLATED
+    //   transition mask (target=deep_water): bit=0 where neighbor === 'deep_water'
+    //     W(deep_water) → 0, E(sand) → 1 (not target)
+    const tMask = computeTransitionMask(grid, 1, 0, 3, 1, 'deep_water');
+
+    // Same-material mask: W=0, E=0 (neither is deep_sand)
+    expect(sameMask & W).toBe(0);
+    expect(sameMask & E).toBe(0);
+
+    // Transition mask: W=0 (IS target), E=1 (NOT target = solid)
+    expect(tMask & W).toBe(0);
+    expect(tMask & E).toBe(E);
+
+    // They differ
+    expect(tMask).not.toBe(sameMask);
   });
 
-  it('should treat same-priority neighbors as matching', () => {
-    const grid = makeGrid(3, 3, 'water');
+  it('should treat OOB as non-target (bit=1) when outOfBoundsMatches is true', () => {
+    // 1x3 row: [deep_water, deep_sand, sand]
+    const grid: Cell[][] = [[
+      { terrain: 'deep_water', elevation: 0, meta: {} } as Cell,
+      { terrain: 'deep_sand', elevation: 0, meta: {} } as Cell,
+      { terrain: 'sand', elevation: 0, meta: {} } as Cell,
+    ]];
 
-    const materials = new Map<string, MaterialInfo>([
-      ['water', makeMaterial('water', 5)],
-    ]);
+    const tMask = computeTransitionMask(grid, 1, 0, 3, 1, 'deep_water', {
+      outOfBoundsMatches: true,
+    });
 
-    const mask = computeNeighborMaskByPriority(grid, 1, 1, 3, 3, 5, materials);
-    expect(mask).toBe(N | NE | E | SE | S | SW | W | NW);
+    // N, NE, NW, S, SE, SW are OOB → bit=1 (not target = matching)
+    expect(tMask & N).toBe(N);
+    expect(tMask & S).toBe(S);
+    expect(tMask & NE).toBe(NE);
+    expect(tMask & SE).toBe(SE);
+    expect(tMask & NW).toBe(NW);
+    expect(tMask & SW).toBe(SW);
   });
 
-  it('should handle OOB with outOfBoundsMatches=true (default)', () => {
-    const grid = makeGrid(3, 3, 'water');
-    const materials = new Map<string, MaterialInfo>([
-      ['water', makeMaterial('water', 5)],
-    ]);
+  it('should treat OOB as target (bit=0) when outOfBoundsMatches is false', () => {
+    // 1x3 row: [deep_water, deep_sand, sand]
+    const grid: Cell[][] = [[
+      { terrain: 'deep_water', elevation: 0, meta: {} } as Cell,
+      { terrain: 'deep_sand', elevation: 0, meta: {} } as Cell,
+      { terrain: 'sand', elevation: 0, meta: {} } as Cell,
+    ]];
 
-    // Top-left corner: N, NW, W are OOB → should be set
-    const mask = computeNeighborMaskByPriority(grid, 0, 0, 3, 3, 5, materials);
-    expect(mask & N).toBe(N);
-    expect(mask & NW).toBe(NW);
-    expect(mask & W).toBe(W);
-  });
-
-  it('should handle OOB with outOfBoundsMatches=false', () => {
-    const grid = makeGrid(3, 3, 'water');
-    const materials = new Map<string, MaterialInfo>([
-      ['water', makeMaterial('water', 5)],
-    ]);
-
-    const mask = computeNeighborMaskByPriority(grid, 0, 0, 3, 3, 5, materials, {
+    const tMask = computeTransitionMask(grid, 1, 0, 3, 1, 'deep_water', {
       outOfBoundsMatches: false,
     });
-    expect(mask & N).toBe(0);
-    expect(mask & NW).toBe(0);
-    expect(mask & W).toBe(0);
+
+    // N, NE, NW, S, SE, SW are OOB → bit=0
+    expect(tMask & N).toBe(0);
+    expect(tMask & S).toBe(0);
   });
 
-  it('should default unknown materials to priority 0', () => {
-    const grid = makeGrid(3, 3, 'unknown_terrain');
-    grid[1][1] = { terrain: 'water', elevation: 0, meta: {} } as Cell;
-
-    const materials = new Map<string, MaterialInfo>([
-      ['water', makeMaterial('water', 5)],
-      // 'unknown_terrain' is NOT in the map → defaults to priority 0
-    ]);
-
-    // water (priority=5): unknown neighbors have priority 0, which is <= 5, so they match
-    const mask = computeNeighborMaskByPriority(grid, 1, 1, 3, 3, 5, materials);
-    expect(mask).toBe(N | NE | E | SE | S | SW | W | NW);
+  it('should return 255 when no neighbors are the target material', () => {
+    // 3x3 all grass, target=water (not present)
+    const grid = makeGrid(3, 3, 'grass');
+    const tMask = computeTransitionMask(grid, 1, 1, 3, 3, 'water');
+    expect(tMask).toBe(255); // no neighbor is water → all bits 1
   });
 });
+

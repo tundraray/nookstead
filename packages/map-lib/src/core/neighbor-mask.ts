@@ -1,6 +1,6 @@
 import { N, NE, E, SE, S, SW, W, NW } from './autotile';
 import type { Cell } from '@nookstead/shared';
-import type { TilesetInfo, MaterialInfo } from '../types/material-types';
+import type { TilesetInfo } from '../types/material-types';
 
 /**
  * Direction offsets for the 8 neighbors, ordered to match bitmask constants.
@@ -151,36 +151,25 @@ export function computeNeighborMaskByMaterial(
 }
 
 /**
- * Compute the 8-bit neighbor mask for a cell at (x, y) using render-priority
- * comparison. A neighbor "matches" (bit set) when its material's
- * `renderPriority` is **less than or equal to** the current cell's priority.
+ * Compute a transition mask relative to a specific target material.
  *
- * This means lower-priority materials (like deep_water with priority 1) are
- * treated as matching when computing the mask for a higher-priority material
- * (like water with priority 5). The result is that water on deep_water shows
- * as SOLID rather than ISOLATED.
+ * Unlike `computeNeighborMaskByMaterial` (bit=1 where same material),
+ * this function sets bit=0 ONLY where the neighbor IS `targetMaterial`.
+ * All other neighbors (own material + other foreign materials) get bit=1.
  *
- * Falls back to exact string comparison when a material is not found in the
- * lookup map.
+ * This produces transitions only toward the target material, while other
+ * foreign materials appear as a continuation of the cell's own surface.
  *
- * @param grid - The 2D cell grid (indexed as grid[y][x]).
- * @param x - Column index of the target cell.
- * @param y - Row index of the target cell.
- * @param width - Grid width in cells.
- * @param height - Grid height in cells.
- * @param currentPriority - The renderPriority of the cell being evaluated.
- * @param materials - Material lookup map for priority resolution.
- * @param options - Optional configuration for OOB behavior.
- * @returns An 8-bit neighbor mask with bits set for matching neighbors.
+ * When only one foreign material is present, the result is identical to
+ * `computeNeighborMaskByMaterial`.
  */
-export function computeNeighborMaskByPriority(
+export function computeTransitionMask(
   grid: Cell[][],
   x: number,
   y: number,
   width: number,
   height: number,
-  currentPriority: number,
-  materials: ReadonlyMap<string, MaterialInfo>,
+  targetMaterial: string,
   options?: NeighborMaskOptions,
 ): number {
   const oobMatches = options?.outOfBoundsMatches ?? true;
@@ -195,11 +184,9 @@ export function computeNeighborMaskByPriority(
       continue;
     }
 
-    const neighborTerrain = grid[ny][nx].terrain;
-    const neighborMat = neighborTerrain ? materials.get(neighborTerrain) : undefined;
-    const neighborPriority = neighborMat?.renderPriority ?? 0;
-
-    if (neighborPriority <= currentPriority) {
+    // bit=1 when neighbor is NOT target (matching / solid)
+    // bit=0 when neighbor IS target (transition here)
+    if (grid[ny][nx].terrain !== targetMaterial) {
       mask |= bit;
     }
   }
