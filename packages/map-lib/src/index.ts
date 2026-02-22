@@ -26,6 +26,13 @@ export {
 // Material types
 export type { TilesetInfo, MaterialInfo } from './types/material-types';
 
+// API response types
+export type { MaterialProperties } from './types/api-types';
+
+// Map editor data builder
+export { buildMapEditorData } from './core/map-editor-data';
+export type { MapEditorData, RawMaterial, RawTileset } from './core/map-editor-data';
+
 // Editor types
 export type {
   EditorTool,
@@ -44,7 +51,7 @@ export type {
 export { SIDEBAR_TABS } from './types/editor-types';
 
 // Core algorithm modules (Phase 2)
-export { NEIGHBOR_OFFSETS, computeNeighborMask, checkTerrainPresence } from './core/neighbor-mask';
+export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial, computeNeighborMaskByPriority } from './core/neighbor-mask';
 export type { NeighborMaskOptions } from './core/neighbor-mask';
 
 export { recomputeAutotileLayers } from './core/autotile-layers';
@@ -64,7 +71,7 @@ export type { OverlapResult, ValidationError } from './core/zone-validation';
 export { applyDeltas, PaintCommand, FillCommand } from './core/commands';
 
 // Material resolver (Phase 4)
-export { buildTransitionMap, resolvePaint, createTransitionLayer } from './core/material-resolver';
+export { buildTransitionMap, resolvePaint } from './core/material-resolver';
 export type {
   TransitionEntry,
   TransitionMap,

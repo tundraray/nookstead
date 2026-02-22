@@ -1,11 +1,9 @@
-export interface MaterialProperties {
-  walkable: boolean;
-  speedModifier: number;
-  swimRequired: boolean;
-  damaging: boolean;
-}
+import type { MaterialProperties } from '@nookstead/map-lib';
+
+export type { MaterialProperties };
 
 const DEFAULT_PROPERTIES: MaterialProperties = {
+  key: '',
   walkable: true,
   speedModifier: 1.0,
   swimRequired: false,
@@ -14,37 +12,14 @@ const DEFAULT_PROPERTIES: MaterialProperties = {
 
 let cache: Map<string, MaterialProperties> | null = null;
 
-export async function loadMaterialCache(): Promise<void> {
-  const res = await fetch('/api/materials');
-  if (!res.ok) {
-    console.error(
-      '[MaterialCache] Failed to load materials:',
-      res.status,
-      res.statusText
-    );
-    return;
-  }
-
-  const materials: Array<{
-    key: string;
-    walkable: boolean;
-    speedModifier: number;
-    swimRequired: boolean;
-    damaging: boolean;
-  }> = await res.json();
-
-  cache = new Map(
-    materials.map((m) => [
-      m.key,
-      {
-        walkable: m.walkable,
-        speedModifier: m.speedModifier,
-        swimRequired: m.swimRequired,
-        damaging: m.damaging,
-      },
-    ])
-  );
-
+/**
+ * Populate the material cache from pre-fetched data.
+ * Called by Preloader with data from GET /api/game-data.
+ */
+export function loadMaterialCacheFromData(
+  materials: MaterialProperties[],
+): void {
+  cache = new Map(materials.map((m) => [m.key, m]));
   console.log(`[MaterialCache] Loaded ${cache.size} materials`);
 }
 

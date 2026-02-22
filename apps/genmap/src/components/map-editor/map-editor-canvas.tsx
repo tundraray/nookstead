@@ -267,7 +267,7 @@ export function MapEditorCanvas({
         // Object placement handled by onObjectPlace callback in handlePointerDown
         return noopHandlers;
     }
-  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
+  }, [state.activeTool, state.activeMaterialKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
 
   // Clear previews when tool changes
   useEffect(() => {

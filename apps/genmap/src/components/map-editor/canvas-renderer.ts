@@ -1,3 +1,4 @@
+import { FRAMES_PER_TERRAIN, EMPTY_FRAME } from '@nookstead/map-lib';
 import type { MapEditorState, PlacedObject } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
@@ -91,25 +92,31 @@ export function renderMapCanvas(
     const layerType = (layer as { type?: string }).type ?? 'tile';
 
     if (layerType === 'tile') {
-      // TileLayer rendering
-      const img = tilesetImages.get(layer.terrainKey);
-      if (!img) continue;
+      // TileLayer rendering — per-cell tileset lookup via material baseTilesetKey
+      const TILESET_COLS = FRAMES_PER_TERRAIN / 4; // 12
+      const TILE_PX = 16;
 
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
           const frame = layer.frames[y][x];
-          if (frame === 0) continue; // EMPTY_FRAME, skip
+          if (frame === EMPTY_FRAME) continue;
 
-          // Calculate source position in tileset (12 cols, 16x16 frames)
-          const srcX = (frame % 12) * 16;
-          const srcY = Math.floor(frame / 12) * 16;
+          // Look up the tileset for this specific cell's terrain
+          const cellTerrain = state.grid[y]?.[x]?.terrain;
+          const matInfo = cellTerrain ? state.materials.get(cellTerrain) : undefined;
+          const tilesetKey = matInfo?.baseTilesetKey ?? layer.terrainKey;
+          const img = tilesetImages.get(tilesetKey);
+          if (!img) continue;
+
+          const srcX = (frame % TILESET_COLS) * TILE_PX;
+          const srcY = Math.floor(frame / TILESET_COLS) * TILE_PX;
 
           ctx.drawImage(
             img,
             srcX,
             srcY,
-            16,
-            16,
+            TILE_PX,
+            TILE_PX,
             x * tileSize,
             y * tileSize,
             tileSize,

@@ -51,6 +51,8 @@ export function createRectangleTool(
       isDrawing = false;
       setPreviewRect(null);
 
+      if (!state.materials.has(state.activeMaterialKey)) return;
+
       const { minX, minY, maxX, maxY } = computeBounds(startTile, tile);
       const deltas: CellDelta[] = rectangleFill({
         grid: state.grid,
@@ -58,7 +60,7 @@ export function createRectangleTool(
         minY,
         maxX,
         maxY,
-        newTerrain: state.activeTerrainKey,
+        newTerrain: state.activeMaterialKey,
         width: state.width,
         height: state.height,
         layerIndex: state.activeLayerIndex,

@@ -1,6 +1,6 @@
 import { N, NE, E, SE, S, SW, W, NW } from './autotile';
 import type { Cell } from '@nookstead/shared';
-import type { TilesetInfo } from '../types/material-types';
+import type { TilesetInfo, MaterialInfo } from '../types/material-types';
 
 /**
  * Direction offsets for the 8 neighbors, ordered to match bitmask constants.
@@ -34,9 +34,9 @@ export interface NeighborMaskOptions {
  * Check if a terrain cell type belongs to a layer's terrain key.
  *
  * Looks up the tilesets entry matching the given terrainKey and checks
- * if the cell's terrain name matches the entry's name. For example,
- * terrain key "terrain-03" maps to name "water_grass", so a cell with
- * terrain "water_grass" belongs to that layer.
+ * if the cell's terrain matches the entry's resolved material key
+ * (fromMaterialKey), falling back to the entry's name for backward
+ * compatibility.
  *
  * @param terrain - The terrain string from a cell (e.g., "water_grass").
  * @param terrainKey - The tileset key to check against (e.g., "terrain-03").
@@ -50,7 +50,7 @@ export function checkTerrainPresence(
 ): boolean {
   const entry = tilesets.find((t) => t.key === terrainKey);
   if (!entry) return false;
-  return terrain === entry.name;
+  return terrain === (entry.fromMaterialKey ?? entry.name);
 }
 
 /**
@@ -98,6 +98,108 @@ export function computeNeighborMask(
     }
 
     if (checkTerrainPresence(grid[ny][nx].terrain, terrainKey, tilesets)) {
+      mask |= bit;
+    }
+  }
+
+  return mask;
+}
+
+/**
+ * Compute the 8-bit neighbor mask for a cell at (x, y) by direct material
+ * string comparison. Unlike `computeNeighborMask`, this does not look up
+ * tilesets — it simply checks whether each neighbor's terrain string equals
+ * `materialKey`.
+ *
+ * Use this when a single layer contains multiple materials and autotile
+ * borders should form between different materials.
+ *
+ * @param grid - The 2D cell grid (indexed as grid[y][x]).
+ * @param x - Column index of the target cell.
+ * @param y - Row index of the target cell.
+ * @param width - Grid width in cells.
+ * @param height - Grid height in cells.
+ * @param materialKey - The material string to compare neighbors against.
+ * @param options - Optional configuration for OOB behavior.
+ * @returns An 8-bit neighbor mask with bits set for matching neighbors.
+ */
+export function computeNeighborMaskByMaterial(
+  grid: Cell[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  materialKey: string,
+  options?: NeighborMaskOptions,
+): number {
+  const oobMatches = options?.outOfBoundsMatches ?? true;
+  let mask = 0;
+
+  for (const [dx, dy, bit] of NEIGHBOR_OFFSETS) {
+    const nx = x + dx;
+    const ny = y + dy;
+
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+      if (oobMatches) mask |= bit;
+      continue;
+    }
+
+    if (grid[ny][nx].terrain === materialKey) mask |= bit;
+  }
+
+  return mask;
+}
+
+/**
+ * Compute the 8-bit neighbor mask for a cell at (x, y) using render-priority
+ * comparison. A neighbor "matches" (bit set) when its material's
+ * `renderPriority` is **less than or equal to** the current cell's priority.
+ *
+ * This means lower-priority materials (like deep_water with priority 1) are
+ * treated as matching when computing the mask for a higher-priority material
+ * (like water with priority 5). The result is that water on deep_water shows
+ * as SOLID rather than ISOLATED.
+ *
+ * Falls back to exact string comparison when a material is not found in the
+ * lookup map.
+ *
+ * @param grid - The 2D cell grid (indexed as grid[y][x]).
+ * @param x - Column index of the target cell.
+ * @param y - Row index of the target cell.
+ * @param width - Grid width in cells.
+ * @param height - Grid height in cells.
+ * @param currentPriority - The renderPriority of the cell being evaluated.
+ * @param materials - Material lookup map for priority resolution.
+ * @param options - Optional configuration for OOB behavior.
+ * @returns An 8-bit neighbor mask with bits set for matching neighbors.
+ */
+export function computeNeighborMaskByPriority(
+  grid: Cell[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  currentPriority: number,
+  materials: ReadonlyMap<string, MaterialInfo>,
+  options?: NeighborMaskOptions,
+): number {
+  const oobMatches = options?.outOfBoundsMatches ?? true;
+  let mask = 0;
+
+  for (const [dx, dy, bit] of NEIGHBOR_OFFSETS) {
+    const nx = x + dx;
+    const ny = y + dy;
+
+    if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+      if (oobMatches) mask |= bit;
+      continue;
+    }
+
+    const neighborTerrain = grid[ny][nx].terrain;
+    const neighborMat = neighborTerrain ? materials.get(neighborTerrain) : undefined;
+    const neighborPriority = neighborMat?.renderPriority ?? 0;
+
+    if (neighborPriority <= currentPriority) {
       mask |= bit;
     }
   }

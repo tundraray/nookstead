@@ -100,13 +100,30 @@ The parameterized `outOfBoundsMatches` option on `computeNeighborMask` resolves 
 - `MapEditorState` and `MapEditorAction` types reference `EditorCommand`, `EditorLayer`, `TilesetInfo`, and `MaterialInfo` -- all of which move to map-lib. The state and action types themselves should also move to map-lib since they are pure data types with no React dependency (React `Dispatch<MapEditorAction>` is parameterized by the action type but does not require the action type to import React).
 - Apply the same JSDoc documentation standards visible in the existing `core/autotile.ts` to all new modules.
 
+## Amendments
+
+### 2026-02-21: Single-Layer Material Resolver Pivot
+
+The original material pipeline design (design-013) specified a multi-layer `resolvePaint` that creates transition layers via `createTransitionLayer()` when adjacent materials differ. This approach has been superseded by a **single-layer baked-tile architecture** documented in [design-014-single-layer-material-resolver.md](../design/design-014-single-layer-material-resolver.md).
+
+**Key changes from the original design:**
+- `resolvePaint` simplified to a pure grid-update utility (no layer creation)
+- `createTransitionLayer` function removed
+- `PaintResult.updatedLayers` field removed
+- `ResolvePaintOptions.layers` and `ResolvePaintOptions.transitionMap` fields removed
+- Editor state/action rename: `activeTerrainKey` -> `activeMaterialKey`, `SET_TERRAIN` -> `SET_MATERIAL`
+- `MaterialInfo` extended with optional `baseTilesetKey` for palette swatch lookup
+
+**Rationale:** The project uses Tiled Terrain Sets (baked tile atlas) where a single tile already contains all necessary biome transitions. Creating new layers per transition is architecturally wrong for this workflow. Paint operations target the active layer only; `recomputeAutotileLayers` handles the bitmask recomputation across all layers for undo/redo correctness.
+
 ## Related Information
 
 - [ADR-0006 / adr-006-map-editor-architecture.md](adr-006-map-editor-architecture.md) -- Established the three-package architecture (map-lib, map-renderer, db) and zero-build pattern
 - [ADR-0009 / ADR-0009-tileset-management-architecture.md](ADR-0009-tileset-management-architecture.md) -- Database-driven tilesets and materials with `fromMaterialId`/`toMaterialId` foreign keys
 - [design-007-map-editor.md](../design/design-007-map-editor.md) -- Original map editor design document
 - [design-011-tileset-management.md](../design/design-011-tileset-management.md) -- Tileset management design
-- [design-013-map-lib-extraction.md](../design/design-013-map-lib-extraction.md) -- Companion Design Doc with implementation details
+- [design-013-map-lib-extraction.md](../design/design-013-map-lib-extraction.md) -- Original companion Design Doc (multi-layer material resolver -- **superseded** by design-014)
+- [design-014-single-layer-material-resolver.md](../design/design-014-single-layer-material-resolver.md) -- Single-layer material resolver and editor material pivot Design Doc
 
 ## References
 

@@ -26,10 +26,10 @@ export function applyDeltas(
   direction: 'forward' | 'backward',
 ): MapEditorState {
   // Create shallow copies for immutable update
-  const newGrid = state.grid.map((row) => [...row]);
+  const newGrid = state.grid.map((row: typeof state.grid[0]) => [...row]);
   const newLayers = state.layers.map((layer) => ({
     ...layer,
-    frames: layer.frames.map((row) => [...row]),
+    frames: layer.frames.map((row: number[]) => [...row]),
   }));
 
   for (const delta of deltas) {
@@ -60,7 +60,7 @@ export function applyDeltas(
     newGrid,
     newLayers,
     affectedCells,
-    state.tilesets,
+    state.materials,
   );
 
   // Recompute walkability for the entire grid

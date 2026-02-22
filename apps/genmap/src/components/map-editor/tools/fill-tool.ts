@@ -13,11 +13,13 @@ export function createFillTool(
 ): ToolHandlers {
   return {
     onMouseDown(tile: { x: number; y: number }) {
+      if (!state.materials.has(state.activeMaterialKey)) return;
+
       const deltas = floodFill(
         state.grid,
         tile.x,
         tile.y,
-        state.activeTerrainKey,
+        state.activeMaterialKey,
         state.width,
         state.height,
         state.activeLayerIndex,

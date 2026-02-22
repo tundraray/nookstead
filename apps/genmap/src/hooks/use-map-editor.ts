@@ -13,11 +13,15 @@ import type {
   PlacedObject,
   ObjectLayer,
 } from '@nookstead/map-lib';
+import {
+  recomputeAutotileLayers,
+} from '@nookstead/map-lib';
 
 const DEFAULT_WIDTH = 32;
 const DEFAULT_HEIGHT = 32;
 const DEFAULT_TERRAIN = 'deep_water' as const;
 const DEFAULT_TERRAIN_KEY = 'terrain-01';
+const DEFAULT_MATERIAL_KEY = 'deep_water';
 const DEFAULT_LAYER_NAME = 'ground';
 
 /** Maximum number of commands in the undo stack. */
@@ -105,7 +109,7 @@ function createInitialState(): MapEditorState {
     materials: new Map(),
     activeLayerIndex: 0,
     activeTool: 'brush',
-    activeTerrainKey: DEFAULT_TERRAIN_KEY,
+    activeMaterialKey: DEFAULT_MATERIAL_KEY,
     undoStack: [],
     redoStack: [],
     metadata: {},
@@ -230,7 +234,10 @@ function normalizeLayer(
     terrainKey: (l.terrainKey as string) || DEFAULT_TERRAIN_KEY,
     visible: l.visible !== undefined ? (l.visible as boolean) : true,
     opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
-    frames: (l.frames as number[][]) || createEmptyFrames(width, height),
+    frames:
+      Array.isArray(l.frames) && (l.frames as number[][]).length === height
+        ? (l.frames as number[][])
+        : createEmptyFrames(width, height),
   } as EditorLayer;
 }
 
@@ -256,8 +263,8 @@ export function mapEditorReducer(
     case 'SET_TOOL':
       return { ...state, activeTool: action.tool };
 
-    case 'SET_TERRAIN':
-      return { ...state, activeTerrainKey: action.terrainKey };
+    case 'SET_MATERIAL':
+      return { ...state, activeMaterialKey: action.materialKey };
 
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerIndex: action.index };
@@ -269,6 +276,21 @@ export function mapEditorReducer(
         map.width,
         map.height
       );
+
+      // Full autotile recompute for all cells
+      const allCells: { x: number; y: number }[] = [];
+      for (let y = 0; y < map.height; y++) {
+        for (let x = 0; x < map.width; x++) {
+          allCells.push({ x, y });
+        }
+      }
+      const computedLayers = recomputeAutotileLayers(
+        map.grid,
+        editorLayers,
+        allCells,
+        state.materials,
+      );
+
       return {
         ...state,
         mapId: map.id,
@@ -278,7 +300,7 @@ export function mapEditorReducer(
         height: map.height,
         seed: map.seed ?? 0,
         grid: map.grid,
-        layers: editorLayers,
+        layers: computedLayers,
         walkable: map.walkable,
         metadata: (map.metadata as Record<string, string>) ?? {},
         activeLayerIndex: 0,
@@ -616,8 +638,8 @@ export function useMapEditor() {
     []
   );
 
-  const setTerrain = useCallback(
-    (terrainKey: string) => dispatch({ type: 'SET_TERRAIN', terrainKey }),
+  const setMaterial = useCallback(
+    (materialKey: string) => dispatch({ type: 'SET_MATERIAL', materialKey }),
     []
   );
 
@@ -724,7 +746,7 @@ export function useMapEditor() {
     state,
     dispatch,
     setTool,
-    setTerrain,
+    setMaterial,
     setActiveLayer,
     loadMap,
     save,

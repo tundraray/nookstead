@@ -9,24 +9,17 @@ export interface TilesetImagesResult {
   totalCount: number;
 }
 
-/** Shape of a tileset record returned by GET /api/tilesets. */
-interface TilesetApiRecord {
-  key: string;
-  s3Url: string;
-}
-
 /**
- * Loads tileset images from the API using presigned S3 URLs.
+ * Loads tileset images from presigned S3 URLs.
  *
- * Fetches the tileset list from GET /api/tilesets, then loads each tileset's
- * image via its presigned S3 URL. Returns a Map<string, HTMLImageElement>
- * keyed by tileset.key (e.g., 'terrain-01'), maintaining full backward
- * compatibility with canvas-renderer.ts which uses tilesetImages.get(layer.terrainKey).
+ * Accepts a list of tilesets with keys and signed URLs, then loads each image.
+ * Returns a Map<string, HTMLImageElement> keyed by tileset.key (e.g., 'terrain-01').
  *
- * Presigned URLs expire after ~1 hour. For the development workflow (internal tool),
- * refreshing the page will fetch new presigned URLs.
+ * When `tilesets` is null/undefined, the hook stays in loading state (waiting for data).
  */
-export function useTilesetImages(): TilesetImagesResult {
+export function useTilesetImages(
+  tilesets: { key: string; s3Url: string }[] | null | undefined,
+): TilesetImagesResult {
   const [images, setImages] = useState<Map<string, HTMLImageElement>>(
     () => new Map()
   );
@@ -35,73 +28,54 @@ export function useTilesetImages(): TilesetImagesResult {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    if (!tilesets) return;
+
     let cancelled = false;
 
-    async function loadImages() {
-      try {
-        const res = await fetch('/api/tilesets');
-        if (!res.ok) {
-          console.warn(
-            `[TilesetImages] Failed to fetch tilesets: ${res.status}`
-          );
-          if (!cancelled) setIsLoading(false);
-          return;
-        }
+    const total = tilesets.length;
+    setTotalCount(total);
 
-        const tilesets: TilesetApiRecord[] = await res.json();
-        if (cancelled) return;
+    if (total === 0) {
+      setIsLoading(false);
+      return;
+    }
 
-        const total = tilesets.length;
-        setTotalCount(total);
+    let loaded = 0;
+    const imageMap = new Map<string, HTMLImageElement>();
 
-        if (total === 0) {
+    function checkComplete() {
+      loaded++;
+      if (!cancelled) {
+        setLoadedCount(loaded);
+        if (loaded >= total) {
+          setImages(new Map(imageMap));
           setIsLoading(false);
-          return;
         }
-
-        let loaded = 0;
-        const imageMap = new Map<string, HTMLImageElement>();
-
-        function checkComplete() {
-          loaded++;
-          if (!cancelled) {
-            setLoadedCount(loaded);
-            if (loaded >= total) {
-              setImages(new Map(imageMap));
-              setIsLoading(false);
-            }
-          }
-        }
-
-        for (const tileset of tilesets) {
-          const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.src = tileset.s3Url;
-          img.onload = () => {
-            if (!cancelled) {
-              imageMap.set(tileset.key, img);
-            }
-            checkComplete();
-          };
-          img.onerror = () => {
-            console.warn(
-              `[TilesetImages] Failed to load tileset: ${tileset.key}`
-            );
-            checkComplete();
-          };
-        }
-      } catch (err) {
-        console.warn('[TilesetImages] Error loading tileset images:', err);
-        if (!cancelled) setIsLoading(false);
       }
     }
 
-    loadImages();
+    for (const tileset of tilesets) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = tileset.s3Url;
+      img.onload = () => {
+        if (!cancelled) {
+          imageMap.set(tileset.key, img);
+        }
+        checkComplete();
+      };
+      img.onerror = () => {
+        console.warn(
+          `[TilesetImages] Failed to load tileset: ${tileset.key}`
+        );
+        checkComplete();
+      };
+    }
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [tilesets]);
 
   return { images, isLoading, loadedCount, totalCount };
 }

@@ -1,12 +1,17 @@
 import type { Dispatch } from 'react';
 import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
-import { bresenhamLine, PaintCommand } from '@nookstead/map-lib';
+import { bresenhamLine, PaintCommand, resolvePaint } from '@nookstead/map-lib';
+import type { Cell } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
 
 /**
  * Creates brush tool handlers.
  * Click to paint a single cell; drag to paint along a Bresenham line path.
  * Collects CellDelta entries and dispatches a PaintCommand on mouse up.
+ *
+ * Uses resolvePaint() per cell so material validation and grid update
+ * follow the canonical pipeline. currentGrid tracks the accumulated grid
+ * state during a stroke; state.grid provides oldTerrain for correct undo.
  */
 export function createBrushTool(
   state: MapEditorState,
@@ -14,17 +19,30 @@ export function createBrushTool(
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
+  let currentGrid: Cell[][] = state.grid;
   const paintedCells = new Map<string, CellDelta>();
 
   function tryPaint(x: number, y: number): void {
-    // Bounds check
-    if (x < 0 || x >= state.width || y < 0 || y >= state.height) return;
-
     const key = `${x},${y}`;
     if (paintedCells.has(key)) return;
 
-    const oldTerrain = state.grid[y][x].terrain;
-    if (oldTerrain === state.activeTerrainKey) return;
+    // Same-terrain check against accumulated grid (not original -- supports multi-material strokes)
+    if (currentGrid[y]?.[x]?.terrain === state.activeMaterialKey) return;
+
+    const result = resolvePaint({
+      grid: currentGrid,
+      x,
+      y,
+      materialKey: state.activeMaterialKey,
+      width: state.width,
+      height: state.height,
+      materials: state.materials,
+    });
+
+    if (result.affectedCells.length === 0) return;
+
+    // Advance accumulated grid for next cell in stroke
+    currentGrid = result.updatedGrid;
 
     const layerIndex = state.activeLayerIndex;
     const oldFrame =
@@ -36,10 +54,11 @@ export function createBrushTool(
       layerIndex,
       x,
       y,
-      oldTerrain,
-      newTerrain: state.activeTerrainKey,
+      // oldTerrain from ORIGINAL state.grid (not currentGrid) for correct undo
+      oldTerrain: state.grid[y][x].terrain,
+      newTerrain: state.activeMaterialKey,
       oldFrame,
-      newFrame: 0, // Will be recalculated by autotile (Task 17)
+      newFrame: 0, // Overridden by recomputeAutotileLayers in applyDeltas
     });
   }
 
@@ -47,6 +66,7 @@ export function createBrushTool(
     onMouseDown(tile: { x: number; y: number }) {
       isDrawing = true;
       paintedCells.clear();
+      currentGrid = state.grid; // Reset to original grid at stroke start
       lastTile = tile;
       tryPaint(tile.x, tile.y);
     },

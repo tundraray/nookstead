@@ -8,7 +8,8 @@ import {
   loadCustomSkinTexture,
 } from '../characters/custom-skin-loader';
 import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
-import { loadMaterialCache } from '../services/material-cache';
+import { loadMaterialCacheFromData } from '../services/material-cache';
+import type { MaterialProperties } from '@nookstead/map-lib';
 
 interface TilesetMeta {
   key: string;
@@ -16,11 +17,16 @@ interface TilesetMeta {
   s3Url: string;
 }
 
-async function fetchTilesetMetadata(): Promise<TilesetMeta[]> {
-  const res = await fetch('/api/tilesets');
+interface GameData {
+  materials: MaterialProperties[];
+  tilesets: TilesetMeta[];
+}
+
+async function fetchGameData(): Promise<GameData> {
+  const res = await fetch('/api/game-data');
   if (!res.ok) {
     throw new Error(
-      `[Preloader] Failed to fetch tileset metadata: ${res.status} ${res.statusText}`
+      `[Preloader] Failed to fetch game data: ${res.status} ${res.statusText}`
     );
   }
   return res.json();
@@ -57,16 +63,14 @@ export class Preloader extends Scene {
   }
 
   async create() {
-    // Fetch tileset metadata from API and pre-load material cache in parallel
+    // Fetch combined game data (materials + tilesets with signed URLs)
     let tilesets: TilesetMeta[] = [];
     try {
-      const [fetchedTilesets] = await Promise.all([
-        fetchTilesetMetadata(),
-        loadMaterialCache(),
-      ]);
-      tilesets = fetchedTilesets;
+      const gameData = await fetchGameData();
+      loadMaterialCacheFromData(gameData.materials);
+      tilesets = gameData.tilesets;
     } catch (err) {
-      console.error('[Preloader] Failed to load tileset metadata:', err);
+      console.error('[Preloader] Failed to load game data:', err);
     }
 
     // Queue tileset spritesheets from S3 presigned URLs

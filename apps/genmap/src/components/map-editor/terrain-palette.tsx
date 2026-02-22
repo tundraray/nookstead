@@ -8,84 +8,43 @@ import {
   useMemo,
   type Dispatch,
 } from 'react';
-import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
+import {
+  SOLID_FRAME, FRAMES_PER_TERRAIN,
+  type MapEditorState, type MapEditorAction, type MaterialInfo,
+} from '@nookstead/map-lib';
 
-/**
- * Minimal tileset shape needed by the terrain palette.
- * Compatible with TilesetWithTags from useTilesets hook.
- */
-export interface PaletteTileset {
-  id: string;
-  name: string;
-  key: string;
-  tags: string[];
-}
+/** Tileset layout: 12 cols x 4 rows = 48 frames. */
+const TILESET_COLS = FRAMES_PER_TERRAIN / 4;
 
-/**
- * Frame index for the solid (fully-filled) autotile frame.
- * This is the frame used for palette swatch previews.
- * Previously imported as SOLID_FRAME from '@nookstead/map-lib'.
- */
-const SOLID_FRAME_INDEX = 47;
-
-/** Format a terrain name for display (capitalize each word). */
-function formatTerrainName(name: string): string {
+/** Format a material name for display (capitalize each word). */
+function formatMaterialName(name: string): string {
   return name
     .split('_')
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ');
 }
 
-/**
- * Group tilesets by their first tag.
- * Tilesets without tags go into an 'Uncategorized' group.
- */
-function groupTilesetsByTag(
-  tilesets: PaletteTileset[]
-): Array<{ name: string; tilesets: PaletteTileset[] }> {
-  const groupMap = new Map<string, PaletteTileset[]>();
-
-  for (const tileset of tilesets) {
-    const groupName =
-      tileset.tags.length > 0 ? tileset.tags[0] : 'uncategorized';
-    const existing = groupMap.get(groupName);
-    if (existing) {
-      existing.push(tileset);
-    } else {
-      groupMap.set(groupName, [tileset]);
-    }
-  }
-
-  return Array.from(groupMap.entries()).map(([name, items]) => ({
-    name,
-    tilesets: items,
-  }));
-}
-
-/** Capitalize the first letter of a string. */
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-interface TerrainItemProps {
-  terrainKey: string;
+interface MaterialItemProps {
+  materialKey: string;
   displayName: string;
+  color: string;
   isActive: boolean;
   tilesetImage: HTMLImageElement | undefined;
   onClick: () => void;
 }
 
 /**
- * A single terrain item with a canvas swatch preview and name.
- * Memoized to avoid re-renders when other terrains change.
+ * A single material item with a canvas swatch preview and name.
+ * Memoized to avoid re-renders when other materials change.
  */
-const TerrainItem = memo(function TerrainItem({
-  terrainKey,
+const MaterialItem = memo(function MaterialItem({
+  materialKey,
   displayName,
+  color,
   isActive,
   tilesetImage,
   onClick,
-}: TerrainItemProps) {
+}: MaterialItemProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Draw the solid frame swatch into the mini canvas
@@ -99,15 +58,15 @@ const TerrainItem = memo(function TerrainItem({
 
     if (tilesetImage) {
       ctx.imageSmoothingEnabled = false;
-      const srcX = (SOLID_FRAME_INDEX % 12) * 16;
-      const srcY = Math.floor(SOLID_FRAME_INDEX / 12) * 16;
+      const srcX = (SOLID_FRAME % TILESET_COLS) * 16;
+      const srcY = Math.floor(SOLID_FRAME / TILESET_COLS) * 16;
       ctx.drawImage(tilesetImage, srcX, srcY, 16, 16, 0, 0, 24, 24);
     } else {
-      // Placeholder gray square when image is not loaded
-      ctx.fillStyle = '#4a5568';
+      // Use material color as swatch fallback
+      ctx.fillStyle = color || '#4a5568';
       ctx.fillRect(0, 0, 24, 24);
     }
-  }, [tilesetImage]);
+  }, [tilesetImage, color]);
 
   return (
     <button
@@ -126,10 +85,10 @@ const TerrainItem = memo(function TerrainItem({
       />
       <div className="min-w-0 flex-1">
         <div className="text-xs font-medium truncate">
-          {formatTerrainName(displayName)}
+          {formatMaterialName(displayName)}
         </div>
         <div className="text-[10px] text-muted-foreground truncate">
-          {terrainKey}
+          {materialKey}
         </div>
       </div>
     </button>
@@ -140,76 +99,48 @@ interface TerrainPaletteProps {
   state: MapEditorState;
   dispatch: Dispatch<MapEditorAction>;
   tilesetImages: Map<string, HTMLImageElement>;
-  tilesets: PaletteTileset[];
 }
 
 /**
- * Terrain palette sidebar panel.
- * Lists tilesets organized into collapsible groups by tag.
- * Clicking a terrain dispatches SET_TERRAIN to make it the active paint terrain.
+ * Material palette sidebar panel.
+ * Lists materials from state.materials with swatch previews via baseTilesetKey.
+ * Clicking a material dispatches SET_MATERIAL to make it the active paint material.
  */
 export function TerrainPalette({
   state,
   dispatch,
   tilesetImages,
-  tilesets,
 }: TerrainPaletteProps) {
-  const groups = useMemo(() => groupTilesetsByTag(tilesets), [tilesets]);
-
-  // All groups open by default
-  const [openGroups, setOpenGroups] = useState<Set<string>>(
-    () => new Set(groups.map((g) => g.name))
-  );
-
-  // Update open groups when groups change (new tilesets loaded)
-  useEffect(() => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      for (const g of groups) {
-        next.add(g.name);
-      }
-      return next;
-    });
-  }, [groups]);
+  // Build sorted materials list from state.materials
+  const materialList = useMemo(() => {
+    const list: MaterialInfo[] = [];
+    for (const mat of state.materials.values()) {
+      list.push(mat);
+    }
+    // Sort by renderPriority ascending, then by key
+    list.sort((a, b) => a.renderPriority - b.renderPriority || a.key.localeCompare(b.key));
+    return list;
+  }, [state.materials]);
 
   // Search/filter state
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredGroups = useMemo(() => {
-    if (!searchQuery.trim()) return groups;
+  const filteredMaterials = useMemo(() => {
+    if (!searchQuery.trim()) return materialList;
     const query = searchQuery.toLowerCase();
-    return groups
-      .map((group) => ({
-        ...group,
-        tilesets: group.tilesets.filter(
-          (t) =>
-            t.name.toLowerCase().includes(query) ||
-            t.key.toLowerCase().includes(query)
-        ),
-      }))
-      .filter((group) => group.tilesets.length > 0);
-  }, [groups, searchQuery]);
+    return materialList.filter(
+      (m) => m.key.toLowerCase().includes(query)
+    );
+  }, [materialList, searchQuery]);
 
-  function toggleGroup(groupName: string) {
-    setOpenGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupName)) {
-        next.delete(groupName);
-      } else {
-        next.add(groupName);
-      }
-      return next;
-    });
+  function handleSelectMaterial(materialKey: string) {
+    dispatch({ type: 'SET_MATERIAL', materialKey });
   }
 
-  function handleSelectTerrain(terrainKey: string) {
-    dispatch({ type: 'SET_TERRAIN', terrainKey });
-  }
-
-  if (tilesets.length === 0) {
+  if (state.materials.size === 0) {
     return (
       <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-        Loading tilesets...
+        Loading materials...
       </div>
     );
   }
@@ -220,46 +151,30 @@ export function TerrainPalette({
       <div className="pb-1">
         <input
           type="text"
-          placeholder="Filter tilesets..."
+          placeholder="Filter materials..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="w-full px-2 py-1 text-xs rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </div>
 
-      {filteredGroups.map((group) => {
-        const isOpen = openGroups.has(group.name);
-        return (
-          <div key={group.name}>
-            <button
-              type="button"
-              onClick={() => toggleGroup(group.name)}
-              className="flex items-center justify-between w-full px-1 py-1 text-xs font-semibold hover:bg-accent rounded transition-colors"
-            >
-              <span>
-                {capitalize(group.name)} ({group.tilesets.length})
-              </span>
-              <span className="text-muted-foreground">
-                {isOpen ? '\u25B4' : '\u25BE'}
-              </span>
-            </button>
-            {isOpen && (
-              <div className="space-y-0.5 ml-1">
-                {group.tilesets.map((tileset) => (
-                  <TerrainItem
-                    key={tileset.key}
-                    terrainKey={tileset.key}
-                    displayName={tileset.name}
-                    isActive={state.activeTerrainKey === tileset.key}
-                    tilesetImage={tilesetImages.get(tileset.key)}
-                    onClick={() => handleSelectTerrain(tileset.key)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+      <div className="space-y-0.5">
+        {filteredMaterials.map((material) => (
+          <MaterialItem
+            key={material.key}
+            materialKey={material.key}
+            displayName={material.key}
+            color={material.color}
+            isActive={state.activeMaterialKey === material.key}
+            tilesetImage={
+              material.baseTilesetKey
+                ? tilesetImages.get(material.baseTilesetKey)
+                : undefined
+            }
+            onClick={() => handleSelectMaterial(material.key)}
+          />
+        ))}
+      </div>
     </div>
   );
 }

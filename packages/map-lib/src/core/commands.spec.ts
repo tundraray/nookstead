@@ -32,7 +32,7 @@ function makeState(terrain: string): MapEditorState {
     materials: new Map(),
     activeLayerIndex: 0,
     activeTool: 'brush',
-    activeTerrainKey: terrain,
+    activeMaterialKey: terrain,
     undoStack: [],
     redoStack: [],
     metadata: {},

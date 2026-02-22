@@ -1,21 +1,21 @@
 import {
   buildTransitionMap,
   resolvePaint,
-  createTransitionLayer,
 } from './material-resolver';
 import type { TilesetInfo, MaterialInfo } from '../types/material-types';
-import type { EditorLayer } from '../types/editor-types';
 import type { Cell } from '@nookstead/shared';
 
 // --- Test fixtures ---
 
 const grassMaterial: MaterialInfo = {
   key: 'grass',
+  color: '#2d6a4f',
   walkable: true,
   renderPriority: 0,
 };
 const sandMaterial: MaterialInfo = {
   key: 'sand',
+  color: '#e9c46a',
   walkable: true,
   renderPriority: 1,
 };
@@ -25,15 +25,12 @@ const materials = new Map<string, MaterialInfo>([
   ['sand', sandMaterial],
 ]);
 
-/**
- * Transition tileset: fromMaterialId and toMaterialId are material keys
- * (caller must pre-resolve UUIDs to keys before calling buildTransitionMap).
- */
+/** Transition tileset with resolved material keys. */
 const transitionTileset: TilesetInfo = {
   key: 'grass-to-sand',
   name: 'Grass to Sand',
-  fromMaterialId: 'grass',
-  toMaterialId: 'sand',
+  fromMaterialKey: 'grass',
+  toMaterialKey: 'sand',
 };
 
 // --- Helpers ---
@@ -45,17 +42,6 @@ function makeGrid(w: number, h: number, terrain: string): Cell[][] {
       () => ({ terrain, elevation: 0, meta: {} } as Cell),
     ),
   );
-}
-
-function makeLayer(terrainKey: string, w: number, h: number): EditorLayer {
-  return {
-    id: 'l1',
-    name: 'Layer',
-    terrainKey,
-    visible: true,
-    opacity: 1,
-    frames: Array.from({ length: h }, () => Array(w).fill(0)),
-  };
 }
 
 // --- Tests ---
@@ -73,17 +59,17 @@ describe('buildTransitionMap', () => {
     expect(entry.tilesetName).toBe('Grass to Sand');
   });
 
-  it('should skip tilesets without fromMaterialId', () => {
+  it('should skip tilesets without fromMaterialKey', () => {
     const tilesets: TilesetInfo[] = [
-      { key: 'plain', name: 'Plain', toMaterialId: 'sand' },
+      { key: 'plain', name: 'Plain', toMaterialKey: 'sand' },
     ];
     const map = buildTransitionMap(tilesets, materials);
     expect(map.size).toBe(0);
   });
 
-  it('should skip tilesets without toMaterialId', () => {
+  it('should skip tilesets without toMaterialKey', () => {
     const tilesets: TilesetInfo[] = [
-      { key: 'plain', name: 'Plain', fromMaterialId: 'grass' },
+      { key: 'plain', name: 'Plain', fromMaterialKey: 'grass' },
     ];
     const map = buildTransitionMap(tilesets, materials);
     expect(map.size).toBe(0);
@@ -94,8 +80,8 @@ describe('buildTransitionMap', () => {
       {
         key: 'unknown-transition',
         name: 'Unknown',
-        fromMaterialId: 'grass',
-        toMaterialId: 'lava',
+        fromMaterialKey: 'grass',
+        toMaterialKey: 'lava',
       },
     ];
     const map = buildTransitionMap(tilesets, materials);
@@ -105,6 +91,7 @@ describe('buildTransitionMap', () => {
   it('should handle multiple tilesets', () => {
     const waterMaterial: MaterialInfo = {
       key: 'water',
+      color: '#219ebc',
       walkable: false,
       renderPriority: 2,
     };
@@ -114,8 +101,8 @@ describe('buildTransitionMap', () => {
       {
         key: 'grass-to-water',
         name: 'Grass to Water',
-        fromMaterialId: 'grass',
-        toMaterialId: 'water',
+        fromMaterialKey: 'grass',
+        toMaterialKey: 'water',
       },
     ];
     const map = buildTransitionMap(tilesets, extMaterials);
@@ -126,9 +113,7 @@ describe('buildTransitionMap', () => {
 });
 
 describe('resolvePaint', () => {
-  const transitionMap = buildTransitionMap([transitionTileset], materials);
-
-  it('should set grid[y][x].terrain to materialKey (AC3)', () => {
+  it('should set grid[y][x].terrain to materialKey', () => {
     const grid = makeGrid(3, 3, 'grass');
     const result = resolvePaint({
       grid,
@@ -137,8 +122,6 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
     expect(result.updatedGrid[1][1].terrain).toBe('sand');
@@ -153,14 +136,12 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
     expect(grid[1][1].terrain).toBe('grass');
   });
 
-  it('should include painted cell and all in-bounds neighbors in affectedCells (AC3)', () => {
+  it('should include painted cell and all in-bounds neighbors in affectedCells', () => {
     const grid = makeGrid(3, 3, 'grass');
     const result = resolvePaint({
       grid,
@@ -169,8 +150,6 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
     // Center cell + 8 neighbors = 9 cells
@@ -180,17 +159,8 @@ describe('resolvePaint', () => {
     );
   });
 
-  it('should return warning for missing transition (AC3)', () => {
+  it('should NOT include updatedLayers in result', () => {
     const grid = makeGrid(3, 3, 'grass');
-    // Place a 'water' neighbor that has no transition tileset
-    grid[1][0] = { terrain: 'water', elevation: 0, meta: {} } as Cell;
-    const waterMaterials = new Map<string, MaterialInfo>([
-      ...materials,
-      [
-        'water',
-        { key: 'water', walkable: false, renderPriority: 2 },
-      ],
-    ]);
     const result = resolvePaint({
       grid,
       x: 1,
@@ -198,21 +168,13 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
-      materials: waterMaterials,
+      materials,
     });
-    // 'sand' + 'water' has no transition tileset, should produce a warning
-    expect(result.warnings.length).toBeGreaterThan(0);
-    const waterWarning = result.warnings.find(
-      (w) => w.toMaterial === 'water' || w.fromMaterial === 'water',
-    );
-    expect(waterWarning).toBeDefined();
+    expect('updatedLayers' in result).toBe(false);
   });
 
   it('should return unchanged state for out-of-bounds coordinates', () => {
     const grid = makeGrid(3, 3, 'grass');
-    const layers = [makeLayer('grass', 3, 3)];
     const result = resolvePaint({
       grid,
       x: 10,
@@ -220,8 +182,6 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers,
-      transitionMap,
       materials,
     });
     // Grid reference should be the same object (unchanged)
@@ -231,7 +191,6 @@ describe('resolvePaint', () => {
 
   it('should return unchanged state for negative coordinates', () => {
     const grid = makeGrid(3, 3, 'grass');
-    const layers = [makeLayer('grass', 3, 3)];
     const result = resolvePaint({
       grid,
       x: -1,
@@ -239,8 +198,6 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers,
-      transitionMap,
       materials,
     });
     expect(result.updatedGrid).toBe(grid);
@@ -256,8 +213,6 @@ describe('resolvePaint', () => {
       materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
     // Corner cell (0,0): self + 3 in-bounds neighbors = 4 affected cells
@@ -273,8 +228,6 @@ describe('resolvePaint', () => {
       materialKey: 'lava',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
     expect(result.warnings.length).toBe(1);
@@ -282,73 +235,17 @@ describe('resolvePaint', () => {
     expect(result.affectedCells).toHaveLength(0);
   });
 
-  it('should create a transition layer when painting a neighbor with a known transition', () => {
-    // Fill grid with grass, but put sand at (0,1) so painting (1,1) as grass
-    // has a sand neighbor. The transition grass:sand or sand:grass should be found.
-    const grid = makeGrid(3, 3, 'sand');
-    grid[1][1] = { terrain: 'grass', elevation: 0, meta: {} } as Cell;
+  it('should return empty warnings for valid paint on homogeneous grid', () => {
+    const grid = makeGrid(3, 3, 'grass');
     const result = resolvePaint({
       grid,
       x: 1,
       y: 1,
-      materialKey: 'grass',
+      materialKey: 'sand',
       width: 3,
       height: 3,
-      layers: [makeLayer('grass', 3, 3)],
-      transitionMap,
       materials,
     });
-    // Should have created a transition layer for grass-to-sand
-    const transLayer = result.updatedLayers.find(
-      (l) => l.terrainKey === 'grass-to-sand',
-    );
-    expect(transLayer).toBeDefined();
-    expect(transLayer!.frames.length).toBe(3);
-    expect(transLayer!.frames[0].length).toBe(3);
-  });
-
-  it('should not duplicate transition layer if it already exists', () => {
-    const grid = makeGrid(3, 3, 'sand');
-    grid[1][1] = { terrain: 'grass', elevation: 0, meta: {} } as Cell;
-    const existingTransLayer = createTransitionLayer(
-      'grass-to-sand',
-      'Grass to Sand',
-      3,
-      3,
-    );
-    const result = resolvePaint({
-      grid,
-      x: 1,
-      y: 1,
-      materialKey: 'grass',
-      width: 3,
-      height: 3,
-      layers: [makeLayer('grass', 3, 3), existingTransLayer],
-      transitionMap,
-      materials,
-    });
-    const transLayers = result.updatedLayers.filter(
-      (l) => l.terrainKey === 'grass-to-sand',
-    );
-    expect(transLayers.length).toBe(1);
-  });
-});
-
-describe('createTransitionLayer', () => {
-  it('should create an EditorLayer with all frames initialized to 0', () => {
-    const layer = createTransitionLayer('grass-sand', 'Grass to Sand', 3, 2);
-    expect(layer.terrainKey).toBe('grass-sand');
-    expect(layer.name).toBe('Grass to Sand');
-    expect(layer.frames).toHaveLength(2); // height = 2 rows
-    expect(layer.frames[0]).toHaveLength(3); // width = 3 cols
-    expect(layer.frames[0][0]).toBe(0);
-    expect(layer.frames[1][2]).toBe(0);
-    expect(layer.visible).toBe(true);
-    expect(layer.opacity).toBe(1);
-  });
-
-  it('should set id to "transition-{tilesetKey}"', () => {
-    const layer = createTransitionLayer('water-grass', 'Water Grass', 2, 2);
-    expect(layer.id).toBe('transition-water-grass');
+    expect(result.warnings).toHaveLength(0);
   });
 });

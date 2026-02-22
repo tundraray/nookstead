@@ -123,7 +123,7 @@ export interface MapEditorState {
   // Editor UI state
   activeLayerIndex: number;
   activeTool: EditorTool;
-  activeTerrainKey: string;
+  activeMaterialKey: string;
 
   // Undo/redo
   undoStack: EditorCommand[];
@@ -146,7 +146,7 @@ export interface MapEditorState {
 export type MapEditorAction =
   // Tool and selection actions
   | { type: 'SET_TOOL'; tool: EditorTool }
-  | { type: 'SET_TERRAIN'; terrainKey: string }
+  | { type: 'SET_MATERIAL'; materialKey: string }
   | { type: 'SET_ACTIVE_LAYER'; index: number }
 
   // Map data actions
