@@ -1517,7 +1517,7 @@ When a cell uses a logical base tileset (no transition) but has diagonal-only fo
 | fertile-soil_grass | fertile-soil | grass | ts-fertile-soil-grass |
 | soil_grass | soil | grass | ts-soil-grass |
 | wet-soil_grass | wet-soil | grass | ts-wet-soil-grass |
-| tilled-soil_sand | tilled-soil | sand | ts-tilled-soil-sand |
+| tilled-soil_grass | tilled-soil | grass | ts-tilled-soil-grass |
 | deep-water_water | deep-water | water | ts-deep-water-water |
 | deep-sand_sand | deep-sand | sand | ts-deep-sand-sand |
 | sand_water | sand | water | ts-sand-water |
@@ -1536,7 +1536,7 @@ grass -- soil
 grass -- dusty-soil
 grass -- fertile-soil
 grass -- wet-soil
-sand -- tilled-soil
+grass -- tilled-soil
 sand -- deep-sand
 ```
 

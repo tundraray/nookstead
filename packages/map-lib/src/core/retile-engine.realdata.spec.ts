@@ -27,7 +27,7 @@ function makeProdTilesets(): TilesetInfo[] {
     { key: 'grass_water', name: 'grass_water', fromMaterialKey: 'grass', toMaterialKey: 'water' },
     { key: 'fertile-soil_grass', name: 'fertile-soil_grass', fromMaterialKey: 'fertile_soil', toMaterialKey: 'grass' },
     { key: 'wet-soil_grass', name: 'wet-soil_grass', fromMaterialKey: 'watered_soil', toMaterialKey: 'grass' },
-    { key: 'tilled-soil_sand', name: 'tilled-soil_sand', fromMaterialKey: 'tilled_soil', toMaterialKey: 'grass' },
+    { key: 'tilled-soil_grass', name: 'tilled-soil_grass', fromMaterialKey: 'tilled_soil', toMaterialKey: 'grass' },
     { key: 'sand_water', name: 'deep-sand_water', fromMaterialKey: 'deep_sand', toMaterialKey: 'water' },
     { key: 'deep-sand_sand', name: 'deep-sand_sand', fromMaterialKey: 'deep_sand', toMaterialKey: 'sand' },
     { key: 'sand_grass', name: 'sand_grass', fromMaterialKey: 'sand', toMaterialKey: 'grass' },
@@ -46,7 +46,7 @@ function makeProdMaterials(): Map<string, MaterialInfo> {
     ['grass', { key: 'grass', color: '#3bf761', walkable: true, renderPriority: 30, baseTilesetKey: 'grass_water' }],
     ['sand', { key: 'sand', color: '#ffd91a', walkable: true, renderPriority: 40, baseTilesetKey: 'sand_grass' }],
     ['soil', { key: 'soil', color: '#e69f05', walkable: true, renderPriority: 55, baseTilesetKey: 'soil_grass' }],
-    ['tilled_soil', { key: 'tilled_soil', color: '#c29005', walkable: true, renderPriority: 60, baseTilesetKey: 'tilled-soil_sand' }],
+    ['tilled_soil', { key: 'tilled_soil', color: '#c29005', walkable: true, renderPriority: 60, baseTilesetKey: 'tilled-soil_grass' }],
     ['water', { key: 'water', color: '#3b82f6', walkable: false, renderPriority: 10, baseTilesetKey: 'water_grass' }],
     ['watered_soil', { key: 'watered_soil', color: '#a06a46', walkable: true, renderPriority: 65, baseTilesetKey: 'wet-soil_grass' }],
   ]);
@@ -129,8 +129,8 @@ function makeMapGrid(): Cell[][] {
   const grass = () => makeCell('grass');
   return [
     [deepWater(), deepWater(), deepWater(), deepWater(), deepWater()],
-    [deepWater(), deepWater(), water(),     deepWater(), deepWater()],
-    [deepWater(), deepWater(), grass(),     deepWater(), deepWater()],
+    [deepWater(), deepWater(), water(), deepWater(), deepWater()],
+    [deepWater(), deepWater(), grass(), deepWater(), deepWater()],
     [deepWater(), deepWater(), deepWater(), deepWater(), deepWater()],
     [deepWater(), deepWater(), deepWater(), deepWater(), deepWater()],
   ];
@@ -150,8 +150,8 @@ const TRUTH_5X5_FRAMES = [
 
 const TRUTH_5X5_TILESET_KEYS = [
   ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
-  ['deep-water_water', 'deep-water_water', 'water_grass',      'deep-water_water', 'deep-water_water'],
-  ['deep-water_water', 'deep-water_water', 'grass_water',      'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'water_grass', 'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'grass_water', 'deep-water_water', 'deep-water_water'],
   ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
   ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
 ];
@@ -815,7 +815,7 @@ describe('Additional routing/render combinations (real data)', () => {
     //   [1,  1,  1,  1, 1]
     //   [1, 36, 34, 38, 1]
     //   [1, 33, 47, 33, 1]
-    //   [1, 40, 34, 42, 1]
+    //   [1, 42, 34, 40, 1]
     //   [1,  1,  1,  1, 1]
     const W = 5;
     const H = 5;
