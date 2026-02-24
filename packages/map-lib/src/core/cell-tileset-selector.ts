@@ -214,10 +214,13 @@ function resolvePairOrFallback(
 // ---------------------------------------------------------------------------
 
 /**
- * Compute a transition mask relative to a specific target material.
+ * Compute a transition mask relative to a target BG material.
  *
- * Sets bit=0 ONLY where the neighbor IS `targetMaterial`.
- * All other neighbors (own material + other foreign materials) get bit=1.
+ * Sets bit=0 where the neighbor IS the target BG material or is in the
+ * `bgMatchMaterials` set (materials that route to FG through BG, and so
+ * are visually on the "BG side" of the transition).
+ *
+ * All other neighbors (own FG material + unrelated foreign materials) get bit=1.
  */
 function computeTransitionMask(
   grid: Cell[][],
@@ -226,6 +229,7 @@ function computeTransitionMask(
   width: number,
   height: number,
   targetMaterial: string,
+  bgMatchMaterials?: ReadonlySet<string>,
 ): number {
   let mask = 0;
 
@@ -238,9 +242,16 @@ function computeTransitionMask(
       continue;
     }
 
-    if (grid[ny][nx].terrain !== targetMaterial) {
-      mask |= bit;
+    const neighborTerrain = grid[ny][nx].terrain;
+    if (neighborTerrain === targetMaterial) {
+      continue; // bit stays 0 (transition opening toward BG)
     }
+
+    if (bgMatchMaterials && bgMatchMaterials.has(neighborTerrain)) {
+      continue; // Neighbor routes through BG → treat as BG-side (bit stays 0)
+    }
+
+    mask |= bit;
   }
 
   return mask;
@@ -251,8 +262,15 @@ function computeTransitionMask(
  *
  * Selected-mode mask computation (ADR-0011 Decision 8, Design Doc FR5 / AC4):
  * - If `bg === ''` (base mode): use FG-equality mask via `computeNeighborMaskByMaterial`.
- * - If `bg !== ''` (transition mode): start from BG-targeted transition mask
- *   (bit=0 where neighbor IS BG, bit=1 otherwise),
+ *   In engine context (`ownedEdges` provided):
+ *   - Mode B: If any in-bounds cardinal neighbor is foreign → SOLID_FRAME directly.
+ *     (All base-mode cells with foreign cardinals have had their transitions
+ *      handled by bridge edge promotion in RetileEngine; remaining foreign
+ *      cardinals are non-renderable and must show solid.)
+ *   - Mode C: All in-bounds cardinals match FG → FG-equality mask with
+ *     selective diagonal closure via `closeDiagonalMask`, then FRAME_TABLE.
+ * - If `bg !== ''` (transition mode, Mode A): start from BG-targeted transition mask
+ *   (bit=0 where neighbor IS BG or in `bgMatchMaterials`, bit=1 otherwise),
  *   then enforce canonical edge contracts on cardinal foreign edges:
  *   - owned edge with matching contract type (`edge.bg === bg`) -> force open (`bit=0`)
  *   - all other foreign cardinal edges -> force closed (`bit=1`)
@@ -271,6 +289,8 @@ function computeTransitionMask(
  * @param bg - Background material ('' for base mode, non-empty for transition mode).
  * @param orientation - Pair orientation: 'direct', 'reverse', or '' (base).
  * @param ownedEdges - Owned edge contracts for this cell (used for transition-mode cardinal gating).
+ * @param closeDiagonalMask - Bitmask of diagonal bits to force closed in base mode (engine-computed).
+ * @param bgMatchMaterials - Additional materials treated as BG-matching in transition mode.
  * @returns Object with `mask47` (gated mask) and `frameId` (0-47).
  */
 export function computeCellFrame(
@@ -283,6 +303,9 @@ export function computeCellFrame(
   bg = '',
   orientation: 'direct' | 'reverse' | '' = '',
   ownedEdges?: ReadonlyMap<EdgeDirection, OwnedEdgeInfo>,
+  closeDiagonalMask = 0,
+  bgMatchMaterials?: ReadonlySet<string>,
+  closeForeignCardinals = false,
 ): { mask47: number; frameId: number } {
   const hasOwnerContext = ownedEdges !== undefined;
   const edgeContracts = ownedEdges ?? EMPTY_OWNED_EDGES;
@@ -293,22 +316,30 @@ export function computeCellFrame(
     // Base mode: bit=1 where neighbor terrain === fg
     rawMask = computeNeighborMaskByMaterial(grid, x, y, width, height, fg);
     if (hasOwnerContext) {
-      // In engine context, base-mode cells must not open foreign cardinal edges
-      // on the non-owner side of a canonical contract.
-      rawMask = closeForeignCardinalBits(rawMask, grid, x, y, width, height, fg);
-      // Close foreign diagonal bits ONLY when the cell has no foreign cardinal
-      // neighbors (i.e., all 4 cardinals match FG). This prevents corner indent
-      // artifacts on diagonal cells whose only foreign contact is diagonal,
-      // while preserving diagonal bits for cells that DO have cardinal transitions.
-      // (design-015-neighbor-repaint-policy-v2 §5 Step 4.8)
-      if (!hasForeignCardinalNeighbor(grid, x, y, width, height, fg)) {
-        rawMask = closeForeignDiagonalBits(rawMask, grid, x, y, width, height, fg);
+      if (closeForeignCardinals) {
+        // Mode B-base: Cell has a standalone base tileset but foreign cardinals.
+        // Close foreign cardinal bits (treat them as matching) so the cell
+        // computes a proper corner/edge frame instead of isolated/cross.
+        // Then apply diagonal closure as usual.
+        rawMask = closeForeignCardinalBits(rawMask, grid, x, y, width, height, fg);
+        rawMask |= closeDiagonalMask;
+      } else if (hasForeignCardinalNeighbor(grid, x, y, width, height, fg)) {
+        // Mode B-solid: Cell has NO standalone base tileset and foreign cardinals.
+        // All renderable transitions for these cells have been promoted to
+        // transition mode via C3 bridge edge promotion in RetileEngine.
+        // Remaining foreign cardinals are non-renderable (C4/C5) and must show solid.
+        return { mask47: 255, frameId: SOLID_FRAME };
       }
+      // Mode C: No foreign cardinals. Apply selective diagonal closure
+      // (pre-computed by RetileEngine based on edge classification).
+      rawMask |= closeDiagonalMask;
     }
   } else {
-    // Transition mode uses selected BG baseline + owner/type gating on
-    // cardinal foreign edges (canonical edge contract semantics).
-    rawMask = computeTransitionMask(grid, x, y, width, height, bg);
+    // Mode A: Transition mode uses selected BG baseline + owner/type gating
+    // on cardinal foreign edges (canonical edge contract semantics).
+    rawMask = computeTransitionMask(
+      grid, x, y, width, height, bg, bgMatchMaterials,
+    );
     rawMask = applyCardinalOwnershipGating(
       rawMask, grid, x, y, width, height, fg, bg, edgeContracts,
     );
@@ -332,37 +363,8 @@ const CARDINAL_GATING: ReadonlyArray<readonly [EdgeDirection, number, number, nu
 const EMPTY_OWNED_EDGES: ReadonlyMap<EdgeDirection, OwnedEdgeInfo> = new Map();
 
 /**
- * Base-mode closure for canonical contracts: foreign cardinals are forced closed.
- */
-function closeForeignCardinalBits(
-  rawMask: number,
-  grid: Cell[][],
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  fg: string,
-): number {
-  let gatedMask = rawMask;
-
-  for (const [, dx, dy, bit] of CARDINAL_GATING) {
-    const nx = x + dx;
-    const ny = y + dy;
-
-    if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-      continue;
-    }
-
-    if (grid[ny][nx].terrain !== fg) {
-      gatedMask |= bit;
-    }
-  }
-
-  return gatedMask;
-}
-
-/**
- * Returns true if at least one cardinal neighbor has a different terrain than fg.
+ * Returns true if at least one in-bounds cardinal neighbor has a different
+ * terrain than fg.
  */
 function hasForeignCardinalNeighbor(
   grid: Cell[][],
@@ -381,22 +383,14 @@ function hasForeignCardinalNeighbor(
   return false;
 }
 
-const DIAGONAL_GATING: ReadonlyArray<readonly [number, number, number]> = [
-  [1, -1, NE],
-  [1, 1, SE],
-  [-1, 1, SW],
-  [-1, -1, NW],
-];
-
 /**
- * Base-mode closure for diagonal bits: foreign diagonals are forced closed.
+ * Close (set to 1) all foreign cardinal bits in a raw FG-equality mask.
  *
- * Mirrors closeForeignCardinalBits but for diagonal directions.
- * Without this, a base-mode cell whose only foreign neighbor is diagonal
- * would show a corner indent while adjacent cardinal cells show no transition,
- * creating a visual inconsistency (design-015-neighbor-repaint-policy-v2 §5 Step 4.8).
+ * Used in base mode when the cell has a standalone base tileset but
+ * foreign cardinal neighbors. Foreign cardinals are treated as "matching"
+ * so the cell computes a proper corner/edge frame (not isolated/cross).
  */
-function closeForeignDiagonalBits(
+function closeForeignCardinalBits(
   rawMask: number,
   grid: Cell[][],
   x: number,
@@ -405,22 +399,16 @@ function closeForeignDiagonalBits(
   height: number,
   fg: string,
 ): number {
-  let gatedMask = rawMask;
-
-  for (const [dx, dy, bit] of DIAGONAL_GATING) {
+  let mask = rawMask;
+  for (const [, dx, dy, bit] of CARDINAL_GATING) {
     const nx = x + dx;
     const ny = y + dy;
-
-    if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-      continue;
-    }
-
+    if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
     if (grid[ny][nx].terrain !== fg) {
-      gatedMask |= bit;
+      mask |= bit; // Close: treat foreign cardinal as matching
     }
   }
-
-  return gatedMask;
+  return mask;
 }
 
 /**

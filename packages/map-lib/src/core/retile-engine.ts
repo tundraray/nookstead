@@ -22,7 +22,7 @@ import {
 } from './cell-tileset-selector';
 import { resolveEdge } from './edge-resolver';
 import { classifyEdge } from './edge-classifier';
-import { SOLID_FRAME } from './autotile';
+import { SOLID_FRAME, NE, SE, SW, NW } from './autotile';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -52,6 +52,17 @@ readonly [number, number, EdgeDirection, EdgeDirection]
   [1, -1, 'N', 'E'],  // NE corner
   [1, 1, 'S', 'E'],   // SE corner
   [-1, 1, 'S', 'W'],  // SW corner
+];
+
+/**
+ * Diagonal direction offsets for base-mode diagonal closure:
+ * [dx, dy, autotile bit constant].
+ */
+const DIAGONAL_OFFSETS: ReadonlyArray<readonly [number, number, number]> = [
+  [1, -1, NE],
+  [1, 1, SE],
+  [-1, 1, SW],
+  [-1, -1, NW],
 ];
 
 interface ComputedCellResult {
@@ -475,9 +486,10 @@ export class RetileEngine {
       const oldCache = this.cache[y]?.[x] ?? undefined;
       const fg = grid[y][x].terrain;
 
-      // 1. Resolve canonical edge ownership for cardinal foreign neighbors.
-      //    Only owner-side contracts are passed to selectTilesetForCell.
+      // 1. Resolve edge ownership for cardinal foreign neighbors.
+      //    Owner-side contracts + C3 bridge promotions are collected.
       const ownedEdges = new Map<EdgeDirection, OwnedEdgeInfo>();
+      let hasForeignCardinal = false;
 
       for (const [dx, dy, dir] of CARDINAL_OFFSETS) {
         const nx = x + dx;
@@ -492,6 +504,8 @@ export class RetileEngine {
           continue; // Same material -- no transition needed
         }
 
+        hasForeignCardinal = true;
+
         const edgeOwner = resolveEdge(
           fg,
           neighborFg,
@@ -502,10 +516,70 @@ export class RetileEngine {
         );
 
         if (edgeOwner?.owner === fg) {
+          // Cell wins ownership of this edge.
           ownedEdges.set(dir, {
             bg: edgeOwner.bg,
             neighborMaterial: neighborFg,
           });
+        } else {
+          // Cell does NOT own this edge. Check if it's a C3 bridge edge
+          // AND the cell has no standalone base tileset in the registry.
+          //
+          // C3 edges have both-direct pairs through a common intermediate hop.
+          // When the cell lacks a standalone base tileset (its baseTilesetKey
+          // in the materials map points to a transition tileset), the non-owner
+          // side must still enter transition mode so that the correct autotile
+          // shape is computed. Cells WITH a standalone base tileset can fall
+          // back cleanly and do not need bridge promotion.
+          const hasStandaloneBase = this.registry.getBaseTilesetKey(fg) !== undefined;
+          if (!hasStandaloneBase) {
+            const edgeClass = classifyEdge(fg, neighborFg, this.router, this.registry);
+            if (edgeClass === 'C3') {
+              const virtualBG = this.router.nextHop(fg, neighborFg);
+              if (virtualBG !== null) {
+                const pair = this.registry.resolvePair(fg, virtualBG);
+                if (pair && pair.orientation === 'direct') {
+                  ownedEdges.set(dir, {
+                    bg: virtualBG,
+                    neighborMaterial: neighborFg,
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // 1b. Determine if this cell has a standalone base tileset in the registry.
+      //     Cells WITH a standalone base tileset that have foreign cardinals
+      //     use "close foreign cardinals" mode (Mode B-base) instead of
+      //     returning SOLID_FRAME (Mode B-solid).
+      const hasStandaloneBase = this.registry.getBaseTilesetKey(fg) !== undefined;
+      const closeForeignCardinals = hasStandaloneBase && hasForeignCardinal && ownedEdges.size === 0;
+
+      // 1c. Compute closeDiagonalMask for base-mode cells. Only C2 (symmetric
+      //     direct pair) foreign diagonals are closed to prevent visual corner
+      //     indent artifacts when both sides have direct tilesets. C3/C4/C5
+      //     diagonals remain open so that natural autotile shapes are preserved
+      //     for multi-hop transitions.
+      //     This applies both to Mode C (no foreign cardinals) and Mode B-base
+      //     (foreign cardinals but standalone base tileset).
+      let closeDiagonalMask = 0;
+      const isBaseMode = ownedEdges.size === 0;
+      const shouldComputeDiagonalClosure = isBaseMode && (!hasForeignCardinal || closeForeignCardinals);
+      if (shouldComputeDiagonalClosure) {
+        for (const [ddx, ddy, diagonalBit] of DIAGONAL_OFFSETS) {
+          const dnx = x + ddx;
+          const dny = y + ddy;
+          if (dnx < 0 || dnx >= this.width || dny < 0 || dny >= this.height) {
+            continue;
+          }
+          const diagFg = grid[dny][dnx].terrain;
+          if (diagFg === fg) continue;
+          const diagEdgeClass = classifyEdge(fg, diagFg, this.router, this.registry);
+          if (diagEdgeClass === 'C2') {
+            closeDiagonalMask |= diagonalBit;
+          }
         }
       }
 
@@ -521,9 +595,36 @@ export class RetileEngine {
       const bg = selection.selectedTilesetKey ? selection.bg : '';
       const orientation = selection.selectedTilesetKey ? selection.orientation : '';
 
+      // 2b. Compute bgMatchMaterials for transition mode.
+      //     Materials that route to FG through the selected BG are treated
+      //     as BG-side neighbors in the transition mask (bit=0), preventing
+      //     false corner artifacts in multi-hop routing chains.
+      let bgMatchMaterials: Set<string> | undefined;
+      if (bg !== '') {
+        bgMatchMaterials = new Set<string>();
+        // Check each unique neighbor material.
+        for (const [ndx, ndy] of [...CARDINAL_OFFSETS.map(([dx, dy]) => [dx, dy] as const), ...DIAGONAL_OFFSETS.map(([dx, dy]) => [dx, dy] as const)]) {
+          const nnx = x + ndx;
+          const nny = y + ndy;
+          if (nnx < 0 || nnx >= this.width || nny < 0 || nny >= this.height) continue;
+          const nFg = grid[nny][nnx].terrain;
+          if (nFg === fg || nFg === bg || bgMatchMaterials.has(nFg)) continue;
+          // If this neighbor routes to fg through bg, it's on the bg-side.
+          const hop = this.router.nextHop(nFg, fg);
+          if (hop === bg) {
+            bgMatchMaterials.add(nFg);
+          }
+        }
+        if (bgMatchMaterials.size === 0) {
+          bgMatchMaterials = undefined; // No extra materials; skip the set
+        }
+      }
+
       // 3. Compute frame with selected-mode mask (bg + orientation)
       const { frameId } = computeCellFrame(
-        grid, x, y, this.width, this.height, fg, bg, orientation || undefined, ownedEdges,
+        grid, x, y, this.width, this.height, fg, bg,
+        orientation || undefined, ownedEdges, closeDiagonalMask, bgMatchMaterials,
+        closeForeignCardinals,
       );
 
       // 4. Resolve render tileset key (pass bg to avoid base-override in transition mode)
@@ -559,13 +660,22 @@ export class RetileEngine {
       ? new Set<number>()
       : this.buildForcedSolidSet(grid, paintedLookup, computed);
 
+    // Build set of non-mandatory dirty cells whose computed frame changed from
+    // cache AND that lack a standalone base tileset. These must be committed
+    // because their visual representation depends entirely on transition tilesets
+    // and cannot safely "fall back" to a base state. Cells WITH standalone base
+    // tilesets can preserve their old cached state (C4 cardinal preserve policy).
+    const visualChangeSet = paintedLookup.size === 0
+      ? new Set<number>()
+      : this.buildVisualChangeCommitSet(computed, commitSet);
+
     for (const flatIdx of dirtyIndices) {
       const computedCell = computed.get(flatIdx);
       if (!computedCell) {
         continue;
       }
 
-      const isMandatory = commitSet.has(flatIdx);
+      const isMandatory = commitSet.has(flatIdx) || visualChangeSet.has(flatIdx);
       const hasPriorVisualState = computedCell.oldCache !== undefined;
       if (!isMandatory && hasPriorVisualState) {
         continue;
@@ -732,6 +842,50 @@ export class RetileEngine {
     }
 
     return forced;
+  }
+
+  /**
+   * Build a set of non-mandatory dirty cells whose computed frame changed
+   * from cache AND that lack a standalone base tileset in the registry.
+   *
+   * Cells without a standalone base tileset depend entirely on transition
+   * tilesets for their visual representation. When a terrain change in their
+   * neighborhood alters their computed frame, they must be committed even if
+   * the standard C4 cardinal/diagonal commit rules would skip them.
+   *
+   * Cells WITH a standalone base tileset can safely preserve their old
+   * cached state, honoring the C4 cardinal preserve policy.
+   */
+  private buildVisualChangeCommitSet(
+    computed: ReadonlyMap<number, ComputedCellResult>,
+    mandatorySet: ReadonlySet<number>,
+  ): Set<number> {
+    const result = new Set<number>();
+
+    for (const [flatIdx, cell] of computed) {
+      if (mandatorySet.has(flatIdx)) {
+        continue; // Already committed by normal rules
+      }
+
+      if (!cell.oldCache) {
+        continue; // No prior state — will be committed as new cell
+      }
+
+      // Only commit if cell has no standalone base tileset
+      if (this.registry.getBaseTilesetKey(cell.fg) !== undefined) {
+        continue; // Has standalone base — preserve old state (C4 policy)
+      }
+
+      // Commit if frame or tileset changed
+      if (
+        cell.newCache.frameId !== cell.oldCache.frameId ||
+        cell.newCache.selectedTilesetKey !== cell.oldCache.selectedTilesetKey
+      ) {
+        result.add(flatIdx);
+      }
+    }
+
+    return result;
   }
 
   private withForcedSolidFrame(cache: CellCacheEntry): CellCacheEntry {
