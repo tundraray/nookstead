@@ -1,11 +1,14 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
-import { floodFill, FillCommand } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
+import { floodFill, RoutingFillCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /**
  * Creates fill tool handlers.
  * Single-click performs a flood fill; no drag behavior.
+ * Converts CellDelta results from floodFill into CellPatchEntry format
+ * for RoutingFillCommand.
  */
 export function createFillTool(
   state: MapEditorState,
@@ -28,7 +31,18 @@ export function createFillTool(
 
       if (deltas.length === 0) return;
 
-      const command = new FillCommand(deltas);
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      // Convert CellDelta[] to CellPatchEntry[]
+      const patches: CellPatchEntry[] = deltas.map((d) => ({
+        x: d.x,
+        y: d.y,
+        oldFg: d.oldTerrain,
+        newFg: d.newTerrain,
+      }));
+
+      const command = new RoutingFillCommand(patches, engine);
       dispatch({ type: 'PUSH_COMMAND', command });
     },
 

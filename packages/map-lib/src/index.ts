@@ -51,10 +51,8 @@ export type {
 export { SIDEBAR_TABS } from './types/editor-types';
 
 // Core algorithm modules (Phase 2)
-export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial, computeTransitionMask } from './core/neighbor-mask';
+export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial } from './core/neighbor-mask';
 export type { NeighborMaskOptions } from './core/neighbor-mask';
-
-export { recomputeAutotileLayers } from './core/autotile-layers';
 
 export { recomputeWalkability } from './core/walkability';
 
@@ -67,9 +65,6 @@ export type { TileCoord } from './core/zone-geometry';
 export { getZoneTiles, rasterizePolygon, detectZoneOverlap, validateAllZones } from './core/zone-validation';
 export type { OverlapResult, ValidationError } from './core/zone-validation';
 
-// Editor commands (Phase 3)
-export { applyDeltas, PaintCommand, FillCommand } from './core/commands';
-
 // Material resolver (Phase 4)
 export { buildTransitionMap, resolvePaint } from './core/material-resolver';
 export type {
@@ -79,3 +74,31 @@ export type {
   PaintResult,
   ResolvePaintOptions,
 } from './core/material-resolver';
+
+// Routing pipeline modules (Phase 5)
+export { TilesetRegistry, type ResolvedPair } from './core/tileset-registry';
+export { buildGraphs, type MaterialGraphs } from './core/graph-builder';
+export { computeRoutingTable } from './core/router';
+export { resolveEdge } from './core/edge-resolver';
+export { classifyEdge } from './core/edge-classifier';
+export { selectTilesetForCell, computeCellFrame, resolveRenderTilesetKey } from './core/cell-tileset-selector';
+export { RetileEngine } from './core/retile-engine';
+export { RoutingPaintCommand, RoutingFillCommand } from './core/routing-commands';
+
+// Routing types
+export type {
+  CompatGraph,
+  RenderGraph,
+  MaterialPriorityMap,
+  RoutingTable,
+  NeighborDirection,
+  EdgeDirection,
+  CellCacheEntry,
+  CellCache,
+  CellPatchEntry,
+  RetileResult,
+  RetileEngineOptions,
+  EdgeOwner,
+  MapPatchEntry,
+} from './types/routing-types';
+export type { EdgeClass } from './core/edge-classifier';

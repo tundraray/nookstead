@@ -1,13 +1,16 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
-import { rectangleFill, PaintCommand } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
+import { rectangleFill, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { PreviewRect } from '../canvas-renderer';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /**
  * Creates rectangle fill tool handlers.
  * Click to set start corner, drag to show preview rectangle overlay,
  * release to fill all cells in the rectangle with the active terrain.
+ * Converts CellDelta results from rectangleFill into CellPatchEntry format
+ * for RoutingPaintCommand.
  */
 export function createRectangleTool(
   state: MapEditorState,
@@ -54,7 +57,7 @@ export function createRectangleTool(
       if (!state.materials.has(state.activeMaterialKey)) return;
 
       const { minX, minY, maxX, maxY } = computeBounds(startTile, tile);
-      const deltas: CellDelta[] = rectangleFill({
+      const deltas = rectangleFill({
         grid: state.grid,
         minX,
         minY,
@@ -69,7 +72,18 @@ export function createRectangleTool(
 
       if (deltas.length === 0) return;
 
-      const command = new PaintCommand(deltas, 'Rectangle fill');
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      // Convert CellDelta[] to CellPatchEntry[]
+      const patches: CellPatchEntry[] = deltas.map((d) => ({
+        x: d.x,
+        y: d.y,
+        oldFg: d.oldTerrain,
+        newFg: d.newTerrain,
+      }));
+
+      const command = new RoutingPaintCommand(patches, engine);
       dispatch({ type: 'PUSH_COMMAND', command });
 
       startTile = null;

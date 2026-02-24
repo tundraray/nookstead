@@ -1,7 +1,8 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
-import { bresenhamLine, PaintCommand } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
+import { bresenhamLine, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /** Default terrain that the eraser sets cells to. */
 const DEFAULT_TERRAIN = 'deep_water';
@@ -17,7 +18,7 @@ export function createEraserTool(
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
-  const erasedCells = new Map<string, CellDelta>();
+  const erasedCells = new Map<string, CellPatchEntry>();
 
   function tryErase(x: number, y: number): void {
     // Bounds check
@@ -26,23 +27,14 @@ export function createEraserTool(
     const key = `${x},${y}`;
     if (erasedCells.has(key)) return;
 
-    const oldTerrain = state.grid[y][x].terrain;
-    if (oldTerrain === DEFAULT_TERRAIN) return;
-
-    const layerIndex = state.activeLayerIndex;
-    const oldFrame =
-      layerIndex >= 0 && layerIndex < state.layers.length
-        ? state.layers[layerIndex].frames[y][x]
-        : 0;
+    const oldFg = state.grid[y][x].terrain;
+    if (oldFg === DEFAULT_TERRAIN) return;
 
     erasedCells.set(key, {
-      layerIndex,
       x,
       y,
-      oldTerrain,
-      newTerrain: DEFAULT_TERRAIN,
-      oldFrame,
-      newFrame: 0,
+      oldFg,
+      newFg: DEFAULT_TERRAIN,
     });
   }
 
@@ -77,9 +69,12 @@ export function createEraserTool(
 
       if (erasedCells.size === 0) return;
 
-      const command = new PaintCommand(
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      const command = new RoutingPaintCommand(
         Array.from(erasedCells.values()),
-        'Erase'
+        engine
       );
       dispatch({ type: 'PUSH_COMMAND', command });
       erasedCells.clear();

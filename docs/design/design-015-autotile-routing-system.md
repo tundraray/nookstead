@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the technical design for replacing the current dominant-neighbor autotile pipeline in `packages/map-lib/` with a graph-based routing system. The new system builds compatibility and render graphs from tileset metadata, computes shortest-path routing tables via BFS, resolves background consensus (virtual boundaries) between adjacent cells, and selects the correct transition tileset per cell -- all driven by an incremental RetileEngine with per-cell caching. The command system (`PaintCommand`, `FillCommand`, `applyDeltas`) is also replaced with RetileEngine-integrated commands.
+This document defines the technical design for replacing the current dominant-neighbor autotile pipeline in `packages/map-lib/` with a graph-based routing system. The new system builds compatibility and render graphs from tileset metadata, computes shortest-path routing tables via BFS, resolves background consensus (virtual boundaries) between adjacent cells, selects a logical transition tileset per cell, and resolves the final render tileset per frame via fallback policy -- all driven by an incremental RetileEngine with per-cell caching. The command system (`PaintCommand`, `FillCommand`, `applyDeltas`) is also replaced with RetileEngine-integrated commands.
 
 ## Design Summary (Meta)
 
@@ -11,8 +11,8 @@ design_type: "refactoring"
 risk_level: "medium"
 complexity_level: "high"
 complexity_rationale: >
-  (1) The 5-step core algorithm (graph build, BFS routing, background consensus, cell tileset selection,
-  mask computation) involves 6+ coordinating modules with S1+S2 conflict resolution. Five painting variation scenarios (V1-V5) and four retile
+  (1) The 6-step core algorithm (graph build, BFS routing, background consensus, logical tileset selection,
+  mask computation, frame-source resolution) involves 6+ coordinating modules with S1+S2 conflict resolution. Five painting variation scenarios (V1-V5) and four retile
   triggers (T1-T4) each require independent correctness verification.
   (2) Key constraints: immutability throughout (React state compatibility), zero-build TS source
   pattern, no browser deps in map-lib, backward-compatible EditorCommand interface for undo/redo,
@@ -40,7 +40,7 @@ unknowns:
 
 ### Prerequisite ADRs
 
-- **ADR-0011** (pending): Architecture decision for autotile routing system -- full replacement of dominant-neighbor pipeline, RetileEngine-integrated commands, explicit fromMaterialKey/toMaterialKey, single-layer constraint, background consensus algorithm, S1+S2 conflict resolution strategies.
+- **ADR-0011** (accepted): Architecture decision for autotile routing system -- full replacement of dominant-neighbor pipeline, RetileEngine-integrated commands, explicit fromMaterialKey/toMaterialKey, single-layer constraint, background consensus algorithm, S1+S2 conflict resolution strategies, and frame-level render fallback.
 - **ADR-0010 (ADR-0010-map-lib-algorithm-extraction.md)**: Extraction of map algorithms into map-lib package; established zero-build pattern and module boundaries.
 - **ADR-0009 (ADR-0009-tileset-management-architecture.md)**: Tileset management architecture; TilesetInfo schema with fromMaterialKey/toMaterialKey fields.
 - **adr-006-map-editor-architecture.md**: Map editor architecture decisions including three-package split and dual-mode workflow.
@@ -50,9 +50,9 @@ No common ADRs (`ADR-COMMON-*`) exist in the project yet.
 ### Agreement Checklist
 
 #### Scope
-- [x] Replace `recomputeAutotileLayers()` with graph-based routing pipeline (5-step algorithm)
+- [x] Replace `recomputeAutotileLayers()` with graph-based routing pipeline (6-step algorithm)
 - [x] Replace `applyDeltas()`, `PaintCommand`, `FillCommand` with RetileEngine-integrated commands
-- [x] Create 6 new modules: TilesetRegistry, GraphBuilder, Router, BoundaryResolver, CellTilesetSelector, RetileEngine
+- [x] Create 6 new modules: TilesetRegistry, GraphBuilder, Router, EdgeResolver, CellTilesetSelector, RetileEngine
 - [x] Create new types file `routing-types.ts` with all routing-specific types
 - [x] Validate `fromMaterialKey`/`toMaterialKey` at `TilesetRegistry` boundary (fields remain optional on `TilesetInfo` type; tilesets missing either field are excluded from routing graph)
 - [x] Add per-cell cache with incremental dirty propagation
@@ -92,14 +92,16 @@ The current autotile pipeline uses a dominant-neighbor heuristic: for each cell,
 
 - FR1: Build undirected compatibility graph and directed render graph from tileset metadata
 - FR2: Compute BFS routing table (`nextHop[A][B]`) with configurable tie-break preferences
-- FR3: Compute background consensus material (EdgeMaterial) for 8 directions (edges, corners) between adjacent cells
-- FR4: Select exactly one tileset per cell based on background consensus
-- FR5: Compute blob-47 mask by comparing cell FG with computed EdgeMaterials and apply diagonal gating
+- FR3: Compute canonical per-edge contracts (owner + transition type) for shared cardinal edges; diagonals remain mask-only (no ownership)
+- FR4: Select exactly one logical tileset per cell based on background consensus
+- FR5: Compute blob-47 mask in selected-mode basis with edge-contract gating and diagonal rules: FG-basis for base/no-transition cells, transition basis for selected BG on owned edges, and closed-cardinal behavior on non-owned foreign edges
 - FR6: Support conflict resolution via S1 (boundary consensus reassign, max 4 iterations) and S2 (BG priority fallback)
 - FR7: Incremental retile with per-cell cache and Chebyshev R=2 dirty propagation
 - FR8: Four retile triggers: single-cell paint (T1), batch paint (T2), maskToTile change (T3a/T3b), theme switch (T4)
 - FR9: Editor API: `applyMapPatch`, `updateTileset`, `removeTileset`, `addTileset`, `switchTilesetGroup`, `rebuild`
 - FR10: New command system with RetileEngine-integrated PaintCommand/FillCommand preserving undo/redo
+- FR11: Resolve per-frame render tileset fallback (`renderTilesetKey`) without changing logical routing selection (`selectedTilesetKey`)
+- FR12: Apply post-recompute neighbor repaint policy: all dirty cells are recomputed, center is always committed, cardinal neighbor commit guarantees depend on edge stability class (C1/C2/C3 stable, C4/C5 non-mandatory), and diagonals are committed when both adjacent cardinal edges are stable
 
 #### Non-Functional Requirements
 
@@ -110,28 +112,52 @@ The current autotile pipeline uses a dominant-neighbor heuristic: for each cell,
 
 ### Core Algorithm: Background Consensus
 
-The routing system operates on a unique variation of the Blob-47 bitmasking approach. Because the map strictly enforces a single-layer constraint (each grid cell has exactly one terrain material and one visual tileset), the system mathematically simulates background transitions without adding physical intermediary tiles.
+The routing system operates on a unique variation of the Blob-47 bitmasking approach. Because the map strictly enforces a single-layer constraint (each grid cell has exactly one terrain material and one rendered tileset per frame), the system mathematically simulates background transitions without adding physical intermediary tiles.
 
 **Step 1: Routing (Graph & Pathfinding)**
 For any pair of neighboring materials (A, B), the algorithm finds the shortest path in the tileset definition graph. 
 Example: `nextHop(deep_water, soil) = water`. If a direct transition exists, e.g., `soil` to `sand`, then `nextHop(soil, sand) = sand` (the background material).
 
-**Step 2: Virtual Boundaries (BoundaryResolver)**
-For each cell, the algorithm evaluates its 8 neighbors (4 edges, 4 corners) and computes an `EdgeMaterial` for that boundary:
-- If a neighboring cell has the same material `FG`, then `EdgeMaterial = FG`.
-- If a neighboring cell has a different material, then `EdgeMaterial = nextHop(FG, neighborFG)`.
-This establishes a virtual ring of 8 materials around the cell.
+**Step 2: Canonical Edge Contracts (EdgeResolver)**
+For each shared cardinal edge `(A, B)`, the algorithm evaluates directional candidates and commits to one canonical contract:
+- Candidate from A-side: `nextHop(A.fg, B.fg)` + pair availability check (direct-first, reverse fallback).
+- Candidate from B-side: `nextHop(B.fg, A.fg)` + pair availability check (direct-first, reverse fallback).
+- EdgeResolver selects one owner side and one transition type for the edge.
+Diagonals are not ownership units; they only affect frame corners through diagonal gating.
 
-**Step 3: Background Selection (CellTilesetSelector)**
-The cell reviews its 8 `EdgeMaterials`:
-- If all 8 directions are `FG` or the *same* `BG` material (e.g., all non-FG edges resolve to `water`), the cell selects the `FG_BG` transition tileset (e.g., `soil_water`).
-- **Conflict Resolution**: If the 8 directions demand *different* BGs (e.g., one side wants `water`, another wants `sand`), the single-layer constraint forces a choice. The cell applies Conflict Resolution (S1/S2) to pick the single BG with the highest priority configured in `MaterialPriorityMap`.
+**Step 3: Logical Tileset Selection (CellTilesetSelector)**
+The cell reviews only its **owned cardinal contracts**:
+- If it owns no foreign edges, it selects FG logical base provider (`bg = ''`).
+- If owned edges request a single BG material, it selects that `FG_BG` transition (or reverse pair in reverse orientation mode).
+- **Conflict Resolution**: If owned edges request multiple BGs, the single-layer constraint forces a choice. The cell applies S1 then S2 to converge to one BG.
 
 **Step 4: Mask Calculation (Blob-47)**
-Unlike standard AutoTile algorithms that compare physical neighbor cells, this algorithm compares the specific `FG` of the cell against the 8 computed `EdgeMaterials`.
-- If `EdgeMaterial == FG`, the bit for that direction is `1` (matching).
-- If `EdgeMaterial == BG` (the selected background), the bit is `0` (different).
-This generated bitmask retrieves the correct frame from the `autotile.ts` engine, allowing two completely different materials to form a perfect seam by resolving to the identical virtual background!
+Mask basis depends on the selected rendering mode for the cell:
+- **Base/no-transition mode (`bg == ''`)**: use FG-equality mask (`bit = 1` when `neighbor.terrain === FG`), then in engine owner-context force foreign cardinal edges closed on non-owner side.
+- **Transition mode (`bg != ''`)**: use edge-contract-aware transition mask. Cardinal opening (`bit = 0`) is allowed only when this cell owns that edge and the edge contract type matches selected BG; non-owned foreign edges (and owned foreign edges of other types) are forced closed (`bit = 1`).
+The selected-mode mask is then passed through `gateDiagonals` and `getFrame` (or reverse mapping when orientation is reverse), ensuring edge-type consistency: transition opening is rendered only by the owner side of the canonical edge contract.
+
+**Step 5: Frame Source Resolution (Render Fallback Policy)**
+After `selectedTilesetKey` (logical) and `frameId` are known, the engine resolves `renderTilesetKey` for the final draw source.
+- Default policy (v1): if `frameId === SOLID_FRAME` and `materials[fg].baseTilesetKey` exists, then `renderTilesetKey = materials[fg].baseTilesetKey`.
+- Otherwise, `renderTilesetKey = selectedTilesetKey`.
+This allows borrowing solid frames from another tileset (for example, using `water_grass` as the solid source for `water`) while keeping routing logic unchanged.
+
+**Step 6: Neighbor Repaint Policy (Post-Recompute Commit Stage)**
+After `RetileEngine` recomputes every cell in the local dirty set (`Chebyshev R=2`), commit policy is applied:
+- Painted center cell is always committed.
+- For cardinal center-neighbor edges, classify stability using route + pair resolution on both sides:
+  - `C1`: same material (`A === B`)
+  - `C2`: both sides direct, no bridge (`hopA === B`, `hopB === A`)
+  - `C3`: both sides direct, same bridge (`hopA === hopB !== A,B`)
+  - `C4`: both sides valid but mixed (reverse on at least one side or different bridges)
+  - `C5`: at least one side unresolved (`resolvePair === null`)
+- Neighbor commit is required only for stable classes (`C1/C2/C3`); for `C4/C5`, preserving previous neighbor visual state is allowed.
+- Diagonal commit is required only for stable corners: a diagonal cell commits when both adjacent cardinal edges from the painted center are in `C1/C2/C3` (NW requires N+W, NE requires N+E, SE requires S+E, SW requires S+W).
+- If a recomputed cell has no prior visual/cache state, its computed output is committed even when the edge class is `C4/C5` (initialization fallback).
+- For non-paint triggers (full rebuild, tileset update/switch), all dirty cells are committed.
+
+This policy does not change routing, edge ownership, or mask semantics. It controls only which recomputed neighbor outputs are guaranteed to be persisted for visual stability.
 
 ## Acceptance Criteria (AC) - EARS Format
 
@@ -153,20 +179,29 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 ### AC3: Edge Ownership (FR3, V2)
 
 - [ ] **When** two adjacent cells have materials A and B (A !== B), the system shall compute ownership for the shared edge (N/E/S/W from each cell's perspective)
-- [ ] **If** only one candidate is valid (has a non-null nextHop and a matching tileset), **then** that candidate shall own the edge
+- [ ] **For** every resolved shared edge, the system shall produce one canonical edge contract (owner + transition type), and only the owner side may render an opening for that edge
+- [ ] **If** only one candidate is valid (has a non-null nextHop and either a direct pair `A_nextHop` or reverse pair `nextHop_A`), **then** that candidate shall own the edge
 - [ ] **If** both candidates are valid, **then** the candidate with higher `materialPriority` shall own the edge
 - [ ] **If** neither candidate is valid, **then** the edge shall be marked as unresolved and logged
+- [ ] **If** both direct and reverse pairs are available for a candidate, **then** direct shall be preferred
 - [ ] **When** Preset A is active (water-side owns shore), water's materialPriority shall be higher than grass's. Example: `{ 'deep-water': 100, 'water': 90, 'sand': 50, 'grass': 30, 'soil': 10 }` — higher number = owns the edge
 - [ ] **When** Preset B is active (land-side owns shore), grass's materialPriority shall be higher than water's. Example: `{ 'grass': 100, 'soil': 90, 'sand': 80, 'water': 30, 'deep-water': 10 }` — higher number = owns the edge
 - [ ] The policy preset shall be switchable via `materialPriority` map without code changes
 
-### AC4: Cell Tileset Selection (FR4, V3)
+### AC4: Cell Tileset Selection and Frame Source Resolution (FR4, FR11, V3)
 
-- [ ] **When** a cell has no owned edges (all neighbors are same material), the system shall select the FG base tileset (flat tile)
+- [ ] **When** a cell has no owned edges (all neighbors are same material), the system shall select the FG logical base provider tileset
 - [ ] **When** a cell's owned edges all require the same BG material, the system shall select the FG_BG tileset
+- [ ] **When** `FG_BG` is missing but reverse pair `BG_FG` exists, **then** the system shall select `BG_FG` in reverse orientation mode
+- [ ] **When** both `FG_BG` and `BG_FG` exist, **then** the system shall select `FG_BG` (direct-first precedence)
 - [ ] **If** a cell's owned edges require multiple different BG materials, **then** the system shall apply S1 then S2 conflict resolution
-- [ ] The blob-47 mask shall be computed by FG neighbor comparison only (not virtual BG)
+- [ ] **When** a cell has no selected BG (`bg == ''`), the blob-47 mask shall be computed by FG neighbor comparison (`neighbor.terrain === fg`); in engine owner-context, foreign cardinal edges on non-owner side shall be forced closed (`bit = 1`)
+- [ ] **When** a cell has selected BG (`bg != ''`), the blob-47 mask shall be computed in transition mode against BG with edge-contract gating: only owned matching cardinal edges may open (`bit = 0`), non-owned foreign cardinal edges remain closed (`bit = 1`)
+- [ ] **When** reverse orientation mode is selected, **then** frame lookup shall use inverse mapping after diagonal gating (`getFrame((~mask47Input) & 0xFF)` where `mask47Input = gateDiagonals(rawMask)`)
 - [ ] **When** computing diagonal mask bits, NW shall be set only if N and W are both set (diagonal gating preserved)
+- [ ] **When** a cell's `frameId` is `SOLID_FRAME`, `bg == ''`, and `materials[fg].baseTilesetKey` exists, the system shall set `renderTilesetKey` to that base tileset key while keeping `selectedTilesetKey` unchanged
+- [ ] **When** no fallback rule applies, the system shall set `renderTilesetKey === selectedTilesetKey`
+- [ ] **For** any non-empty terrain cell, the system shall not produce empty `selectedTilesetKey` or empty `renderTilesetKey`
 - [ ] The system shall not produce corner holes in island, bay, or inlet patterns (V3 requirement)
 
 ### AC5: Conflict Resolution (FR6, V4)
@@ -180,16 +215,16 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 
 - [ ] **When** trigger T1 (single cell paint) fires, the dirty set shall be Chebyshev R=2 around the painted cell, with max 4 S1 iterations, falling back to S2
 - [ ] **When** trigger T2 (batch paint) fires, the dirty set shall be the union of `expand(changedSet, R=2)`, with full-pass if changed cells exceed 50% of map
-- [ ] **When** trigger T3a (maskToTile change) fires, the system shall find cells using that tilesetKey via `cellsByTilesetKey` index and recompute frameId only
+- [ ] **When** trigger T3a (maskToTile change) fires, the system shall find cells using that tilesetKey via selected/render indices and recompute render selection (`renderTilesetKey`) and frame output metadata
 - [ ] **When** trigger T3b (tileset add/remove) fires, the system shall rebuild graphs + nextHop and dirty cells near affected materials + R=2
 - [ ] **When** trigger T4 (theme switch) fires, the system shall perform a full rebuild
-- [ ] The per-cell cache shall store: `{ fg, selectedTilesetKey, bg, mask47, frameId, ownedEdgesMask }`
-- [ ] The `cellsByTilesetKey` index shall be maintained as `Map<string, Set<number>>` for fast T3a lookups
+- [ ] The per-cell cache shall store: `{ fg, selectedTilesetKey, renderTilesetKey, bg, mask47, frameId, boundaryMaterialsHash }`
+- [ ] The engine shall maintain `cellsBySelectedTilesetKey` and `cellsByRenderTilesetKey` indices (`Map<string, Set<number>>`) for fast T3a lookups
 
 ### AC7: Editor API (FR9)
 
 - [ ] `applyMapPatch(patch)` shall accept `Array<{x, y, fg}>`, update grid terrain, and return changed cells
-- [ ] `updateTileset(tilesetKey, newMaskToTile)` shall find affected cells via index and recompute frameId, returning affected cells
+- [ ] `updateTileset(tilesetKey, newMaskToTile)` shall find affected cells via selected/render indices and recompute `renderTilesetKey` and frame output metadata, returning affected cells
 - [ ] `removeTileset(tilesetKey)` shall rebuild graphs and dirty affected cells, returning affected cells
 - [ ] `addTileset(tilesetInfo)` shall rebuild graphs and dirty affected cells, returning affected cells
 - [ ] `switchTilesetGroup(tilesets)` shall perform a full rebuild, returning all cells
@@ -209,6 +244,18 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 - [ ] **P1**: Given a base deep-water fill + soil rectangle, the system shall produce deep-water_water transition tilesets and flat soil interior tiles
 - [ ] **P2**: Given a soil square + water lake inside, the system shall produce water_grass routing with correct blob-47 corner frames
 - [ ] **P3**: Given deep-water | soil | sand strips, the system shall route through water for deep-water cells (deep-water_water) and route through grass for both soil and sand cells (soil_grass and sand_grass respectively, with S1 conflict resolution for sand when bordered by both soil and deep-water)
+
+### AC10: Neighbor Repaint Policy (FR12)
+
+- [ ] **When** a paint operation triggers local rebuild, the system shall recompute all cells in dirty set (`Chebyshev R=2`) before applying any neighbor commit policy
+- [ ] **When** post-recompute commit runs, the painted center cell shall always be persisted
+- [ ] **When** classifying each center-neighbor cardinal edge, the system shall derive one of `C1..C5` from `{ hopA, hopB, pairA, pairB }` using direct-first pair resolution
+- [ ] **When** edge class is `C1`, `C2`, or `C3`, the system shall treat neighbor update as commit-required behavior
+- [ ] **When** both adjacent cardinal edges for a diagonal are `C1`, `C2`, or `C3`, the system shall treat that diagonal neighbor update as commit-required behavior
+- [ ] **When** edge class is `C4` or `C5`, the system may preserve previous neighbor frame/tileset output (neighbor update is not a required visual invariant)
+- [ ] **When** a recomputed cell has no prior visual/cache state, the system shall commit that cell even under `C4/C5` (initialization fallback)
+- [ ] **When** rebuild is triggered by non-paint operations (T3/T4), the system shall commit all dirty cells
+- [ ] **For** every shared cardinal edge, owner-side opening invariant shall remain valid after commit policy (only owner may render opening on that edge)
 
 ## Applicable Standards
 
@@ -239,7 +286,7 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 | Existing (replaced) | `packages/map-lib/src/core/autotile-layers.ts` | Current recompute pipeline (recomputeAutotileLayers, findDominantNeighbor, buildTilesetPairMap, findIndirectTileset) |
 | Existing (replaced) | `packages/map-lib/src/core/commands.ts` | Current command system (applyDeltas, PaintCommand, FillCommand) |
 | Existing (reused) | `packages/map-lib/src/core/autotile.ts` | Blob-47 engine (getFrame, gateDiagonals, FRAME_TABLE, bit constants) |
-| Existing (partially reused) | `packages/map-lib/src/core/neighbor-mask.ts` | NEIGHBOR_OFFSETS, computeNeighborMaskByMaterial (reused); computeTransitionMask (superseded) |
+| Existing (partially reused) | `packages/map-lib/src/core/neighbor-mask.ts` | NEIGHBOR_OFFSETS, computeNeighborMaskByMaterial (base-mode), computeTransitionMask (transition-mode or equivalent inline logic) |
 | Existing (reused) | `packages/map-lib/src/core/material-resolver.ts` | resolvePaint, buildTransitionMap (used by RetileEngine for grid mutation) |
 | Existing (unchanged) | `packages/map-lib/src/types/material-types.ts` | TilesetInfo unchanged (fromMaterialKey/toMaterialKey stay optional; validated at TilesetRegistry boundary) |
 | Existing (unchanged) | `packages/map-lib/src/types/editor-types.ts` | EditorLayer, MapEditorState, EditorCommand, CellDelta interfaces |
@@ -290,8 +337,8 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 | `autotile-layers.ts:160-167` | `recomputeAutotileLayers` accepts `(grid, layers, affectedCells, materials, paintedCells, tilesets)` and returns `EditorLayer[]` | RetileEngine must produce same output shape: updated `EditorLayer[]` with `frames` and `tilesetKeys` |
 | `autotile-layers.ts:39-50` | `buildTilesetPairMap` uses `"from:to"` key format | TilesetRegistry adopts same key format for pair lookup |
 | `autotile.ts:154-178` | `gateDiagonals` and `getFrame` are stateless pure functions | Reuse directly in CellTilesetSelector -- no wrapping needed |
-| `neighbor-mask.ts:126-151` | `computeNeighborMaskByMaterial` compares `grid[ny][nx].terrain === materialKey` | Reuse for Step 5 mask computation (FG-neighbor comparison) |
-| `neighbor-mask.ts:166-195` | `computeTransitionMask` uses target-specific inversion | Superseded: new system uses per-edge ownership instead of dominant-neighbor |
+| `neighbor-mask.ts:126-151` | `computeNeighborMaskByMaterial` compares `grid[ny][nx].terrain === materialKey` | Reuse for base/no-transition mask path (`bg == ''`) |
+| `neighbor-mask.ts:166-195` | `computeTransitionMask` uses target-specific inversion | Reuse (or equivalent inline logic) for transition mask path (`bg != ''`) |
 | `commands.ts:23-122` | `applyDeltas` mutates shallow copies, then calls recompute + walkability | New commands follow same pattern but call RetileEngine instead |
 | `commands.ts:128-178` | PaintCommand/FillCommand implement `EditorCommand` interface | New commands must implement same interface for undo/redo stack compatibility |
 | `editor-types.ts:78-88` | `EditorLayer` has optional `tilesetKeys?: string[][]` | New system always populates `tilesetKeys`; keep optional for backward compat |
@@ -304,7 +351,7 @@ This generated bitmask retrieves the correct frame from the `autotile.ts` engine
 
 - **Output compatibility**: RetileEngine must produce `EditorLayer[]` with `frames: number[][]` and `tilesetKeys: string[][]` -- the renderer is not modified
 - **`getFrame` reuse**: The blob-47 frame table is correct and battle-tested; CellTilesetSelector calls `getFrame(mask)` directly
-- **`computeNeighborMaskByMaterial` reuse**: FG-neighbor mask in Step 5 is identical to current behavior; reuse this function
+- **Selected-mode mask reuse**: use `computeNeighborMaskByMaterial` for base/no-transition cells and `computeTransitionMask` (or equivalent BG-targeted logic) for transition cells
 - **Command pattern preserved**: New commands implement `EditorCommand` interface unchanged; undo/redo stacks work as before
 - **Immutability discipline**: Every function in the existing codebase returns new arrays/objects; new modules must follow the same pattern
 - **Test patterns**: Factory helpers, co-located `.spec.ts` files, and Jest `describe`/`it` structure are established conventions
@@ -349,6 +396,7 @@ graph TD
 
     G[autotile.ts<br/>getFrame/gateDiagonals] --> E
     H[neighbor-mask.ts<br/>computeNeighborMaskByMaterial] --> E
+    H2[neighbor-mask.ts<br/>computeTransitionMask] --> E
     I[material-resolver.ts<br/>resolvePaint] --> F
     J[walkability.ts<br/>recomputeWalkability] --> F
 
@@ -393,9 +441,11 @@ sequenceDiagram
         Engine->>ER: resolveEdges(cell, neighbors)
         ER-->>Engine: edgeOwnership (N/E/S/W)
         Engine->>CTS: selectTileset(cell, edgeOwnership)
-        CTS-->>Engine: { tilesetKey, bg }
+        CTS-->>Engine: { selectedTilesetKey, bg }
         Engine->>CTS: computeMask47(cell, grid)
         CTS-->>Engine: { mask47, frameId }
+        Engine->>CTS: resolveRenderTilesetKey(fg, selectedTilesetKey, frameId, bg)
+        CTS-->>Engine: { renderTilesetKey }
         Engine->>Cache: update cache[y][x]
     end
 
@@ -451,7 +501,7 @@ Boundary: RoutingPaintCommand <-> MapEditorState
   Output: Sync -- new MapEditorState with updated grid, layers, walkable
   On Error: Return unchanged state (fail-safe)
 
-Boundary: BoundaryResolver <-> Router
+Boundary: EdgeResolver <-> Router
   Input: Two material keys (cellA, cellB)
   Output: Sync -- EdgeMaterial (string)
   On Error: Return null (unresolved boundary)
@@ -488,23 +538,23 @@ Boundary: BoundaryResolver <-> Router
 - **Interface**: `computeRoutingTable(compatGraph, preferences)` returning `RoutingTable`, `nextHop(from, to)` query
 - **Dependencies**: GraphBuilder output (compatGraph)
 
-#### Component 4: BoundaryResolver
+#### Component 4: EdgeResolver
 
-- **Responsibility**: Determines the virtual background (BG) material for a cell at a given edge direction. Called independently for EACH cell -- both cells at a boundary compute their own virtual BG.
-- **Interface**: `resolveBoundary(cellFg, neighborFg, router)` returning `EdgeMaterial` (string)
-- **Dependencies**: Router (nextHop)
+- **Responsibility**: Resolves ownership of shared cardinal edges and produces one canonical edge contract per edge; provides per-direction virtual BG candidates used to build each contract.
+- **Interface**: `resolveEdge(materialA, materialB, dir, router, registry, priorities)` returning `EdgeOwner | null`
+- **Dependencies**: Router (nextHop), TilesetRegistry
 
-> **Clarification -- Independent Per-Cell Resolution**: BoundaryResolver is called once per cell per foreign edge direction. Both cells at a shared boundary independently compute their own virtual BG. Cell A computes `nextHop(A_fg, B_fg)` and cell B computes `nextHop(B_fg, A_fg)`. These may return DIFFERENT materials (e.g., A gets `water`, B gets `grass`). This is correct and expected -- the two cells render with different transition tilesets, and the visual result at the pixel boundary shows two compatible intermediate materials meeting.
+> **Clarification -- Canonical Per-Edge Contract**: For each shared cardinal edge, both directional candidates are evaluated (`nextHop(A_fg, B_fg)` and `nextHop(B_fg, A_fg)`), but the renderer must commit to one canonical edge contract with one owner cell. Only the owner may render an opening on that edge; the non-owner treats that edge as closed in mask computation.
 
 #### Component 5: CellTilesetSelector
 
-- **Responsibility**: Selects one tileset per cell and computes the blob-47 mask and frame. Each cell independently determines its virtual BG per cardinal edge direction using `nextHop(cellFg, neighborFg)`, then checks if a matching tileset exists in the render graph. If multiple edges require different BGs, S1/S2 conflict resolution selects a single BG. Edge ownership (via materialPriority) is used ONLY during conflict resolution -- it does NOT prevent a cell from rendering a transition.
-- **Interface**: `selectTilesetForCell(cellFg, boundaryMaterials, registry, priorities)` returning `{ tilesetKey, bg }`, `computeCellFrame(cellFg, boundaryMaterials)` returning `{ mask47, frameId }`
-- **Dependencies**: TilesetRegistry, materialPriority config, autotile.ts (`getFrame`), neighbor-mask.ts (`computeNeighborMaskByMaterial`)
+- **Responsibility**: Selects one logical tileset per cell, computes the blob-47 mask and frame, then resolves the final render tileset via frame-source fallback. Candidate BGs come from owned edge contracts (direct-first pair resolution with reverse fallback per edge). If multiple owned edges require different BGs, S1/S2 conflict resolution selects a single BG. Mask basis is selected per cell: FG mask for base/no-transition (`bg == ''`) with foreign-cardinal non-owner closure in engine context, transition mask for selected BG (`bg != ''`) with edge-contract gating: owned matching edges may open, non-owned foreign edges remain closed.
+- **Interface**: `selectTilesetForCell(cellFg, ownedEdges, registry, priorities)` returning `{ selectedTilesetKey, bg, orientation }`, `computeCellFrame(grid, x, y, width, height, fg, bg, orientation)` returning `{ mask47, frameId }`, `resolveRenderTilesetKey(fg, selectedTilesetKey, frameId, materials, bg)` returning `renderTilesetKey`
+- **Dependencies**: TilesetRegistry, materialPriority config, autotile.ts (`getFrame`), neighbor-mask.ts (`computeNeighborMaskByMaterial`, `computeTransitionMask` or equivalent BG-targeted logic)
 
 #### Component 6: RetileEngine
 
-- **Responsibility**: Orchestrates the full pipeline: maintains per-cell cache, propagates dirty sets, calls BoundaryResolver/CellTilesetSelector, and produces updated layers.
+- **Responsibility**: Orchestrates the full pipeline: maintains per-cell cache, propagates dirty sets, calls EdgeResolver/CellTilesetSelector, resolves render fallback, and produces updated layers.
 - **Interface**: `applyMapPatch()`, `updateTileset()`, `removeTileset()`, `addTileset()`, `switchTilesetGroup()`, `rebuild()`
 - **Dependencies**: All other components + material-resolver.ts + walkability.ts
 
@@ -537,8 +587,10 @@ export type NeighborDirection = 'N' | 'NE' | 'E' | 'SE' | 'S' | 'SW' | 'W' | 'NW
 export interface CellCacheEntry {
   /** Foreground material key. */
   readonly fg: string;
-  /** Selected tileset key for this cell. */
+  /** Logical tileset key chosen by routing/consensus. */
   readonly selectedTilesetKey: string;
+  /** Final tileset key used for rendering this frame. */
+  readonly renderTilesetKey: string;
   /** Background material (empty string if base tileset). */
   readonly bg: string;
   /** Computed blob-47 mask (post-gating). */
@@ -654,48 +706,49 @@ Invariants:
   - For all A, B: if nextHop(A, B) !== null, then hasTileset(A, nextHop(A,B)) or hasTileset(nextHop(A,B), A) is true in compatGraph
 ```
 
-#### BoundaryResolver
+#### EdgeResolver
 
 ```yaml
 Input:
-  Type: (cellFg: string, neighborFg: string, router: RoutingTable)
+  Type: (materialA: string, materialB: string, dir: EdgeDirection, router: RoutingTable, registry: TilesetRegistry, priorities: MaterialPriorityMap)
   Preconditions: None
-  Validation: Handles same materials simply returning cellFg
+  Validation: Handles same materials by returning null (no foreign edge)
 
 Output:
-  Type: EdgeMaterial (string)
+  Type: EdgeOwner | null
   Guarantees:
-    - Returns nextHop(cellFg, neighborFg) -- the first hop from cellFg toward neighborFg
-    - Returns cellFg if cellFg == neighborFg (same material, no transition)
-    - Called independently for BOTH cells at a boundary. Cell A calls
-      resolveBoundary(A_fg, B_fg) and cell B calls resolveBoundary(B_fg, A_fg).
-      These may return different EdgeMaterials (e.g., A gets 'water', B gets 'grass').
-      This is correct and expected.
+    - Evaluates both directional candidates (nextHop(A,B) and nextHop(B,A)) and selects one owner
+    - Returns null if neither candidate is valid (unresolvable edge)
+  - Called for each shared cardinal edge; final rendering uses one canonical edge contract.
+    Candidate BG values may differ (e.g., A gets 'water', B gets 'grass'), but
+    only the owner-side transition is renderable for that edge.
   On Error: Returns null for unresolved boundaries
 
 Invariants:
-  - Deterministic: same inputs always produce same EdgeMaterial
-  - Does NOT determine edge ownership -- only computes the virtual BG from one cell's perspective
+  - Deterministic: same inputs always produce same EdgeOwner candidate
+  - Only owner-side transition is renderable for the edge
 ```
 
 #### CellTilesetSelector
 
 ```yaml
 Input:
-  Type: (fg: string, boundaryMaterials: Map<NeighborDirection, string>, registry: TilesetRegistry, priorities: MaterialPriorityMap)
-  Preconditions: fg is a known material; boundaryMaterials contains exactly 8 entries
-  Validation: Unknown materials in edges are treated as void
+  Type: (fg: string, ownedEdges: Map<EdgeDirection, OwnedEdgeInfo>, registry: TilesetRegistry, priorities: MaterialPriorityMap)
+  Preconditions: fg is a known material; ownedEdges contains 0..4 cardinal entries
+  Validation: Unknown materials in ownedEdges are treated as unresolved and skipped
 
 Output:
-  Type: { tilesetKey: string, bg: string }
+  Type: { selectedTilesetKey: string, renderTilesetKey: string, bg: string }
   Guarantees:
-    - tilesetKey is always a valid key in the registry (base or transition)
+    - selectedTilesetKey is always a valid key in the registry (base or transition)
+    - renderTilesetKey is always a valid key in the registry
     - bg is empty string for base tileset, material key for transition
-  On Error: Falls back to base tileset with empty bg
+  On Error: Falls back to base tileset for selectedTilesetKey and uses selectedTilesetKey as renderTilesetKey
 
 Invariants:
-  - If all 8 directions use the same bg or fg, selects that bg's transition tileset
-  - If all 8 directions are fg, selects base tileset
+  - If all owned transition directions resolve to one bg, selects that bg's transition tileset
+  - If no owned transition directions remain, selects base tileset
+  - Default frame-source policy: when frameId === SOLID_FRAME and bg === '' and materials[fg].baseTilesetKey exists, renderTilesetKey = materials[fg].baseTilesetKey
 ```
 
 #### RetileEngine
@@ -758,10 +811,22 @@ fields:
     origin: "CellTilesetSelector computation"
     transformations:
       - layer: "CellTilesetSelector"
-        type: "string (tileset key)"
+        type: "string (logical tileset key)"
         validation: "must exist in TilesetRegistry"
       - layer: "CellCache"
         type: "CellCacheEntry.selectedTilesetKey"
+        transformation: "stored as-is"
+    destination: "CellCacheEntry.selectedTilesetKey (routing/debug state)"
+    loss_risk: "none"
+
+  - name: "renderTilesetKey"
+    origin: "resolveRenderTilesetKey(fg, selectedTilesetKey, frameId, bg)"
+    transformations:
+      - layer: "CellTilesetSelector"
+        type: "string (final render tileset key)"
+        validation: "must exist in TilesetRegistry"
+      - layer: "CellCache"
+        type: "CellCacheEntry.renderTilesetKey"
         transformation: "stored as-is"
       - layer: "EditorLayer"
         type: "layer.tilesetKeys[y][x]"
@@ -807,9 +872,9 @@ fields:
 | `PaintCommand(deltas)` | `RoutingPaintCommand(patches, engine)` | Yes | Not required | Different constructor, same `EditorCommand` interface |
 | `FillCommand(deltas)` | `RoutingFillCommand(patches, engine)` | Yes | Not required | Different constructor, same `EditorCommand` interface |
 | `buildTilesetPairMap(tilesets)` | `TilesetRegistry.hasTileset(fg, bg)` / `.getTilesetKey(fg, bg)` | Yes | Not required | Registry provides broader API |
-| `findDominantNeighbor(grid, x, y, ...)` | `BoundaryResolver.resolveBoundary(A, B, ...)` | Yes | Not required | Per-edge instead of per-cell dominant |
+| `findDominantNeighbor(grid, x, y, ...)` | `EdgeResolver.resolveEdge(A, B, ...)` | Yes | Not required | Per-edge instead of per-cell dominant |
 | `findIndirectTileset(cell, neighbor, ...)` | `Router.nextHop(A, B)` | Yes | Not required | BFS replaces 2-hop search |
-| `computeTransitionMask(grid, x, y, target)` | `computeNeighborMaskByMaterial(grid, x, y, fg)` | Yes | Not required | Mask is FG-only; background consensus replaces transition mask |
+| `computeTransitionMask(grid, x, y, target)` | `computeCellFrame(..., fg, bg)` selected-mode mask path | Yes | Not required | Transition cells use BG-targeted mask; base cells use FG mask |
 
 ### Error Handling
 
@@ -1016,25 +1081,33 @@ export function resolveEdge(
 /**
  * Select the tileset and compute the frame for a single cell.
  *
- * Step 4: Examines owned edges to determine the BG requirement.
- * Step 5: Computes the blob-47 mask from FG neighbors.
+ * Step 3: Examines owned edges to determine the BG requirement.
+ * Step 4: Computes the blob-47 mask in selected mode:
+ *         FG mask for base/no-transition, BG-targeted mask for transition.
+ * Step 5: Resolves final render tileset key via fallback policy.
  *
  * @param fg - Foreground material of the cell.
  * @param ownedEdges - Map of edge directions to EdgeOwner results (0-4 entries).
  * @param registry - Tileset registry.
- * @returns Selected tileset key and background material.
+ * @returns Selected logical tileset key, resolved background material, and orientation mode.
  */
 export function selectTilesetForCell(
   fg: string,
   ownedEdges: ReadonlyMap<EdgeDirection, EdgeOwner>,
   registry: TilesetRegistry,
-): { tilesetKey: string; bg: string };
+): { selectedTilesetKey: string; bg: string; orientation: 'direct' | 'reverse' };
 
 /**
  * Compute the blob-47 mask and frame index for a cell.
  *
- * Uses computeNeighborMaskByMaterial for FG-only comparison,
- * then getFrame for diagonal gating and frame lookup.
+ * Selected-mode mask behavior:
+ * - If `bg === ''` (base/no-transition), use `computeNeighborMaskByMaterial(..., fg)`,
+ *   then close foreign cardinal edges for non-owner side in canonical owner-context.
+ * - If `bg !== ''` (transition), compute a BG-targeted base mask and apply
+ *   edge-contract gating on cardinal directions:
+ *   opening (`bit=0`) is allowed only on owned edges typed as `bg`,
+ *   all non-owned foreign edges are forced closed (`bit=1`).
+ * Then apply orientation mapping (`direct` vs `reverse`) and frame lookup.
  *
  * @param grid - The 2D cell grid (indexed as grid[y][x]).
  * @param x - Column index of the target cell.
@@ -1042,6 +1115,8 @@ export function selectTilesetForCell(
  * @param width - Grid width in cells.
  * @param height - Grid height in cells.
  * @param fg - Foreground material of the cell.
+ * @param bg - Selected background material for the cell (`''` for base/no-transition mode).
+ * @param orientation - Pair orientation mode (`direct` or `reverse`).
  * @returns mask47 (gated mask) and frameId (0-47).
  */
 export function computeCellFrame(
@@ -1051,7 +1126,25 @@ export function computeCellFrame(
   width: number,
   height: number,
   fg: string,
+  bg: string,
+  orientation: 'direct' | 'reverse' | '',
 ): { mask47: number; frameId: number };
+
+/**
+ * Resolve the final render tileset key for a computed frame.
+ *
+ * Default policy (v1):
+ * - If frameId === SOLID_FRAME, bg === '', and materials[fg].baseTilesetKey exists, use that key.
+ * - Otherwise use selectedTilesetKey.
+ */
+export function resolveRenderTilesetKey(
+  fg: string,
+  selectedTilesetKey: string,
+  frameId: number,
+  materials: ReadonlyMap<string, MaterialInfo>,
+  registry: TilesetRegistry,
+  bg: string,
+): string;
 ```
 
 ### RetileEngine
@@ -1061,8 +1154,9 @@ export function computeCellFrame(
  * Incremental retile engine with per-cell caching.
  *
  * Orchestrates the full routing pipeline: graph construction,
- * BFS routing, edge resolution, tileset selection, and frame computation.
- * Maintains a per-cell cache and cellsByTilesetKey index for fast
+ * BFS routing, edge resolution, logical tileset selection, frame computation,
+ * and frame-source fallback resolution.
+ * Maintains a per-cell cache plus selected/render tileset indices for fast
  * incremental updates.
  */
 export class RetileEngine {
@@ -1090,7 +1184,7 @@ export class RetileEngine {
    *
    * @param state - Current editor state.
    * @param tilesetKey - Key of the modified tileset.
-   * @param newMaskToTile - New mask-to-tile mapping (unused by map-lib but triggers frameId recompute).
+   * @param newMaskToTile - New mask-to-tile mapping (unused by map-lib but triggers render selection refresh for indexed cells).
    * @returns RetileResult with cells that used this tileset recomputed.
    */
   updateTileset(
@@ -1169,9 +1263,10 @@ State Transitions:
 
 System Invariants:
   - For every non-empty cell (x,y): cache[y][x].fg === grid[y][x].terrain
-  - For every cached cell: cache[y][x].frameId === getFrame(cache[y][x].mask47)
+  - For every cached cell: `frameId` is derived from selected-mode raw mask after `gateDiagonals` (`mask47Input`) + orientation (`direct`: `getFrame(mask47Input)`, `reverse`: `getFrame((~mask47Input) & 0xFF)`)
   - For every cached cell: cache[y][x].selectedTilesetKey is a valid key in TilesetRegistry
-  - cellsByTilesetKey index is consistent with cache entries at all times
+  - For every cached cell: cache[y][x].renderTilesetKey is a valid key in TilesetRegistry
+  - cellsBySelectedTilesetKey and cellsByRenderTilesetKey indices are consistent with cache entries at all times
   - S1 iteration count never exceeds 4 per rebuild operation
 ```
 
@@ -1189,8 +1284,8 @@ Each AC maps to one or more test cases. Tests follow the factory helper pattern 
 | `graph-builder.spec.ts` | Single pair; multiple pairs; undirected symmetry of compatGraph; directed renderGraph; base tilesets excluded from edges; empty input | 100% |
 | `router.spec.ts` | Direct neighbor hop; 2-hop path; 3-hop path; tie-break with preferences; unreachable pair returns null; self-query returns null | 100% |
 | `edge-resolver.spec.ts` | One valid candidate; both valid (priority decides); neither valid (null); various priority preset configurations | 100% |
-| `cell-tileset-selector.spec.ts` | No owned edges (base tileset); one BG (transition tileset); multiple BGs (conflict); mask computation for solid/isolated/corner cells | 100% |
-| `retile-engine.spec.ts` | T1 single paint; T2 batch paint; T3a maskToTile; T3b add/remove; T4 full rebuild; cache consistency; dirty propagation radius | 90%+ |
+| `cell-tileset-selector.spec.ts` | No owned edges (base tileset); one BG (transition tileset); multiple BGs (conflict); selected-mode mask computation (FG base-mode + BG transition-mode with owner gating); reverse orientation mapping; solid-frame render fallback to `baseTilesetKey` | 100% |
+| `retile-engine.spec.ts` | T1 single paint; T2 batch paint; T3a maskToTile; T3b add/remove; T4 full rebuild; cache consistency; selected/render index consistency; dirty propagation radius | 90%+ |
 | `routing-commands.spec.ts` | PaintCommand execute/undo cycle; FillCommand execute/undo; redo after undo; EditorCommand interface compliance | 100% |
 
 ### Integration Tests
@@ -1198,8 +1293,9 @@ Each AC maps to one or more test cases. Tests follow the factory helper pattern 
 | Test Suite | Scenario | Verification |
 |-----------|----------|--------------|
 | Routing pipeline E2E | Build registry -> graphs -> router -> resolve edges -> select tileset for a 5x5 grid | Correct tilesetKeys and frames for known configuration |
+| Render fallback E2E | Cell with `frameId=SOLID_FRAME` and `baseTilesetKey` override | `selectedTilesetKey` preserved; `renderTilesetKey` switches to material base provider |
 | Painting scenario P1 | Deep-water fill + soil rectangle | `deep_water_water` transition tilesets at borders, flat soil interior |
-| Painting scenario P2 | Soil square + water lake | `water_grass` routing, correct 47-mask corners |
+| Painting scenario P2 | Soil square + water lake | `water_grass` routing, correct selected-mode 47-mask corners (no false isolated transition cells) |
 | Painting scenario P3 | Deep-water, soil, sand strips | dw cells use deep-water_water; soil cells use soil_grass; sand cells use sand_grass (S1 resolves conflict under Preset A) |
 | Undo/redo cycle | Paint -> undo -> redo on 8x8 grid | State after redo === state after initial paint |
 
@@ -1265,11 +1361,14 @@ No security concerns. This module operates entirely on in-memory data structures
 - [Autotiling Technique - Excalibur.js](https://excaliburjs.com/blog/Autotiling%20Technique/) - Modern blob-47 autotiling implementation patterns
 - [Dual Tilemap Autotiling Technique - Excalibur.js](https://excaliburjs.com/blog/Dual%20Tilemap%20Autotiling%20Technique/) - Alternative dual-map approach (evaluated as Alternative 3)
 - [Tile/Map-Based Game Techniques: Handling Terrain Transitions - GameDev.net](https://www.gamedev.net/articles/programming/general-and-gameplay-programming/tilemap-based-game-techniques-handling-terrai-r934/) - Classic terrain transition algorithms
+- [How to Use Tile Bitmasking to Auto-Tile Your Level Layouts - Tuts+](https://code.tutsplus.com/how-to-use-tile-bitmasking-to-auto-tile-your-level-layouts--cms-25673t) - 4-bit/8-bit mask flow, diagonal gating rule, and LUT mapping to 47/48-tile sets
+- [Autotiling by Code - GameMaker Forum](https://forum.gamemaker.io/index.php?threads/autotiling-by-code.76441/) - Practical trade-offs of single-layer transitions, transparent edges, and layered fallback strategies
 - [Refactor Terrain Tile Matching Algorithm - Godot Proposals #7670](https://github.com/godotengine/godot-proposals/issues/7670) - Discussion of deterministic tile matching with backtracking
 - [Designing a Lightweight Undo History with TypeScript - JitBlox](https://www.jitblox.com/blog/designing-a-lightweight-undo-history-with-typescript) - Command pattern for undo/redo in TypeScript
 - [Undo, Redo, and the Command Pattern - esveo](https://www.esveo.com/en/blog/undo-redo-and-the-command-pattern/) - Best practices for TypeScript command-based undo/redo
 - [Amit's Game Programming Information](http://www-cs-students.stanford.edu/~amitp/gameprog.html) - BFS and graph algorithms for game tile maps
 - `docs/design/autotile-system-reference.md` - Internal reference for current autotile system being replaced
+- `docs/design/design-015-neighbor-repaint-policy-v2-ru.md` - Post-recompute center/neighbor commit policy and edge stability classes (`C1..C5`)
 - `docs/design/design-007-map-editor.md` - Parent design document for the map editor feature
 
 ## Algorithm Clarifications and Invariants
@@ -1280,15 +1379,30 @@ This section codifies the precise algorithm semantics, correcting ambiguities id
 
 1. **Routing is tileset SELECTION, never cell insertion.** When `nextHop(deep_water, soil) = water`, this means the `deep_water` cell selects `deep-water_water` as its tileset. No intermediate water cell is created or inserted into the grid. The grid always contains exactly the materials the user painted.
 
-2. **The 47-mask is ALWAYS computed from FG material comparison only.** For a cell with FG material M, the mask bit for each of the 8 neighbor directions is: `bit = 1` if `neighbor.terrain === M`, else `bit = 0`. The virtual BG never affects mask computation.
+2. **The 47-mask is computed in selected mode, not globally FG-only.** For a cell with FG material `M` and selected BG `B`:
+   - If `B === ''` (base/no-transition), mask starts from FG comparison: `bit = 1` when `neighbor.terrain === M`, else `0`; in engine owner-context, foreign cardinal edges are then forced closed (`bit = 1`) on non-owner side.
+   - If `B !== ''` (transition), mask uses BG-targeted transition rule: `bit = 0` when `neighbor.terrain === B`, else `1`.
+   This is what prevents transition cells on both sides of a boundary from collapsing to isolated frames.
 
-3. **Diagonals follow the gating rule regardless of virtual BG.** The `gateDiagonals()` function is applied after the raw 8-bit mask is computed. A diagonal bit (NW, NE, SE, SW) survives gating only if both adjacent cardinal bits are also set. This rule is applied identically whether the cell uses a base tileset or a transition tileset.
+3. **Diagonals follow the gating rule regardless of mask mode.** The `gateDiagonals()` function is applied after the raw 8-bit mask is computed. A diagonal bit (NW, NE, SE, SW) survives gating only if both adjacent cardinal bits are also set. This rule is applied identically in base mode and transition mode.
 
-4. **Single-layer constraint: ONE tileset per cell per frame.** Each cell selects exactly one tileset (either a base tileset or a transition tileset). There is no compositing, layering, or blending of multiple tilesets within a single cell.
+4. **Single-layer constraint: ONE rendered tileset per cell per frame.** Each cell computes one logical tileset (`selectedTilesetKey`) and one final render tileset (`renderTilesetKey`) for the current frame. There is no compositing, layering, or blending of multiple tilesets within a single cell.
 
-5. **Both cells at a boundary independently compute their own transition.** Cell A computes `virtualBG_A = nextHop(A_fg, B_fg)` and cell B computes `virtualBG_B = nextHop(B_fg, A_fg)`. These may differ. Each cell selects its own tileset based on its own routing. The visual result at the pixel boundary between cells shows two potentially different intermediate materials meeting -- this is acceptable because BFS routing guarantees they are adjacent in the compat graph.
+5. **Each cardinal boundary has one canonical transition contract.** For a shared edge `(A,B)`, both directional candidates may be computed, but EdgeResolver must select one owner side for rendering that edge. The non-owner side must not open that same edge in its mask.
 
-6. **Edge ownership is for conflict resolution, not transition gating.** A cell's decision to render a transition tileset is based on whether it has valid `nextHop` + matching tileset, NOT on whether it "owns" the edge. Ownership (materialPriority) only determines which BG wins when a cell has MULTIPLE conflicting BG requirements from different edges (the S1/S2 pipeline). A cell that borders a single foreign material never needs ownership resolution.
+6. **Edge ownership gates transition rendering.** Ownership is used both for conflict resolution (S1/S2) and for per-edge mask gating: owned foreign edges can open toward selected BG; non-owned foreign edges stay closed for that cell. This enforces edge-type consistency and avoids double-painted boundaries.
+
+7. **Frame fallback does not alter routing.** `renderTilesetKey` may differ from `selectedTilesetKey` for a specific frame (default: `SOLID_FRAME`), but routing, ownership, and BG consensus are always computed from materials and graph edges, not from fallback choices.
+
+8. **Reverse-pair fallback is allowed, but only as fallback.** For a required transition `(FG, BG)`, the system first tries direct pair `FG_BG`. If direct is missing, it may use reverse pair `BG_FG` with reverse frame orientation (inverse/opposite-diagonal mapping). If both are missing, the edge is unresolved.
+
+9. **Direct-first precedence is mandatory.** If both `FG_BG` and `BG_FG` exist, a cell with foreground `FG` must use `FG_BG`. Reverse fallback must never override an available direct pair.
+
+10. **Reverse mode does not change routing semantics.** `nextHop`, ownership logic (S1/S2), and BG conflict resolution remain unchanged. Reverse mode only affects pair selection for rendering and frame orientation mapping.
+
+11. **No empty tileset key for non-empty terrain.** For any cell with non-empty FG terrain, `selectedTilesetKey` and `renderTilesetKey` must not be empty after selection + fallback resolution.
+
+12. **Neighbor repaint policy is post-recompute, not dirty-set filtering.** `RetileEngine` recomputes all cells in `R=2` dirty set. Edge class (`C1..C5`) affects commit guarantees for neighbors only: center always commits; cardinal neighbors are mandatory for `C1/C2/C3` and optional for `C4/C5`; diagonal neighbors are mandatory only when both adjacent cardinals are stable (`C1/C2/C3`).
 
 ### Per-Cell BG Resolution Algorithm (Detailed)
 
@@ -1297,54 +1411,77 @@ For a cell at position (x, y) with FG material `M`:
 ```
 1. For each cardinal direction D in {N, E, S, W}:
    a. neighbor = grid[y + dy][x + dx]
-   b. If neighbor is out of bounds: skip (no BG requirement for this direction)
-   c. If neighbor.terrain === M: skip (same material, no transition on this edge)
-   d. Else:
-      virtualBG = nextHop(M, neighbor.terrain)
-      If virtualBG is null: edge is unresolvable, skip, log warning
-      If virtualBG === M: skip (nextHop returned self, no transition needed)
-      If hasTileset(M, virtualBG) in renderGraph:
-        Record: direction D needs BG = virtualBG (VALID)
-      Else:
-        Edge has routing but no render tileset for M_virtualBG. Skip this edge.
-        (The neighbor cell handles its own side of the transition.)
+   b. If neighbor is out of bounds or neighbor.terrain === M:
+      mark edge D as non-transition and continue.
+   c. Compute BOTH directional candidates for this shared edge:
+      - selfCandidate: nextHop(M, neighbor.terrain) + pair resolution (direct first, else reverse)
+      - neighborCandidate: nextHop(neighbor.terrain, M) + pair resolution (direct first, else reverse)
+   d. Resolve canonical edge ownership with EdgeResolver:
+      - If current cell owns D and selfCandidate is valid, record owned requirement
+        `{ bg, orientation }` for this direction.
+      - Otherwise mark D as non-owned foreign edge for mask gating.
 
-2. Collect all valid BG requirements:
-   a. If zero valid BGs: use base tileset (M_M or standalone).
-      This only happens when: (i) all neighbors are same material, or
-      (ii) all foreign edges have unresolvable routing, or
-      (iii) all foreign edges have routing but M has no tileset toward the virtualBG.
-   b. If one unique BG: use tileset M_BG, no conflict.
-   c. If multiple distinct BGs: CONFLICT -- apply S1 then S2.
+2. Collect owned BG requirements:
+   a. If zero owned requirements: use FG logical base provider tileset.
+   b. If one unique BG: use resolved pair for that BG (direct first, else reverse).
+   c. If multiple distinct BGs: CONFLICT -- apply S1 then S2 on owned requirements only.
 
 3. S1 (Owner Reassign, max 4 iterations):
-   For each conflicting edge, check if the NEIGHBOR cell can absorb the transition:
-   - If neighbor has higher materialPriority, it should own this edge.
-   - Reassign: remove this BG requirement from current cell.
+   For each conflicting owned edge, if neighbor has higher materialPriority:
+   - Reassign this edge to neighbor (remove requirement from current cell).
    - If a single BG remains after reassignment: resolved.
 
 4. S2 (BG Priority Fallback):
-   If still multiple BGs after S1: pick the BG with highest priority
-   from the preference array (default: water > grass > sand).
+   If still multiple BGs after S1: pick one BG by preference/priority.
+   For chosen BG:
+   - use direct pair if available
+   - else use reverse pair
+   - else fallback to FG logical base provider.
 
-5. Compute FG mask from ALL 8 neighbors (including diagonals):
-   mask = computeNeighborMaskByMaterial(grid, x, y, width, height, M)
-   frame = getFrame(mask)  // applies diagonal gating internally
+5. Compute raw 8-bit mask in selected mode with edge-contract gating:
+   If selected BG is empty (`bg == ''`):
+      rawMask = computeNeighborMaskByMaterial(grid, x, y, width, height, M)
+      For each cardinal foreign edge D:
+      If currentCell is not owner of D:
+         force cardinal bit(D) = 1 (closed on non-owner side)
+   Else (`bg != ''`):
+      rawMask = computeTransitionMask(grid, x, y, width, height, bg) // baseline only
+      For each cardinal foreign edge D with canonical edge contract C:
+      If C.owner == currentCell AND C.transitionType == bg:
+         force cardinal bit(D) = 0 (open by owner contract)
+      Else:
+         force cardinal bit(D) = 1 (closed for non-owner or other transition type)
+
+6. Apply diagonal gating:
+   mask47Input = gateDiagonals(rawMask)
+
+7. Compute frame by orientation:
+   If selected orientation is reverse:
+      frame = getFrame((~mask47Input) & 0xFF)
+   Else:
+      frame = getFrame(mask47Input)
+
+8. Resolve render tileset key (frame-source fallback):
+   selectedTilesetKey = result from step 2/3/4
+   If frame == SOLID_FRAME AND bg == '' AND materials[M].baseTilesetKey exists:
+      renderTilesetKey = materials[M].baseTilesetKey
+   Else:
+      renderTilesetKey = selectedTilesetKey
 ```
 
 ### Diagonal and Corner Handling Rules
 
 1. **Diagonals do NOT participate in BG resolution.** Only the 4 cardinal directions (N, E, S, W) determine which tileset a cell selects. A diagonal-only foreign neighbor does not create a BG requirement.
 
-2. **Diagonals DO participate in mask computation.** The FG mask includes all 8 directions. A diagonal neighbor with a different FG material produces `bit = 0` in the mask, which (after gating) creates a corner indent in the rendered tile.
+2. **Diagonals DO participate in mask computation.** The selected-mode mask includes all 8 directions. In base mode (`bg == ''`), bits are FG-based with foreign-cardinal non-owner closure in engine context. In transition mode (`bg != ''`), cardinal bits follow canonical edge contracts (owner + transition type) and only then diagonals are gated from that cardinal context. In both modes, diagonals affect corner shape after gating.
 
 3. **Diagonal gating prevents orphan corners.** If a diagonal bit is 0 but both adjacent cardinal bits are 1, the tile shows a corner indent (the foreign material "pokes in" at the corner). If either adjacent cardinal is also 0, the diagonal bit is cleared by gating, preventing a disconnected corner artifact.
 
-4. **Corner where 3 materials meet.** At a T-junction or L-corner where materials A, B, and C all meet, each cell independently resolves its own transition tileset. The mask for each cell reflects which neighbors share its FG material. The diagonal gating rule ensures that corner artifacts are prevented when a cardinal edge is already open.
+4. **Corner where 3 materials meet.** At a T-junction or L-corner where materials A, B, and C all meet, each shared cardinal edge is resolved to one owner-side transition contract. Cells then compute masks from those contracts (FG base-mode or BG transition-mode with owner gating). The diagonal gating rule ensures corner artifacts are prevented when a cardinal edge is already open.
 
 5. **Out-of-bounds neighbors.** For mask computation: OOB neighbors are treated as matching (bit = 1) by default (`outOfBoundsMatches = true`). For BG resolution: OOB directions are skipped entirely -- they produce no BG requirement. This means edge cells have fewer potential conflicts than interior cells.
 
-6. **Virtual BG does NOT affect diagonal gating.** The `gateDiagonals()` function operates solely on the FG mask bits. A diagonal neighbor's virtual BG is irrelevant to gating. Example: if cell M has FG mask where N=1 (same FG), E=0 (different FG), then NE is gated off regardless of what virtual BG was computed for the E direction.
+6. **Virtual BG does NOT alter gating rules.** The `gateDiagonals()` function operates on the already computed raw mask bits, regardless of whether raw mask came from FG base-mode or BG transition-mode. Gating criteria remain strictly cardinal-adjacency based.
 
 ### S1 Conflict Resolution Behavior by Preset
 
@@ -1363,12 +1500,12 @@ The S1 algorithm's behavior depends heavily on the active priority preset:
 
 **Design implication**: The choice of preset is an aesthetic decision. Preset A produces more consistent "grass rings" around land masses; Preset B produces smoother water gradients. Both are valid and can be switched at runtime via `materialPriority` map.
 
-### Base Tileset Behavior with Non-Solid Masks
+### Base Tileset and Frame-Fallback Behavior
 
-When a cell uses its base tileset (no transition) but has diagonal-only foreign neighbors, the mask is non-solid (e.g., 247 instead of 255). In this case:
+When a cell uses a logical base tileset (no transition) but has diagonal-only foreign neighbors, the mask is non-solid (e.g., 247 instead of 255). In this case:
 - The frame from `FRAME_TABLE` may show a corner indent (e.g., frame 5 for mask 247).
-- For a base tileset, the "BG" portion of the frame should render as the same material (no visible transition). This requires base tilesets to be authored so that all 47 frames show the FG material fully, with no transparent or contrasting BG.
-- This assumption must be communicated to tileset artists as a requirement for single-layer rendering.
+- Default fallback (v1) only remaps `SOLID_FRAME`; non-solid frames continue to use `selectedTilesetKey`.
+- If art constraints require non-solid borrowing, the frame-source policy can be extended beyond `SOLID_FRAME` without changing routing/ownership logic.
 
 ## Worked Examples
 
@@ -1469,13 +1606,13 @@ Valid BGs: {grass}. No conflict. Selected tileset: **soil_grass** (BG=grass).
 
 #### Step 4: Mask Computation
 
-**Cell (1,1) -- deep_water, FG mask:**
+**Cell (1,1) -- deep_water, raw mask (selected mode):**
 Neighbors: N=dw(1), NE=dw(1), E=soil(0), SE=soil(0), S=dw(1), SW=dw(1), W=dw(1), NW=dw(1)
 Raw mask: N|NE|S|SW|W|NW = 1+2+16+32+64+128 = 243
 Gated: Cardinals = N+S+W = 81. NE: N+E? E=0, not added. SE: S+E? E=0, not added. SW: S+W, raw=1 -> +32=113. NW: N+W, raw=1 -> +128=241.
 **gated = 241, FRAME_TABLE[241] = frame 25** (T-junction open E, NW+SW corners filled)
 
-**Cell (2,1) -- soil, FG mask:**
+**Cell (2,1) -- soil, raw mask (selected mode):**
 Neighbors: N=dw(0), NE=OOB(1), E=OOB(1), SE=soil(1), S=soil(1), SW=dw(0), W=dw(0), NW=dw(0)
 Raw mask: NE|E|SE|S = 2+4+8+16 = 30
 Gated: Cardinals = E+S = 20. NE: N=0, not added. SE: S+E both 1, raw=1 -> +8=28. SW: S+W? W=0, not added. NW: N=0, not added.
@@ -1639,15 +1776,18 @@ Focus cells: deep_water(1,1), soil(2,1), water(2,2), deep_water(1,2).
 **Cell (2,2) -- water:**
 | Dir | Neighbor | Foreign? | nextHop | Tileset? | BG |
 |---|---|---|---|---|---|
-| N(2,1) | soil | Yes | grass | water_grass: YES | grass |
+| N(2,1) | soil | Yes | grass | water_grass (direct): YES | grass |
 | E(3,2) | water | No | | | |
-| S(2,3) | dw | Yes | deep_water | water_deep-water: **NO** | **INVALID** |
-| W(1,2) | dw | Yes | deep_water | water_deep-water: **NO** | **INVALID** |
+| S(2,3) | dw | Yes | deep_water | deep-water_water (reverse): YES | deep_water |
+| W(1,2) | dw | Yes | deep_water | deep-water_water (reverse): YES | deep_water |
 
-The render graph does NOT contain `water -> deep_water` (no `water_deep-water` tileset exists). Only `deep-water -> water` exists (deep-water_water tileset, meaning deep-water renders ONTO water).
+The render graph does not contain direct `water -> deep_water` (no `water_deep-water` tileset exists). Reverse fallback is therefore used for S/W edges via `deep-water -> water` (`deep-water_water`).
 
-Valid BGs: {grass} (only N contributes). S and W edges are unresolvable from water's perspective.
-Selected: **water_grass** (BG=grass).
+Valid BG requirements before conflict resolution: `{grass, deep_water}`.
+
+Under Preset A (`deep-water=100, water=90, sand=50, grass=30, soil=10`), S1 reassigns S/W edges to deep_water neighbors (higher priority), leaving `{grass}` on the water cell.
+
+Selected (Preset A): **water_grass** (BG=grass).
 
 **Cell (1,2) -- deep_water:**
 | Dir | Neighbor | Foreign? | nextHop | Tileset? | BG |
@@ -1659,16 +1799,16 @@ Selected: **water_grass** (BG=grass).
 
 BGs: {water}. Selected: **deep-water_water**.
 
-**Key insight**: The deep_water cell correctly handles the transition to water (using deep-water_water). The water cell CANNOT transition back to deep_water because no water_deep-water tileset exists. Instead, water uses water_grass for its only resolvable edge (toward soil to the north). The water cell's W and S edges toward deep_water contribute 0 bits to the FG mask but do not influence tileset selection.
+**Key insight**: Absence of direct `water_deep-water` does not make S/W edges intrinsically invalid. They are reverse-valid via `deep-water_water`. Final selected BG still depends on S1/S2 priorities. In Preset A, water keeps `water_grass`; with different priorities, water may keep deep_water BG and render in reverse mode.
 
 #### Step 4: Mask Computation (Cell 2,2 -- water)
 
-Neighbors: N(2,1)=soil(0), NE(3,1)=soil(0), E(3,2)=water(1), SE(3,3)=dw(0), S(2,3)=dw(0), SW(1,3)=dw(0), W(1,2)=dw(0), NW(1,1)=dw(0)
-Raw: E=4
-Gated: 4
-**frame = 44** (E-only dead end)
+Selected BG is `grass` (Preset A result). Under edge-contract gating, transition openings are driven by owned edge contracts typed as `grass`, not by direct physical check `neighbor.terrain === grass`.
 
-Water at (2,2) shows as E-only dead end. The water_grass tileset renders grass BG on N, S, and W sides. The W side shows grass even though the actual neighbor is deep_water. This is a visual trade-off of the single-tileset constraint: water can only show one BG (grass), so the deep_water boundary appears as grass instead of deep_water.
+Neighbors: N=soil, NE=soil, E=water, SE=dw, S=dw, SW=dw, W=dw, NW=dw  
+Even when no neighbor is physically `grass`, an owned edge may still target `grass` through routing (`nextHop`) and must open consistently by edge type.
+
+**Rule**: edge-type consistency has priority over physical-BG adjacency checks for cardinal openings.
 
 #### Visual Result at Boundaries
 
@@ -1678,9 +1818,9 @@ BG:  water       | grass
 Boundary: water meets grass -- compat (grass_water exists)
 ```
 
-The viewer sees: deep_water fading to water (on the dw cell), then grass (on the water cell). Ideally water should show deep_water at its W edge, but without a water_deep-water tileset, the system degrades gracefully to grass.
+The viewer sees a consistent boundary contract: only the owner side opens each shared edge by its selected transition type. The non-owner side remains closed for that edge, avoiding contradictory "both-open" rendering and preventing false isolated/solid mismatches across the same boundary.
 
-**Note**: If a `water_deep-water` tileset were added, the water cell would gain an additional valid BG requirement (deep_water for W and S edges), potentially conflicting with the N edge's grass BG. That conflict would be resolved by S1/S2 with the preference array (water > grass favoring the water/deep_water transition).
+**Note**: If a direct `water_deep-water` tileset is later added, it takes precedence over reverse (`direct-first`) and keeps the same S1/S2 conflict flow.
 
 ---
 
@@ -1690,7 +1830,7 @@ The viewer sees: deep_water fading to water (on the dw cell), then grass (on the
 
 #### Step 1: Fill map with deep_water
 
-All 64 cells: FG=deep_water, base tileset, mask=255, frame=1 (solid).
+All 64 cells: FG=deep_water, logical base tileset, mask=255, frame=1 (solid), render key resolved by solid-frame fallback policy (typically same key).
 
 #### Step 2: Paint 4x4 soil rectangle at (2,2)-(5,5)
 
@@ -1716,7 +1856,7 @@ Row 7: dw dw dw dw dw dw dw dw
 - All 4 cardinal neighbors = dw. Only diagonal SE(2,2) = soil.
 - No cardinal foreign neighbors -> no BG requirements -> **base tileset**.
 - Mask: SE=0, all others=1. Raw=247. Gated=247, frame=5 (missing SE corner).
-- With base tileset, frame 5 renders identically to frame 1 (base tilesets show full material in all frames for single-layer rendering).
+- Non-solid frame rendering (frame 5) uses the selected logical tileset unless an extended fallback rule is configured.
 
 **Border soil cells** (e.g., (2,2) -- NW corner of soil rectangle):
 - N(2,1)=dw, E(3,2)=so, S(2,3)=so, W(1,2)=dw.
@@ -1726,9 +1866,9 @@ Row 7: dw dw dw dw dw dw dw dw
 - Mask: N=0, NE=0, E=1, SE=1, S=1, SW=0, W=0, NW=0. Raw: E+SE+S=28. Gated: Cardinals=E+S=20. SE: S+E both 1, raw=1 -> 28. frame=35 (L-corner E+S, SE filled).
 
 **Interior soil cells** (e.g., (3,3)):
-- All 8 neighbors = soil. mask=255, frame=1 (solid). Base tileset.
+- All 8 neighbors = soil. mask=255, frame=1 (solid). Logical base tileset; render key resolved by solid-frame fallback policy.
 
-**Verification**: deep_water border cells use **deep-water_water** (BG=water). Soil border cells use **soil_grass** (BG=grass). Interior cells use base tilesets.
+**Verification**: deep_water border cells use **deep-water_water** (BG=water). Soil border cells use **soil_grass** (BG=grass). Interior cells use logical base providers with solid-frame fallback applied at render-key resolution.
 
 #### Step 3: Paint 2x2 water patch at (3,3)-(4,4)
 
@@ -1858,10 +1998,10 @@ The following invariants must hold after each step of the painting workflow (Sce
 | All dw border cells use deep-water_water | N/A (no borders) | YES | YES (unchanged) |
 | All soil border cells use soil_grass | N/A | YES | YES |
 | All water cells use water_grass | N/A | N/A | YES |
-| Interior cells use base tileset, frame=1 | YES (all 64) | YES (dw interior + soil interior) | YES (dw + soil + water interior) |
+| Interior cells use `SOLID_FRAME` with render key resolved by fallback policy | YES (all 64) | YES (dw interior + soil interior) | YES (dw + soil + water interior) |
 | No cell has an empty/transparent edge in single-layer mode | YES | YES (all transitions covered) | YES |
 | `cache[y][x].fg === grid[y][x].terrain` for all cells | YES | YES | YES |
-| `cache[y][x].selectedTilesetKey` is valid in TilesetRegistry | YES | YES | YES |
+| `cache[y][x].selectedTilesetKey` and `cache[y][x].renderTilesetKey` are valid in TilesetRegistry | YES | YES | YES |
 | Undo step 3 restores step 2 state exactly | N/A | N/A | Required |
 | Undo step 2 restores step 1 state exactly | N/A | Required | Required |
 
@@ -1870,5 +2010,11 @@ The following invariants must hold after each step of the painting workflow (Sce
 | Date | Version | Changes | Author |
 |------|---------|---------|--------|
 | 2026-02-22 | 1.0 | Initial version | Claude Code |
-| 2026-02-22 | 1.1 | Add Algorithm Clarifications, Worked Examples (4 scenarios + T-junction), diagonal/corner rules, key invariants, acceptance test table. Clarify BoundaryResolver and CellTilesetSelector: both cells independently resolve BG; edge ownership is for conflict resolution only. | Claude Code |
+| 2026-02-22 | 1.1 | Add Algorithm Clarifications, Worked Examples (4 scenarios + T-junction), diagonal/corner rules, key invariants, acceptance test table. Introduce an early dual-side BG interpretation for boundaries (later superseded by v1.6 canonical edge-contract ownership model). | Claude Code |
 | 2026-02-22 | 1.2 | Fix S1 conflict resolution errors in Worked Examples 2 and T-junction: corrected sand cell from sand_water to sand_grass under Preset A (high-priority dw neighbor causes S/W edges to be reassigned, not N edge). Add explicit OOB handling rule to BG resolution algorithm. Add S1 Preset A vs Preset B visual trade-off analysis. Add OOB and virtual-BG-independent-of-gating rules to Diagonal and Corner Handling section. Update visual summaries for affected examples. | Claude Code |
+| 2026-02-23 | 1.3 | Add frame-level render fallback model (variant 3): introduce logical vs render tileset keys (`selectedTilesetKey`/`renderTilesetKey`), default solid-frame fallback to `materials[fg].baseTilesetKey`, update AC/contracts/cache indices/invariants/tests, and clarify fallback does not modify routing or ownership. | Codex |
+| 2026-02-23 | 1.4 | Add direct-first reverse-pair fallback: if `FG_BG` is missing but `BG_FG` exists, allow reverse orientation mode (current formula: `getFrame((~mask47Input) & 0xFF)` after diagonal gating), keep S1/S2 unchanged, require non-empty keys for non-empty terrain cells, and update Worked Example 3 to treat `deep-water_water` as reverse-valid from water side. | Codex |
+| 2026-02-23 | 1.5 | Add selected-mode mask rule: base/no-transition cells use FG comparison mask, transition cells use BG-targeted mask (`computeTransitionMask` semantics), preserve diagonal gating and reverse orientation behavior, and update AC/invariants/contracts/tests to prevent false isolated transition cells. | Codex |
+| 2026-02-23 | 1.6 | Correct edge-rendering semantics: transition is now defined as a canonical per-edge contract with owner-side rendering (not dual independent per-cell rendering). Update AC/invariants/algorithm/examples to enforce edge-type consistency, owner-gated cardinal openings, and base-only solid-frame fallback (`bg == ''`). | Codex |
+| 2026-02-23 | 1.7 | Add explicit post-recompute neighbor repaint policy (`C1..C5`) to core algorithm, AC, and invariants: dirty set remains `Chebyshev R=2`, center commit is mandatory, neighbor commit is mandatory only for `C1/C2/C3`, and optional for `C4/C5`, with owner-side edge invariant preserved. | Codex |
+| 2026-02-23 | 1.8 | Sync terminology with ADR status (`ADR-0011` accepted) and resolve cross-doc consistency items. | Codex |

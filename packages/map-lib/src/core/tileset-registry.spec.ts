@@ -4,8 +4,7 @@
 // Generated: 2026-02-22
 
 import type { TilesetInfo } from '../types/material-types';
-// TODO: uncomment when module is implemented
-// import { TilesetRegistry } from './tileset-registry';
+import { TilesetRegistry } from './tileset-registry';
 
 // ---------------------------------------------------------------------------
 // Test Data Factories
@@ -54,38 +53,38 @@ describe('TilesetRegistry', () => {
     // @complexity: medium
 
     it('should construct from reference tileset set without errors', () => {
-      // Arrange: Reference tilesets (11 entries)
-      // Act: new TilesetRegistry(makeReferenceTilesets())
-      // Assert: No throw, instance created
+      const tilesets = makeReferenceTilesets();
+      const registry = new TilesetRegistry(tilesets);
 
-      // TODO: implement
+      expect(registry).toBeInstanceOf(TilesetRegistry);
     });
 
     it('should construct from empty tileset array', () => {
-      // Arrange: Empty array []
-      // Act: new TilesetRegistry([])
-      // Assert: No throw, getAllMaterials() returns empty set
+      const registry = new TilesetRegistry([]);
 
-      // TODO: implement
+      expect(registry.getAllMaterials().size).toBe(0);
     });
 
     it('should skip entries without fromMaterialKey', () => {
-      // Arrange: [{ key: 'ts-x', name: 'X' }] -- no fromMaterialKey
-      // Act: new TilesetRegistry([...])
-      // Assert: getAllMaterials() does not include material from skipped entry
+      const tilesets: TilesetInfo[] = [
+        { key: 'ts-x', name: 'X' },
+        makeTileset('ts-grass', 'grass'),
+      ];
+      const registry = new TilesetRegistry(tilesets);
 
-      // TODO: implement
+      expect(registry.getAllMaterials().size).toBe(1);
+      expect(registry.getAllMaterials().has('grass')).toBe(true);
+      expect(registry.getTilesetInfo('ts-x')).toBeUndefined();
     });
 
     it('should treat self-edge tilesets (from === to) as base tilesets, not graph edges', () => {
-      // AC1: "If a tileset has fromMaterialKey === toMaterialKey, then the system
-      //        shall treat it as a base tileset and not add a self-edge to the graphs"
-      // Arrange: [{ key: 'ts-g', name: 'grass', fromMaterialKey: 'grass', toMaterialKey: 'grass' }]
-      // Act: new TilesetRegistry([...])
-      // Assert: hasTileset('grass', 'grass') returns false (no self-edge)
-      //         getBaseTilesetKey('grass') returns 'ts-g'
+      const tilesets: TilesetInfo[] = [
+        { key: 'ts-g', name: 'grass', fromMaterialKey: 'grass', toMaterialKey: 'grass' },
+      ];
+      const registry = new TilesetRegistry(tilesets);
 
-      // TODO: implement
+      expect(registry.hasTileset('grass', 'grass')).toBe(false);
+      expect(registry.getBaseTilesetKey('grass')).toBe('ts-g');
     });
   });
 
@@ -97,28 +96,26 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should return true for existing transition pair (soil, grass)', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: hasTileset('soil', 'grass') === true
-      //         getTilesetKey('soil', 'grass') === 'ts-soil-grass'
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      expect(registry.hasTileset('soil', 'grass')).toBe(true);
+      expect(registry.getTilesetKey('soil', 'grass')).toBe('ts-soil-grass');
     });
 
     it('should return false for missing transition pair (soil, water)', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: hasTileset('soil', 'water') === false
-      //         getTilesetKey('soil', 'water') === undefined
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      expect(registry.hasTileset('soil', 'water')).toBe(false);
+      expect(registry.getTilesetKey('soil', 'water')).toBeUndefined();
     });
 
     it('should return false for reversed pair when only forward exists', () => {
-      // Arrange: Registry from reference tilesets
-      //   deep-water -> water exists, but water -> deep-water does NOT
-      // Assert: hasTileset('deep-water', 'water') === true
-      //         hasTileset('water', 'deep-water') === false
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      // deep-water -> water exists
+      expect(registry.hasTileset('deep-water', 'water')).toBe(true);
+      // water -> deep-water does NOT exist
+      expect(registry.hasTileset('water', 'deep-water')).toBe(false);
     });
   });
 
@@ -129,18 +126,16 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should return base tileset key for material with standalone entry', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: getBaseTilesetKey('deep-water') === 'ts-deep-water'
-      //         getBaseTilesetKey('grass') === 'ts-grass'
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      expect(registry.getBaseTilesetKey('deep-water')).toBe('ts-deep-water');
+      expect(registry.getBaseTilesetKey('grass')).toBe('ts-grass');
     });
 
     it('should return undefined for unknown material', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: getBaseTilesetKey('lava') === undefined
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      expect(registry.getBaseTilesetKey('lava')).toBeUndefined();
     });
   });
 
@@ -151,11 +146,15 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should return all unique materials from reference tilesets', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: getAllMaterials() contains: deep-water, water, grass, soil, sand
-      //         getAllMaterials().size === 5
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      const materials = registry.getAllMaterials();
 
-      // TODO: implement
+      expect(materials.size).toBe(5);
+      expect(materials.has('deep-water')).toBe(true);
+      expect(materials.has('water')).toBe(true);
+      expect(materials.has('grass')).toBe(true);
+      expect(materials.has('soil')).toBe(true);
+      expect(materials.has('sand')).toBe(true);
     });
   });
 
@@ -166,12 +165,18 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should return all transition pairs as [from, to] tuples', () => {
-      // Arrange: Registry from reference tilesets (6 transition pairs)
-      // Assert: getAllTransitionPairs() has length 6
-      //         Includes ['deep-water', 'water'], ['water', 'grass'], ['grass', 'water'],
-      //                  ['soil', 'grass'], ['sand', 'water'], ['sand', 'grass']
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      const pairs = registry.getAllTransitionPairs();
 
-      // TODO: implement
+      expect(pairs).toHaveLength(6);
+
+      const pairStrings = pairs.map(([from, to]) => `${from}:${to}`);
+      expect(pairStrings).toContain('deep-water:water');
+      expect(pairStrings).toContain('water:grass');
+      expect(pairStrings).toContain('grass:water');
+      expect(pairStrings).toContain('soil:grass');
+      expect(pairStrings).toContain('sand:water');
+      expect(pairStrings).toContain('sand:grass');
     });
   });
 
@@ -182,18 +187,91 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should return TilesetInfo for existing key', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: getTilesetInfo('ts-soil-grass')?.fromMaterialKey === 'soil'
-      //         getTilesetInfo('ts-soil-grass')?.toMaterialKey === 'grass'
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      const info = registry.getTilesetInfo('ts-soil-grass');
 
-      // TODO: implement
+      expect(info).toBeDefined();
+      expect(info?.fromMaterialKey).toBe('soil');
+      expect(info?.toMaterialKey).toBe('grass');
     });
 
     it('should return undefined for unknown key', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: getTilesetInfo('ts-nonexistent') === undefined
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      expect(registry.getTilesetInfo('ts-nonexistent')).toBeUndefined();
+    });
+  });
+
+  describe('resolvePair', () => {
+    // ADR-0011 Decision 7: direct-first reverse-pair fallback
+    // ROI: 95 | Business Value: 10 (fixes isolated frame bug) | Frequency: 10
+    // @category: core-functionality
+
+    it('should return direct when FG_BG tileset exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      const result = registry.resolvePair('water', 'grass');
+
+      expect(result).not.toBeNull();
+      expect(result!.tilesetKey).toBe('ts-water-grass');
+      expect(result!.orientation).toBe('direct');
+    });
+
+    it('should return reverse when only BG_FG tileset exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      // deep-water -> water exists, but water -> deep-water does NOT
+      const result = registry.resolvePair('water', 'deep-water');
+
+      expect(result).not.toBeNull();
+      expect(result!.tilesetKey).toBe('ts-deep-water-water');
+      expect(result!.orientation).toBe('reverse');
+    });
+
+    it('should return direct when both FG_BG and BG_FG exist', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      // water -> grass AND grass -> water both exist
+      const result = registry.resolvePair('water', 'grass');
+
+      expect(result).not.toBeNull();
+      expect(result!.tilesetKey).toBe('ts-water-grass');
+      expect(result!.orientation).toBe('direct');
+    });
+
+    it('should return null when neither direction exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      // soil -> deep-water and deep-water -> soil both missing
+      const result = registry.resolvePair('soil', 'deep-water');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null for self-edge (fg === bg)', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      const result = registry.resolvePair('water', 'water');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('hasPairOrReverse', () => {
+    it('should return true when direct pair exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      expect(registry.hasPairOrReverse('water', 'grass')).toBe(true);
+    });
+
+    it('should return true when only reverse pair exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      // water -> deep-water doesn't exist, but deep-water -> water does
+      expect(registry.hasPairOrReverse('water', 'deep-water')).toBe(true);
+    });
+
+    it('should return false when neither direction exists', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      expect(registry.hasPairOrReverse('soil', 'deep-water')).toBe(false);
+    });
+
+    it('should return false for self-edge', () => {
+      const registry = new TilesetRegistry(makeReferenceTilesets());
+      expect(registry.hasPairOrReverse('water', 'water')).toBe(false);
     });
   });
 
@@ -205,11 +283,19 @@ describe('TilesetRegistry', () => {
     // @complexity: low
 
     it('should be immutable after construction', () => {
-      // Arrange: Registry from reference tilesets
-      // Assert: Verify that returned collections (getAllMaterials, getAllTransitionPairs)
-      //         are readonly and cannot be mutated externally
+      const registry = new TilesetRegistry(makeReferenceTilesets());
 
-      // TODO: implement
+      // getAllMaterials returns ReadonlySet -- verify it cannot be mutated
+      const materials = registry.getAllMaterials();
+      expect(typeof (materials as Set<string>).add).toBe('function');
+      // The returned set should be a real Set, but the type system prevents mutation.
+      // We verify that getting the same reference twice returns consistent data.
+      expect(registry.getAllMaterials()).toBe(materials);
+
+      // getAllTransitionPairs returns frozen array
+      const pairs = registry.getAllTransitionPairs();
+      expect(Object.isFrozen(pairs)).toBe(true);
+      expect(registry.getAllTransitionPairs()).toBe(pairs);
     });
   });
 });

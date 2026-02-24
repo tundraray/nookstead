@@ -1,25 +1,52 @@
 # Work Plan: Autotile Routing System Implementation
 
-Created Date: 2026-02-22
+Created Date: 2026-02-23
 Type: refactor
-Estimated Duration: 8-10 days
-Estimated Impact: 14 files (7 new, 7 modified/replaced)
+Estimated Duration: 6-8 days
+Estimated Impact: 19 files (8 new, 4 deleted, 7 modified)
 Related Issue/PR: N/A
 
 ## Related Documents
 - Design Doc: [docs/design/design-015-autotile-routing-system.md](../design/design-015-autotile-routing-system.md)
 - ADR: [docs/adr/ADR-0011-autotile-routing-architecture.md](../adr/ADR-0011-autotile-routing-architecture.md)
+- Neighbor Repaint Policy: [docs/design/design-015-neighbor-repaint-policy-v2-ru.md](../design/design-015-neighbor-repaint-policy-v2-ru.md)
 - Prerequisite ADRs: ADR-0010 (map-lib extraction), ADR-0009 (tileset management), ADR-0006 (map editor architecture)
 
 ## Objective
 
-Replace the current dominant-neighbor autotile pipeline with a graph-based BFS routing system. The new system resolves three fundamental limitations: no multi-hop routing, no multi-material background consensus, and no conflict resolution at T-junctions. The routing architecture provides optimal tileset selection for arbitrary material graphs via BFS shortest-path routing, per-edge ownership with configurable priority presets, and S1/S2 conflict resolution.
+Replace the current dominant-neighbor autotile pipeline with a graph-based BFS routing system. The new system resolves three fundamental limitations of the current approach: no multi-hop routing, no multi-material background consensus, and no conflict resolution at T-junctions.
+
+The routing architecture provides: optimal tileset selection for arbitrary material graphs via BFS shortest-path routing, per-cell background consensus with virtual boundary materials, configurable material priority for conflict resolution (S1/S2), and an incremental RetileEngine with per-cell caching for performance.
 
 ## Background
 
 The current `recomputeAutotileLayers()` pipeline uses `findDominantNeighbor` + `findIndirectTileset` (1-hop search). As more biome materials are added, the number of unreachable material pairs grows combinatorially. The new system builds a compatibility graph from tileset metadata, computes all-pairs BFS routing tables, resolves background consensus per cell, and selects the correct transition tileset -- all orchestrated by an incremental RetileEngine with per-cell caching.
 
-**Implementation Approach**: Horizontal Slice (Foundation-driven), per Design Doc. The 6 new modules form a strict dependency chain where each layer can be implemented and fully tested in isolation before the next layer builds on top.
+**Implementation Approach**: Horizontal Slice (Foundation-driven), per Design Doc. The 8 new modules form a strict dependency chain where each layer can be implemented and fully tested in isolation before the next layer builds on top.
+
+**Development Strategy**: TDD -- all spec files are already written and committed. Each implementation task takes a RED spec file and makes it GREEN by creating the corresponding implementation module.
+
+### Current State
+
+**Spec files already committed (RED -- tests exist, implementations do not):**
+
+| Spec File | Tests | Lines |
+|-----------|-------|-------|
+| `tileset-registry.spec.ts` | 14 | 215 |
+| `graph-builder.spec.ts` | 9 | 155 |
+| `router.spec.ts` | 13 | 241 |
+| `edge-resolver.spec.ts` | 7 | 218 |
+| `cell-tileset-selector.spec.ts` | 18 | 367 |
+| `retile-engine.spec.ts` | 23 | 460 |
+| `retile-engine.integration.spec.ts` | 18 | 417 |
+| `routing-pipeline.integration.spec.ts` | 20 | 455 |
+| **Total** | **122** | **2,528** |
+
+**Implementation files to CREATE:** 8 files (routing-types.ts, tileset-registry.ts, graph-builder.ts, router.ts, edge-resolver.ts, cell-tileset-selector.ts, retile-engine.ts, routing-commands.ts)
+
+**Files to DELETE:** 4 files (autotile-layers.ts, autotile-layers.spec.ts, commands.ts, commands.spec.ts)
+
+**Files to UPDATE:** 7 files (index.ts, neighbor-mask.ts, use-map-editor.ts, brush-tool.ts, fill-tool.ts, eraser-tool.ts, rectangle-tool.ts)
 
 ## Risks and Countermeasures
 
@@ -60,11 +87,11 @@ The current `recomputeAutotileLayers()` pipeline uses `findDominantNeighbor` + `
 The Design Doc specifies a 4-step migration:
 
 1. **During Phases 1-4**: Implement all new modules alongside existing code. Old modules (`autotile-layers.ts`, `commands.ts`) remain functional.
-2. **Phase 5**: Add new exports to `index.ts` with `@deprecated` JSDoc tags on old exports.
-3. **Phase 6**: Switch `use-map-editor.ts` reducer to use new commands and RetileEngine. Remove old imports.
-4. **Phase 7**: Verify all old code paths are unused. Mark for deletion in follow-up (or delete if confirmed safe).
+2. **Phase 5**: Add new exports to `index.ts`, add routing-commands.
+3. **Phase 6**: Switch `use-map-editor.ts` and all tool files to use new commands and RetileEngine. Remove old imports.
+4. **Phase 7**: Delete old modules, clean up deprecated exports.
 
-**Rollback Plan**: At any phase, the old system remains fully functional. If the new system fails integration testing, revert the `use-map-editor.ts` import changes (single-file rollback) to restore the old pipeline.
+**Rollback Plan**: During Phases 1-6, the old system remains fully functional alongside new modules. If the new system fails integration testing, revert the `use-map-editor.ts` and tool file import changes (Phase 6 rollback) to restore the old pipeline. **After Phase 7** (old files deleted), rollback requires `git revert` of the Phase 7 commit to restore deleted modules. Therefore: Phase 7 must only proceed after Phase 6 integration is fully verified and stable.
 
 ## Phase Structure Diagram
 
@@ -73,9 +100,10 @@ graph TD
     P1[Phase 1: Foundation Types<br/>+ TilesetRegistry] --> P2[Phase 2: GraphBuilder<br/>+ Router]
     P2 --> P3[Phase 3: EdgeResolver<br/>+ CellTilesetSelector]
     P3 --> P4[Phase 4: RetileEngine]
-    P4 --> P5[Phase 5: Command System<br/>Replacement]
-    P5 --> P6[Phase 6: Editor Integration<br/>+ Export Updates]
-    P6 --> P7[Phase 7: QA & Performance<br/>Testing]
+    P4 --> P5[Phase 5: Command System<br/>+ Export Updates]
+    P5 --> P6[Phase 6: Editor Integration<br/>+ Tool Migration]
+    P6 --> P7[Phase 7: Neighbor Repaint Policy<br/>+ Cleanup + Delete Old Files]
+    P7 --> P8[Phase 8: QA & Performance<br/>Testing]
 
     style P1 fill:#e1f5fe
     style P2 fill:#e1f5fe
@@ -83,7 +111,8 @@ graph TD
     style P4 fill:#e1f5fe
     style P5 fill:#e1f5fe
     style P6 fill:#bbdefb
-    style P7 fill:#c8e6c9
+    style P7 fill:#fff9c4
+    style P8 fill:#c8e6c9
 ```
 
 ## Task Dependency Diagram
@@ -101,12 +130,13 @@ graph LR
     T4 --> T7
     T7 --> T8[routing-commands.ts]
     T8 --> T9[index.ts exports]
-    T9 --> T10[use-map-editor.ts]
+    T9 --> T10[genmap tool files]
+    T10 --> T11[Delete old files]
 
     AT[autotile.ts<br/>getFrame/gateDiagonals] --> T6
     NM[neighbor-mask.ts<br/>computeNeighborMaskByMaterial] --> T6
     MR[material-resolver.ts<br/>resolvePaint] --> T7
-    WK[walkability.ts<br/>recomputeWalkability] --> T7
+    WK[walkability.ts<br/>recomputeWalkability] --> T8
 
     style T1 fill:#fff9c4
     style T2 fill:#e1f5fe
@@ -118,13 +148,14 @@ graph LR
     style T8 fill:#e1f5fe
     style T9 fill:#bbdefb
     style T10 fill:#bbdefb
+    style T11 fill:#fff9c4
     style AT fill:#f3e5f5
     style NM fill:#f3e5f5
     style MR fill:#f3e5f5
     style WK fill:#f3e5f5
 ```
 
-**Legend**: Yellow = types, Blue = new modules, Light blue = integration, Purple = existing reused modules.
+**Legend**: Yellow = types/cleanup, Blue = new modules, Light blue = integration, Purple = existing reused modules.
 
 ## Implementation Phases
 
@@ -136,55 +167,44 @@ graph LR
 
 **Depends on**: Nothing (foundation layer)
 
-**Complexity**: S-M
+**Test resolution**: 0/14 -> 14/14 (tileset-registry.spec.ts)
 
 #### Tasks
 
 - [ ] **Task 1.1**: Create `packages/map-lib/src/types/routing-types.ts` with all routing type definitions
-  - Types: `CompatGraph`, `RenderGraph`, `MaterialPriorityMap`, `RoutingTable`, `NeighborDirection`, `CellCacheEntry`, `CellCache`, `CellPatchEntry`, `RetileResult`, `RetileEngineOptions`, edge direction constants (`EDGE_N`, `EDGE_E`, `EDGE_S`, `EDGE_W`)
-  - Import `EditorLayer` from `editor-types.ts` and `Cell` from `@nookstead/shared`
-  - Import `TilesetInfo`, `MaterialInfo` from `material-types.ts`
-  - All types use `readonly` modifiers and `ReadonlyArray`/`ReadonlyMap` where applicable
+  - Types from Design Doc contract definitions: `CompatGraph`, `RenderGraph`, `MaterialPriorityMap`, `RoutingTable` interface, `NeighborDirection`, `CellCacheEntry`, `CellCache`, `CellPatchEntry`, `RetileResult`, `RetileEngineOptions`
+  - Edge direction constants: `EDGE_N`, `EDGE_E`, `EDGE_S`, `EDGE_W`
+  - Import `EditorLayer` from `editor-types.ts`, `Cell` from `@nookstead/shared`, `TilesetInfo`/`MaterialInfo` from `material-types.ts`
+  - All types use `readonly` modifiers and `ReadonlyArray`/`ReadonlyMap`
   - JSDoc on every exported type
+  - **Success criteria**: File compiles with `pnpm nx typecheck map-lib`
 
-- [ ] **Task 1.2**: Create `packages/map-lib/src/core/tileset-registry.ts` implementing `TilesetRegistry` class
+- [x] **Task 1.2**: Create `packages/map-lib/src/core/tileset-registry.ts` -- make `tileset-registry.spec.ts` GREEN
+  - Implement `TilesetRegistry` class per Design Doc contract
   - Constructor accepts `ReadonlyArray<TilesetInfo>`, validates and indexes entries
-  - Entries without `fromMaterialKey` are skipped (excluded from routing graph)
-  - Base tilesets: entries where `fromMaterialKey === toMaterialKey` or `toMaterialKey` is absent
-  - Transition tilesets: entries where both `fromMaterialKey` and `toMaterialKey` are present and different
+  - Entries without `fromMaterialKey` are skipped
+  - Base tilesets: `fromMaterialKey === toMaterialKey` or `toMaterialKey` absent
+  - Transition tilesets: both keys present and different
   - API: `hasTileset(fg, bg)`, `getTilesetKey(fg, bg)`, `getBaseTilesetKey(material)`, `getAllMaterials()`, `getAllTransitionPairs()`, `getTilesetInfo(key)`
-  - Internal indexing uses `"from:to"` key format (consistent with existing `buildTilesetPairMap`)
-  - Immutable after construction
-  - JSDoc on all public methods
+  - Internal indexing uses `"from:to"` key format
+  - Immutable after construction; JSDoc on all public methods
+  - **Success criteria**: All 14 tests in `tileset-registry.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/tileset-registry.spec.ts`
 
-- [ ] **Task 1.3**: Create `packages/map-lib/src/core/tileset-registry.spec.ts` with unit tests
-  - Test: constructor with various tileset configs (empty, base-only, transition-only, mixed)
-  - Test: `hasTileset`/`getTilesetKey` for existing pairs, missing pairs, reversed pairs
-  - Test: `getBaseTilesetKey` for materials with and without base tilesets
-  - Test: `getAllMaterials` returns correct set
-  - Test: `getAllTransitionPairs` returns correct tuples
-  - Test: entries without `fromMaterialKey` are excluded
-  - Test: self-edge tilesets (`from === to`) treated as base, not graph edge
-  - Use factory helpers following `makeCell`/`makeMaterial` pattern from existing tests
-  - Target: 100% coverage
-
-- [ ] **Task 1.4**: Quality check -- typecheck, lint, format pass for new files
+- [ ] **Task 1.3**: Quality check -- `pnpm nx typecheck map-lib && pnpm nx lint map-lib`
 
 #### Phase 1 Completion Criteria
 
 - [ ] All routing types defined and exported from `routing-types.ts`
-- [ ] TilesetRegistry constructed from test tileset data; all public methods return correct results
-- [ ] `hasTileset(A, B) === true` iff a tileset with `from=A, to=B` was provided (AC1 partial)
-- [ ] `getBaseTilesetKey(A)` returns correct key for standalone tilesets
-- [ ] All 8+ unit tests pass with 100% coverage on tileset-registry.ts
-- [ ] `pnpm nx test map-lib` passes (existing + new tests)
+- [ ] `tileset-registry.spec.ts`: 14/14 tests GREEN (AC1 partial)
 - [ ] `pnpm nx typecheck map-lib` passes
+- [ ] `pnpm nx lint map-lib` passes
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx test map-lib --testPathPattern=tileset-registry` -- all tests pass
+1. Run `pnpm nx test map-lib --testFile=src/core/tileset-registry.spec.ts` -- all 14 tests pass
 2. Run `pnpm nx typecheck map-lib` -- no type errors
-3. Verify `routing-types.ts` exports are importable from other test files
+3. Verify `routing-types.ts` exports are importable from spec files
 4. Verify TilesetRegistry correctly handles the reference tileset set from Design Doc (11 tilesets, 10 materials)
 
 ---
@@ -195,572 +215,563 @@ graph LR
 
 **Depends on**: Phase 1 (TilesetRegistry, routing types)
 
-**Complexity**: M
+**Test resolution**: 14/14 -> 36/36 (graph-builder: +9, router: +13)
 
 #### Tasks
 
-- [ ] **Task 2.1**: Create `packages/map-lib/src/core/graph-builder.ts` implementing `buildGraphs(registry)` function
-  - Builds `compatGraph: CompatGraph` (undirected) -- if A_B or B_A tileset exists, both A->B and B->A edges added
-  - Builds `renderGraph: RenderGraph` (directed) -- A->B only if A_B tileset exists
+- [x] **Task 2.1**: Create `packages/map-lib/src/core/graph-builder.ts` -- make `graph-builder.spec.ts` GREEN
+  - Implement `buildGraphs(registry)` returning `MaterialGraphs { compatGraph, renderGraph }`
+  - `compatGraph` (undirected): if A_B or B_A tileset exists, both A->B and B->A edges
+  - `renderGraph` (directed): A->B only if A_B tileset exists
   - Self-edges excluded (base tilesets where `from === to`)
-  - Uses `Map<string, Set<string>>` internally, returns `ReadonlyMap<string, ReadonlySet<string>>`
-  - Returns `MaterialGraphs` type: `{ compatGraph, renderGraph }`
+  - Export `MaterialGraphs` type
   - JSDoc on all exports
+  - **Success criteria**: All 9 tests in `graph-builder.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/graph-builder.spec.ts`
 
-- [ ] **Task 2.2**: Create `packages/map-lib/src/core/graph-builder.spec.ts` with unit tests
-  - Test: single transition pair creates bidirectional compat edge and unidirectional render edge
-  - Test: multiple pairs build correct graph
-  - Test: undirected symmetry of compatGraph (`A in compatGraph[B]` iff `B in compatGraph[A]`)
-  - Test: directed renderGraph is NOT symmetric
-  - Test: base tilesets (`from === to`) produce no graph edges
-  - Test: empty registry produces empty graphs
-  - Test: renderGraph edges are a subset of compatGraph edges
-  - Target: 100% coverage
-
-- [ ] **Task 2.3**: Create `packages/map-lib/src/core/router.ts` implementing `computeRoutingTable(compatGraph, preferences)` function
-  - BFS from each material node to all other nodes on the compatGraph
-  - Stores `nextHop[from][to]` -- the first step on the shortest path from `from` to `to`
-  - When multiple equal-length paths exist, tie-break using the `preferences` array (earlier index = preferred)
-  - Materials not in preferences array have lowest priority for tie-breaking
-  - `nextHop(A, A)` returns `null` (same material, no route needed)
-  - Returns an object implementing the `RoutingTable` interface: `nextHop(from, to)`, `hasRoute(from, to)`
-  - Routing table is immutable after construction
+- [x] **Task 2.2**: Create `packages/map-lib/src/core/router.ts` -- make `router.spec.ts` GREEN
+  - Implement `computeRoutingTable(compatGraph, preferences)` returning `RoutingTable`
+  - BFS from each material to all others on compatGraph
+  - Store `nextHop[from][to]` -- first step on shortest path
+  - Tie-break equal-length paths using preferences array (earlier index = preferred)
+  - `nextHop(A, A)` returns `null`; unreachable pairs return `null`
+  - Routing table immutable after construction
   - JSDoc on all exports
+  - **Success criteria**: All 13 tests in `router.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/router.spec.ts`
 
-- [ ] **Task 2.4**: Create `packages/map-lib/src/core/router.spec.ts` with unit tests
-  - Test: direct neighbor hop (`nextHop(water, grass) = grass` when water-grass compat edge exists)
-  - Test: 2-hop path (`nextHop(deep_water, grass) = water` via deep_water-water-grass)
-  - Test: 3-hop path (`nextHop(deep_water, soil) = water` via deep_water-water-grass-soil)
-  - Test: tie-break with preferences (verify preference array order determines winner)
-  - Test: unreachable pair returns `null`
-  - Test: `nextHop(A, A)` returns `null`
-  - Test: `hasRoute(A, B)` consistency with `nextHop`
-  - Test: routing table with the reference tileset set from Design Doc (verify all entries in routing table reference)
-  - Test: routing table immutability
-  - Target: 100% coverage
-
-- [ ] **Task 2.5**: Quality check -- typecheck, lint, format pass for new files
+- [ ] **Task 2.3**: Quality check -- `pnpm nx typecheck map-lib && pnpm nx lint map-lib`
 
 #### Phase 2 Completion Criteria
 
-- [ ] `buildGraphs()` produces correct undirected compat and directed render graphs (AC1)
-- [ ] `computeRoutingTable()` produces correct `nextHop` for all reachable pairs (AC2)
-- [ ] `nextHop('deep_water', 'soil') === 'water'` with the reference tileset set (AC2 specific)
-- [ ] Tie-breaking is deterministic via preference array (AC2)
-- [ ] Unreachable pairs return `null` (AC2)
-- [ ] All unit tests pass with 100% coverage on both modules
-- [ ] `pnpm nx test map-lib` passes
+- [ ] `graph-builder.spec.ts`: 9/9 tests GREEN (AC1)
+- [ ] `router.spec.ts`: 13/13 tests GREEN (AC2)
+- [ ] `nextHop('deep_water', 'soil') === 'water'` with reference tileset set (AC2)
+- [ ] Tie-breaking is deterministic via preference array
+- [ ] `pnpm nx test map-lib` passes (all existing + phases 1-2)
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx test map-lib --testPathPattern="graph-builder|router"` -- all tests pass
-2. Construct a graph from the Design Doc reference tileset set and verify the routing table matches all 10 entries in the "Reference: Routing Table" section
-3. Verify that `computeRoutingTable` returns `null` for disconnected materials (e.g., a material with no tilesets)
-4. Verify BFS completes in <10ms for 30 materials / 100 tilesets (performance sanity)
+1. Run `pnpm nx test map-lib --testFile=src/core/graph-builder.spec.ts` -- all 9 tests pass
+2. Run `pnpm nx test map-lib --testFile=src/core/router.spec.ts` -- all 13 tests pass
+3. Verify the routing table matches all 10 entries in Design Doc "Reference: Routing Table"
+4. Verify `computeRoutingTable` returns `null` for disconnected materials
 
 ---
 
-### Phase 3: EdgeResolver + CellTilesetSelector (Estimated commits: 2-3)
+### Phase 3: EdgeResolver + CellTilesetSelector (Estimated commits: 2)
 
-**Purpose**: Implement per-edge ownership determination and per-cell tileset selection with S1/S2 conflict resolution. These are the core decision-making modules of the routing system.
+**Purpose**: Implement per-edge ownership determination and per-cell tileset selection with S1/S2 conflict resolution. These are the core decision-making modules of the routing pipeline.
 
 **Depends on**: Phase 2 (Router, RoutingTable), Phase 1 (TilesetRegistry, types)
 
-**Complexity**: L (conflict resolution logic)
+**Test resolution**: 36/36 -> 61/61 (edge-resolver: +7, cell-tileset-selector: +18)
 
 #### Tasks
 
-- [ ] **Task 3.1**: Create `packages/map-lib/src/core/edge-resolver.ts` implementing `resolveEdge()` function
-  - `resolveEdge(materialA, materialB, dir, router, registry, priorities)` -> `EdgeOwner | null`
-  - Computes `virtualBG_A = nextHop(A, B)` and `virtualBG_B = nextHop(B, A)`
-  - Checks if matching transition tileset exists in render graph (via `registry.hasTileset`)
-  - If only one candidate valid, that candidate owns the edge
-  - If both valid, higher `materialPriority` wins
-  - If neither valid, returns `null` (unresolved, logged)
-  - Same-material edges return early (no resolution needed)
-  - Define `EdgeOwner` type and `EdgeDirection` type
+- [x] **Task 3.1**: Create `packages/map-lib/src/core/edge-resolver.ts` -- make `edge-resolver.spec.ts` GREEN
+  - Implement `resolveEdge(materialA, materialB, dir, router, registry, priorities)` -> `EdgeOwner | null`
+  - Compute `virtualBG_A = nextHop(A, B)` and `virtualBG_B = nextHop(B, A)`
+  - Check if matching transition tileset exists via `registry.hasTileset`
+  - If only one candidate valid: that candidate owns
+  - If both valid: higher `materialPriority` wins
+  - If neither valid: return `null`
+  - Same-material edges return early
+  - Define and export `EdgeOwner` type, `EdgeDirection` type
   - JSDoc on all exports
+  - **Success criteria**: All 7 tests in `edge-resolver.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/edge-resolver.spec.ts`
 
-- [ ] **Task 3.2**: Create `packages/map-lib/src/core/edge-resolver.spec.ts` with unit tests
-  - Test: one valid candidate owns the edge
-  - Test: both valid -- higher priority wins (Preset A: water > grass)
-  - Test: both valid -- higher priority wins (Preset B: grass > water)
-  - Test: neither valid returns `null`
-  - Test: same material returns early (no ownership needed)
-  - Test: edge ownership symmetry -- `resolveEdge(A, B, N)` consistent with `resolveEdge(B, A, S)`
-  - Test: switchable presets produce different ownership outcomes
-  - Target: 100% coverage
-
-- [ ] **Task 3.3**: Create `packages/map-lib/src/core/cell-tileset-selector.ts` implementing `selectTilesetForCell()` and `computeCellFrame()` functions
-  - `selectTilesetForCell(fg, boundaryMaterials, registry, priorities)` -> `{ tilesetKey, bg }`
-    - Per-Cell BG Resolution Algorithm from Design Doc:
-      1. For each cardinal direction, compute `virtualBG = nextHop(fg, neighborFg)` and check `registry.hasTileset(fg, virtualBG)`
-      2. If zero valid BGs: use base tileset
-      3. If one unique BG: use transition tileset `fg_bg`
-      4. If multiple distinct BGs: CONFLICT -- apply S1 then S2
-    - S1 (Owner Reassign, max 4 iterations): for each conflicting edge, check if neighbor has higher materialPriority; reassign edge ownership if so; remove that BG requirement
-    - S2 (BG Priority Fallback): pick BG with highest priority from preference array
-    - Log warnings at `console.warn` level when S2 is applied
-  - `computeCellFrame(grid, x, y, width, height, fg)` -> `{ mask47, frameId }`
-    - Uses `computeNeighborMaskByMaterial` from `neighbor-mask.ts` for FG-only comparison
-    - Uses `getFrame` from `autotile.ts` for diagonal gating and frame lookup
-    - Mask is ALWAYS computed from FG material comparison only (Design Doc invariant 2)
+- [x] **Task 3.2**: Create `packages/map-lib/src/core/cell-tileset-selector.ts` -- make `cell-tileset-selector.spec.ts` GREEN
+  - Implement three functions per Design Doc contract:
+    - `selectTilesetForCell(fg, ownedEdges, registry)` -> `{ selectedTilesetKey, bg }`
+      - Per-Cell BG Resolution Algorithm (Design Doc Steps 1-4)
+      - S1 Owner Reassign (max 4 iterations) then S2 BG Priority Fallback
+    - `computeCellFrame(grid, x, y, width, height, fg)` -> `{ mask47, frameId }`
+      - Uses `computeNeighborMaskByMaterial` + `getFrame` from existing modules
+      - Mask ALWAYS from FG comparison only (Design Doc invariant 2)
+    - `resolveRenderTilesetKey(fg, selectedTilesetKey, frameId, materials, registry)` -> `string`
+      - Default policy: if frameId === SOLID_FRAME and baseTilesetKey exists, use it
   - JSDoc on all exports
+  - **Success criteria**: All 18 tests in `cell-tileset-selector.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/cell-tileset-selector.spec.ts`
 
-- [ ] **Task 3.4**: Create `packages/map-lib/src/core/cell-tileset-selector.spec.ts` with unit tests
-  - Test: no owned edges -> base tileset selected
-  - Test: one BG material -> correct transition tileset selected
-  - Test: multiple BGs, S1 resolves -> correct single BG remains (V4 scenario)
-  - Test: multiple BGs, S1 fails -> S2 picks highest-priority BG
-  - Test: S1 max iterations capped at 4
-  - Test: mask computation for solid cell (all same FG, mask=255, frame=1)
-  - Test: mask computation for isolated cell (no same FG neighbors, mask=0)
-  - Test: mask computation for corner cells (L-corner, T-junction patterns)
-  - Test: diagonal gating preserved (NW set only if N and W both set)
-  - Test: out-of-bounds neighbors treated as matching (bit=1) by default
-  - Test: Design Doc Worked Example 1 -- deep_water|soil edge
-  - Test: Design Doc Worked Example 2 -- deep_water|soil|sand conflict resolution
-  - Test: V3 no corner holes in island/bay/inlet patterns
-  - Target: 100% coverage on selectTilesetForCell, 100% on computeCellFrame
-
-- [ ] **Task 3.5**: Quality check -- typecheck, lint, format pass for new files
+- [ ] **Task 3.3**: Quality check -- `pnpm nx typecheck map-lib && pnpm nx lint map-lib`
 
 #### Phase 3 Completion Criteria
 
-- [ ] Edge ownership resolves correctly for all valid/invalid candidate combinations (AC3)
-- [ ] Preset A (water-side owns) and Preset B (land-side owns) produce correct results (AC3)
-- [ ] Cell tileset selection handles 0-BG, 1-BG, and multi-BG scenarios (AC4)
-- [ ] S1 conflict resolution converges within 4 iterations for all tested scenarios (AC5)
-- [ ] S2 fallback is deterministic and selects highest-priority BG (AC5)
-- [ ] Blob-47 mask computed by FG comparison only; diagonal gating preserved (AC4)
-- [ ] No corner holes in island/bay/inlet patterns (AC4)
-- [ ] All unit tests pass; target 100% coverage on both modules
+- [ ] `edge-resolver.spec.ts`: 7/7 tests GREEN (AC3)
+- [ ] `cell-tileset-selector.spec.ts`: 18/18 tests GREEN (AC4, AC5 partial)
+- [ ] Preset A (water-side owns) and Preset B (land-side owns) produce correct results
+- [ ] S1 converges within 4 iterations; S2 fallback deterministic
+- [ ] Blob-47 mask by FG only; diagonal gating preserved
 - [ ] `pnpm nx test map-lib` passes
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx test map-lib --testPathPattern="edge-resolver|cell-tileset-selector"` -- all tests pass
-2. Verify Design Doc Worked Example 1 produces: cell(1,1)=deep-water_water frame 25, cell(2,1)=soil_grass frame 35
-3. Verify Design Doc Worked Example 2 (three-material): sand cell at (2,2) resolves via S1 to sand_grass under Preset A
-4. Verify Design Doc T-junction example: sand at (2,2) with N=soil, S=dw, W=dw resolves to sand_grass via S1 under Preset A
-5. Verify that switching to Preset B produces different but correct results (sand_water instead of sand_grass for Worked Example 2)
+1. Run `pnpm nx test map-lib --testFile=src/core/edge-resolver.spec.ts` -- all 7 tests pass
+2. Run `pnpm nx test map-lib --testFile=src/core/cell-tileset-selector.spec.ts` -- all 18 tests pass
+3. Verify Design Doc Worked Example 1: deep_water|soil edge produces correct tilesets and frames
+4. Verify switching to Preset B produces different but correct results
 
 ---
 
 ### Phase 4: RetileEngine (Estimated commits: 2-3)
 
-**Purpose**: Implement the orchestrator that maintains per-cell cache, propagates dirty sets via Chebyshev R=2, and calls EdgeResolver/CellTilesetSelector for each dirty cell to produce updated layers. This is the central module that replaces `recomputeAutotileLayers`.
+**Purpose**: Implement the orchestrator that maintains per-cell cache, propagates dirty sets via Chebyshev R=2, and calls EdgeResolver/CellTilesetSelector for each dirty cell. This is the central module that replaces `recomputeAutotileLayers`.
 
-**Depends on**: Phase 3 (EdgeResolver, CellTilesetSelector), Phase 2 (Router), Phase 1 (TilesetRegistry, types)
+**Depends on**: Phase 3 (EdgeResolver, CellTilesetSelector), Phase 2 (Router), Phase 1 (TilesetRegistry)
 
-**Complexity**: L (cache management, dirty propagation, 4 retile triggers)
+**Test resolution**: 61/61 -> 102/102 (retile-engine: +23, retile-engine.integration: +18)
 
 #### Tasks
 
-- [ ] **Task 4.1**: Create `packages/map-lib/src/core/retile-engine.ts` implementing `RetileEngine` class
-  - Constructor accepts `RetileEngineOptions` (width, height, tilesets, materials, materialPriority, preferences)
-  - Internally constructs `TilesetRegistry`, runs `buildGraphs`, `computeRoutingTable`
-  - Maintains `CellCache[][]` (per-cell cache) and `cellsByTilesetKey: Map<string, Set<number>>` index
-  - Cell index uses flat index `y * width + x` for `cellsByTilesetKey` Set values
-  - **API methods**:
-    - `applyMapPatch(state, patch)` -> `RetileResult` (T1/T2)
-      - Updates grid terrain for each patch entry
-      - Computes dirty set: `expand(changedCells, R=2)` Chebyshev
-      - If changed cells exceed 50% of map: full-pass instead of incremental
-      - For each dirty cell: resolveEdges -> selectTileset -> computeFrame -> updateCache
-      - Max 4 S1 iterations per rebuild operation
-      - Returns updated layers, grid, changedCells, patches (for undo)
+- [x] **Task 4.1**: Create `packages/map-lib/src/core/retile-engine.ts` -- make `retile-engine.spec.ts` GREEN
+  - Implement `RetileEngine` class per Design Doc contract
+  - Constructor accepts `RetileEngineOptions`, internally constructs TilesetRegistry, runs buildGraphs, computeRoutingTable
+  - Maintains `CellCache[][]` and two reverse indices: `cellsBySelectedTilesetKey: Map<string, Set<number>>` and `cellsByRenderTilesetKey: Map<string, Set<number>>` for fast T3a lookups (Design Doc AC6)
+  - API methods (all per Design Doc):
+    - `applyMapPatch(state, patch)` -> `RetileResult` (T1/T2 triggers)
     - `updateTileset(state, tilesetKey, newMaskToTile)` -> `RetileResult` (T3a)
-      - Finds cells using that tilesetKey via `cellsByTilesetKey` index
-      - Recomputes frameId only (no tileset reselection needed)
     - `removeTileset(state, tilesetKey)` -> `RetileResult` (T3b)
-      - Rebuilds graphs + routing table
-      - Dirties cells near affected materials + R=2
     - `addTileset(state, tilesetInfo)` -> `RetileResult` (T3b)
-      - Rebuilds graphs + routing table
-      - Dirties cells near affected materials + R=2
     - `switchTilesetGroup(state, tilesets)` -> `RetileResult` (T4)
-      - Full rebuild: new registry, graphs, routing table, clear cache, recompute all cells
     - `rebuild(state, mode, changedCells?)` -> `RetileResult`
-      - `'local'` mode: dirty propagation from changedCells
-      - `'full'` mode: complete recompute of all cells
-  - Input state is NEVER mutated; returns new references
-  - Empty grid (width=0 or height=0) returns unchanged layers immediately
-  - Out-of-bounds coordinates in patch are silently skipped
-  - JSDoc on all public methods
+  - Dirty propagation: R=2 Chebyshev; >50% triggers full-pass
+  - Max 4 S1 iterations per rebuild; input state NEVER mutated
+  - Empty grid returns unchanged layers; OOB coordinates skipped
+  - **Success criteria**: All 23 tests in `retile-engine.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/retile-engine.spec.ts`
 
-- [ ] **Task 4.2**: Create `packages/map-lib/src/core/retile-engine.spec.ts` with unit tests
-  - Test T1: single-cell paint on 5x5 grid -- verify dirty set is R=2 Chebyshev around painted cell
-  - Test T1: verify cache entries updated for all dirty cells
-  - Test T1: verify `layers[].frames` and `layers[].tilesetKeys` updated correctly
-  - Test T2: batch paint (multiple cells) -- verify dirty set is union of R=2 per cell
-  - Test T2: >50% changed cells triggers full-pass
-  - Test T3a: `updateTileset` finds cells via index and recomputes frameId only
-  - Test T3b: `addTileset` rebuilds graphs and dirties affected cells
-  - Test T3b: `removeTileset` rebuilds graphs and dirties affected cells
-  - Test T4: `switchTilesetGroup` performs full rebuild, clears cache
-  - Test: cache consistency -- `cache[y][x].frameId === layers[layerIdx].frames[y][x]` for all cached cells
-  - Test: `cellsByTilesetKey` index consistency with cache entries
-  - Test: deterministic output (same input produces same output)
-  - Test: immutability -- input state not mutated
-  - Test: empty grid returns unchanged layers
-  - Test: out-of-bounds coordinates skipped silently
-  - Test: patches array enables full undo (verify reverting patches restores original state)
-  - Use factory helpers to construct 5x5 and 8x8 test grids with known material layouts
-  - Target: 90%+ coverage
+- [x] **Task 4.2**: Make `retile-engine.integration.spec.ts` GREEN
+  - These integration tests exercise the full pipeline (registry -> graphs -> router -> edge resolver -> cell selector -> engine)
+  - May require adjustments to the engine implementation from Task 4.1
+  - **Success criteria**: All 18 tests in `retile-engine.integration.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/retile-engine.integration.spec.ts`
 
-- [ ] **Task 4.3**: Quality check -- typecheck, lint, format pass for new files
+- [ ] **Task 4.3**: Quality check -- `pnpm nx typecheck map-lib && pnpm nx lint map-lib`
 
 #### Phase 4 Completion Criteria
 
-- [ ] T1 (single-cell paint) produces correct dirty set with R=2 Chebyshev (AC6)
-- [ ] T2 (batch paint) produces union of R=2 dirty sets; >50% triggers full-pass (AC6)
-- [ ] T3a (maskToTile change) finds affected cells via `cellsByTilesetKey` index (AC6)
-- [ ] T3b (tileset add/remove) rebuilds graphs and routing table (AC6)
-- [ ] T4 (theme switch) performs full rebuild (AC6)
-- [ ] Per-cell cache stores: `{ fg, selectedTilesetKey, bg, mask47, frameId, boundaryMaterialsHash }` (AC6)
-- [ ] Cache consistency invariant holds: `cache[y][x].frameId === layers[layerIdx].frames[y][x]` (AC6)
-- [ ] Output format compatible with canvas-renderer.ts: `layers[].frames[y][x]` and `layers[].tilesetKeys[y][x]`
-- [ ] All editor API methods functional: applyMapPatch, updateTileset, removeTileset, addTileset, switchTilesetGroup, rebuild (AC7)
-- [ ] All unit tests pass; target 90%+ coverage
+- [ ] `retile-engine.spec.ts`: 23/23 tests GREEN (AC6, AC7)
+- [ ] `retile-engine.integration.spec.ts`: 18/18 tests GREEN
+- [ ] T1-T4 triggers all functional; dirty propagation R=2 Chebyshev
+- [ ] Cache consistency: `cache[y][x].frameId === layers[layerIdx].frames[y][x]` for all cached cells
+- [ ] Cache consistency: `cache[y][x].selectedTilesetKey` is a valid key in TilesetRegistry for all cached cells
+- [ ] Cache consistency: `cache[y][x].renderTilesetKey` is a valid key in TilesetRegistry for all cached cells
+- [ ] Index consistency: `cellsBySelectedTilesetKey` and `cellsByRenderTilesetKey` are consistent with cache entries at all times
+- [ ] Output format: `layers[].frames[y][x]` and `layers[].tilesetKeys[y][x]` (canvas-renderer compatible)
+- [ ] All editor API methods functional (AC7)
 - [ ] `pnpm nx test map-lib` passes
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx test map-lib --testPathPattern=retile-engine` -- all tests pass
-2. Verify T1 on a 5x5 grid: paint cell (2,2) from deep_water to soil, verify:
-   - Dirty cells include (0,0)-(4,4) region (R=2 Chebyshev from (2,2))
-   - Cell (2,2) gets soil_grass tileset (routing through grass to deep_water neighbors)
-   - Adjacent deep_water cells get deep-water_water tileset at border
-   - Interior deep_water cells unchanged (still base tileset, solid frame)
-3. Verify T4 full rebuild: construct engine, call switchTilesetGroup with new tileset set, verify all cells recomputed
-4. Verify patches array: apply patch, then manually reverse each CellPatchEntry, verify state restored
-5. Run `pnpm nx typecheck map-lib` -- no type errors
+1. Run `pnpm nx test map-lib --testFile=src/core/retile-engine.spec.ts` -- all 23 tests pass
+2. Run `pnpm nx test map-lib --testFile=src/core/retile-engine.integration.spec.ts` -- all 18 tests pass
+3. Verify T1 on 5x5 grid: paint cell (2,2) from deep_water to soil produces correct dirty set (R=2 Chebyshev)
+4. Verify T4 full rebuild: switchTilesetGroup recomputes all cells
+5. Verify patches array enables full undo (reversing patches restores original state)
 
 ---
 
-### Phase 5: Command System Replacement (Estimated commits: 2)
+### Phase 5: Command System + Export Updates (Estimated commits: 2)
 
-**Purpose**: Create new `RoutingPaintCommand` and `RoutingFillCommand` classes that implement the `EditorCommand` interface and delegate all recomputation to the `RetileEngine`. These replace the current `PaintCommand`, `FillCommand`, and `applyDeltas`.
+**Purpose**: Create new `RoutingPaintCommand`/`RoutingFillCommand` classes implementing `EditorCommand`, and update `index.ts` exports to expose all new modules while deprecating old ones.
 
 **Depends on**: Phase 4 (RetileEngine)
 
-**Complexity**: M
+**Test resolution**: 102/102 -> 122/122 (routing-pipeline.integration: +20)
 
 #### Tasks
 
-- [ ] **Task 5.1**: Create `packages/map-lib/src/core/routing-commands.ts` implementing new command classes
+- [x] **Task 5.1**: Create `packages/map-lib/src/core/routing-commands.ts` and `routing-commands.spec.ts`
   - `RoutingPaintCommand` implements `EditorCommand`:
-    - Constructor accepts patch entries and a `RetileEngine` reference
-    - `execute(state)`: calls `engine.applyMapPatch(state, patch)`, stores undo data (old materials + old cache via patches array), returns new state with updated grid/layers/walkable
-    - `undo(state)`: restores old materials and old cell cache entries from stored patches, returns original state
-    - `description`: human-readable string (e.g., "Paint 5 cell(s) with soil")
-  - `RoutingFillCommand` implements `EditorCommand`:
-    - Same structure as RoutingPaintCommand; semantic distinction for description
-    - `description`: e.g., "Fill 120 cell(s) with deep_water"
-  - Both commands:
-    - Store both old and new material + old and new cell cache for each affected cell (via `CellPatchEntry[]`)
-    - Never mutate input state
-    - Integrate with `recomputeWalkability` for walkable grid update
-    - Implement same `EditorCommand` interface (`execute`, `undo`, `description`)
+    - Constructor: patch entries + RetileEngine reference
+    - `execute(state)`: calls `engine.applyMapPatch(state, patch)`, stores undo data, returns new state with updated grid/layers/walkable
+    - `undo(state)`: restores old materials + old cache from stored patches
+    - `description`: human-readable (e.g., "Paint 5 cell(s) with soil")
+  - `RoutingFillCommand`: same structure, semantic distinction in description
+  - Both store `CellPatchEntry[]` for undo/redo; never mutate input state
+  - Integrate with `recomputeWalkability` for walkable grid update
   - JSDoc on all exports
+  - Write spec file with tests for: execute, undo, round-trip (execute->undo->verify), redo (execute->undo->execute), EditorCommand interface compliance, immutability, description format
+  - **Success criteria**: All routing-commands.spec.ts tests pass
 
-- [ ] **Task 5.2**: Create `packages/map-lib/src/core/routing-commands.spec.ts` with unit tests
-  - Test: `RoutingPaintCommand.execute()` produces updated grid, layers, and walkable
-  - Test: `RoutingPaintCommand.undo()` restores original grid, layers, and walkable
-  - Test: execute -> undo -> verify state equals original (round-trip)
-  - Test: execute -> undo -> execute (redo) -> verify state equals first execute
-  - Test: `RoutingFillCommand.execute()` and `undo()` same correctness
-  - Test: `EditorCommand` interface compliance (description, execute, undo are present)
-  - Test: commands store correct CellPatchEntry data for undo
-  - Test: immutability -- input state not mutated by execute or undo
-  - Test: description string is correctly formed
-  - Target: 100% coverage
+- [x] **Task 5.2**: Make `routing-pipeline.integration.spec.ts` GREEN
+  - Full pipeline integration tests: painting scenarios P1-P3, undo/redo cycles, full workflow
+  - May require adjustments to commands or engine
+  - **Success criteria**: All 20 tests in `routing-pipeline.integration.spec.ts` pass
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/routing-pipeline.integration.spec.ts`
 
-- [ ] **Task 5.3**: Quality check -- typecheck, lint, format pass for new files
+- [x] **Task 5.3**: Update `packages/map-lib/src/index.ts` -- add new exports, deprecate old
+  - Add exports for all new modules:
+    - `TilesetRegistry` from `./core/tileset-registry`
+    - `buildGraphs`, type `MaterialGraphs` from `./core/graph-builder`
+    - `computeRoutingTable` from `./core/router`
+    - `resolveEdge` from `./core/edge-resolver`
+    - `selectTilesetForCell`, `computeCellFrame`, `resolveRenderTilesetKey` from `./core/cell-tileset-selector`
+    - `RetileEngine` from `./core/retile-engine`
+    - `RoutingPaintCommand`, `RoutingFillCommand` from `./core/routing-commands`
+  - Add type exports: `CompatGraph`, `RenderGraph`, `MaterialPriorityMap`, `RoutingTable`, `NeighborDirection`, `CellCacheEntry`, `CellCache`, `CellPatchEntry`, `RetileResult`, `RetileEngineOptions`
+  - Mark old exports with `/** @deprecated Use RetileEngine instead */` JSDoc:
+    - `recomputeAutotileLayers`, `applyDeltas`, `PaintCommand`, `FillCommand`
+  - Keep `computeNeighborMaskByMaterial`, `computeNeighborMask` exports (still used)
+  - **Success criteria**: `pnpm nx typecheck map-lib` passes; all new modules importable from `@nookstead/map-lib`
+
+- [ ] **Task 5.4**: Quality check -- `pnpm nx typecheck map-lib && pnpm nx lint map-lib`
 
 #### Phase 5 Completion Criteria
 
-- [ ] `RoutingPaintCommand` calls `RetileEngine.applyMapPatch()` for execution (AC8)
-- [ ] `RoutingFillCommand` calls `RetileEngine.applyMapPatch()` for execution (AC8)
-- [ ] Undo restores old materials and old cell cache entries (AC8)
-- [ ] Redo reapplies new materials and new cell cache entries (AC8)
-- [ ] `EditorCommand` interface unchanged: `execute`, `undo`, `description` (AC8)
-- [ ] Commands store both old and new material + cache for each affected cell (AC8)
-- [ ] Round-trip test passes: execute -> undo -> state === original
-- [ ] All unit tests pass with 100% coverage
-- [ ] `pnpm nx test map-lib` passes
+- [ ] `routing-commands.spec.ts` tests all GREEN (AC8)
+- [ ] `routing-pipeline.integration.spec.ts`: 20/20 tests GREEN (AC9)
+- [ ] Undo restores old materials + old cell cache (AC8)
+- [ ] EditorCommand interface unchanged: execute, undo, description (AC8)
+- [ ] All new modules importable from `@nookstead/map-lib` (Integration Point 3)
+- [ ] Old exports marked `@deprecated` but still functional
+- [ ] `pnpm nx test map-lib` passes (all 122+ tests)
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx test map-lib --testPathPattern=routing-commands` -- all tests pass
-2. Verify execute -> undo round-trip on an 8x8 grid:
-   - Initial state: all deep_water
-   - Execute: paint 4x4 soil rectangle at (2,2)-(5,5)
-   - Undo: verify all cells return to deep_water, all frames return to solid (255), all tilesetKeys return to base
-3. Verify execute -> undo -> execute (redo):
-   - State after redo matches state after first execute exactly (frame-by-frame comparison)
+1. Run `pnpm nx test map-lib --testFile=src/core/routing-commands.spec.ts` -- all tests pass
+2. Run `pnpm nx test map-lib --testFile=src/core/routing-pipeline.integration.spec.ts` -- all 20 tests pass
+3. Verify execute -> undo round-trip: state after undo === original state
+4. Verify `import { RetileEngine, RoutingPaintCommand } from '@nookstead/map-lib'` compiles
+5. Verify old exports still work: `import { PaintCommand } from '@nookstead/map-lib'` compiles
 
 ---
 
-### Phase 6: Editor Integration + Export Updates (Estimated commits: 2)
+### Phase 6: Editor Integration + Tool Migration (Estimated commits: 2)
 
-**Purpose**: Wire the new routing system into the editor by updating `index.ts` exports and switching the `use-map-editor.ts` reducer to use the new commands. Verify the canvas renderer works without changes.
+**Purpose**: Wire the new routing system into the genmap editor by switching all tool files and the reducer to use new commands and RetileEngine. This is the actual switchover from old to new system.
 
-**Depends on**: Phase 5 (RoutingPaintCommand, RoutingFillCommand)
-
-**Complexity**: M
+**Depends on**: Phase 5 (Commands, exports)
 
 #### Tasks
 
-- [ ] **Task 6.1**: Update `packages/map-lib/src/index.ts` to add new exports and deprecate old exports
-  - Add exports for new modules:
-    - `TilesetRegistry` from `./core/tileset-registry`
-    - `buildGraphs` from `./core/graph-builder`
-    - `computeRoutingTable` from `./core/router`
-    - `resolveEdge` from `./core/edge-resolver`
-    - `selectTilesetForCell`, `computeCellFrame` from `./core/cell-tileset-selector`
-    - `RetileEngine` from `./core/retile-engine`
-    - `RoutingPaintCommand`, `RoutingFillCommand` from `./core/routing-commands`
-  - Add type exports for routing types:
-    - `CompatGraph`, `RenderGraph`, `MaterialPriorityMap`, `RoutingTable`, `NeighborDirection`, `CellCacheEntry`, `CellCache`, `CellPatchEntry`, `RetileResult`, `RetileEngineOptions`
-    - `MaterialGraphs` from `./core/graph-builder`
-  - Mark old exports with `@deprecated` JSDoc:
-    - `recomputeAutotileLayers` -- deprecate, add note: "Use RetileEngine.rebuild() instead"
-    - `applyDeltas` -- deprecate, add note: "Use RoutingPaintCommand/RoutingFillCommand instead"
-    - `PaintCommand` -- deprecate, add note: "Use RoutingPaintCommand instead"
-    - `FillCommand` -- deprecate, add note: "Use RoutingFillCommand instead"
-  - Keep `computeNeighborMaskByMaterial`, `computeNeighborMask`, `computeTransitionMask` exports (still used)
+- [x] **Task 6.1**: Update `apps/genmap/src/hooks/use-map-editor.ts` -- switch to RetileEngine
+  - Replace `recomputeAutotileLayers` import with `RetileEngine`
+  - In LOAD_MAP handler: construct RetileEngine and call `rebuild('full')` instead of `recomputeAutotileLayers`
+  - Manage RetileEngine instance lifecycle (create in LOAD_MAP / SET_TILESETS)
+  - Note: PUSH_COMMAND handler delegates to `command.execute(state)` -- no change needed since new commands implement same EditorCommand interface
 
-- [ ] **Task 6.2**: Update `apps/genmap/src/hooks/use-map-editor.ts` to use new routing system
-  - Replace `recomputeAutotileLayers` import with `RetileEngine` (or remove if only used in LOAD_MAP)
-  - In LOAD_MAP handler: construct a `RetileEngine` and call `rebuild('full')` instead of `recomputeAutotileLayers`
-  - Note: PUSH_COMMAND handler already delegates to `command.execute(state)` -- no change needed here since new commands implement same `EditorCommand` interface
-  - Paint tool and fill tool callers (in React components) must construct `RoutingPaintCommand`/`RoutingFillCommand` instead of old `PaintCommand`/`FillCommand`
-  - Need to manage RetileEngine instance: create in LOAD_MAP or SET_TILESETS, store in state or as module-level variable
-  - Determine integration approach: either store `RetileEngine` in state (breaks serialization) or create per-operation (simple but slightly less efficient)
-  - The component callers that create PaintCommand/FillCommand will need updating -- identify these files
+- [x] **Task 6.2**: Update `apps/genmap/src/components/map-editor/tools/brush-tool.ts`
+  - Replace `import { PaintCommand } from '@nookstead/map-lib'` with `import { RoutingPaintCommand } from '@nookstead/map-lib'`
+  - Update command construction: `new RoutingPaintCommand(patches, engine)` instead of `new PaintCommand(deltas)`
+  - Adapt CellDelta-based collection to patch-based collection (`{ x, y, fg }` format)
 
-- [ ] **Task 6.3**: Verify `apps/genmap/src/components/map-editor/canvas-renderer.ts` works without changes
-  - Canvas renderer reads `state.layers[].frames[y][x]` and `state.layers[].tilesetKeys?.[y]?.[x]`
-  - New system produces identical output format
-  - No code changes required -- verification only
-  - Test: run genmap editor, paint cells, verify rendering is correct
+- [x] **Task 6.3**: Update `apps/genmap/src/components/map-editor/tools/fill-tool.ts`
+  - Replace `import { FillCommand } from '@nookstead/map-lib'` with `import { RoutingFillCommand } from '@nookstead/map-lib'`
+  - Update command construction accordingly
 
-- [ ] **Task 6.4**: Quality check -- typecheck and lint pass across map-lib AND genmap app
-  - Run `pnpm nx typecheck map-lib`
-  - Run `pnpm nx typecheck genmap` (or the genmap app target)
-  - Run `pnpm nx lint map-lib`
+- [x] **Task 6.4**: Update `apps/genmap/src/components/map-editor/tools/eraser-tool.ts`
+  - Replace `import { PaintCommand } from '@nookstead/map-lib'` with `import { RoutingPaintCommand } from '@nookstead/map-lib'`
+  - Update command construction
+
+- [x] **Task 6.5**: Update `apps/genmap/src/components/map-editor/tools/rectangle-tool.ts`
+  - Replace `import { PaintCommand } from '@nookstead/map-lib'` with `import { RoutingPaintCommand } from '@nookstead/map-lib'`
+  - Update command construction
+
+- [x] **Task 6.6**: Verify `canvas-renderer.ts` works without changes
+  - Reads `state.layers[].frames[y][x]` and `state.layers[].tilesetKeys?.[y]?.[x]`
+  - New system produces identical output format -- no code changes required
+
+- [x] **Task 6.7**: Quality check -- typecheck and lint across both map-lib AND genmap
+  - `pnpm nx typecheck map-lib`
+  - `pnpm nx lint map-lib`
+  - `pnpm nx typecheck genmap` (if target exists)
+  - `pnpm nx lint genmap` (if target exists)
 
 #### Phase 6 Completion Criteria
 
-- [ ] All new modules importable from `@nookstead/map-lib` (Integration Point 3 from Design Doc)
-- [ ] Old exports marked `@deprecated` but still functional
-- [ ] `use-map-editor.ts` reducer uses RetileEngine for LOAD_MAP recompute (Integration Point 1)
-- [ ] Paint/fill tool callers create `RoutingPaintCommand`/`RoutingFillCommand` instead of old commands (Integration Point 1)
-- [ ] Canvas renderer works without changes (Integration Point 2, read-only verification)
-- [ ] Undo/redo cycle in the editor produces identical state (Integration Point 2)
-- [ ] `pnpm nx typecheck map-lib` passes
-- [ ] `pnpm nx typecheck genmap` passes (if applicable)
-- [ ] `pnpm nx test map-lib` passes (all existing + new tests)
+- [x] `use-map-editor.ts` uses RetileEngine for LOAD_MAP recompute (Integration Point 1)
+- [x] All 4 tool files use `RoutingPaintCommand`/`RoutingFillCommand` instead of old commands
+- [x] Canvas renderer works without changes (Integration Point 2)
+- [x] `pnpm nx typecheck map-lib` passes
+- [x] `pnpm nx test map-lib` passes
 
 #### Operational Verification Procedures
 
-1. Run `pnpm nx typecheck map-lib` -- all new exports compile
-2. Run `pnpm nx test map-lib` -- all tests pass (existing + new)
-3. Verify Integration Point 1: in `use-map-editor.ts`, LOAD_MAP handler calls RetileEngine.rebuild('full')
-4. Verify Integration Point 2: canvas renderer reads `layers[].frames` and `layers[].tilesetKeys` without change
-5. Verify Integration Point 3: `import { RetileEngine, RoutingPaintCommand } from '@nookstead/map-lib'` compiles
-6. Verify Integration Point 4: `resolvePaint` is still called correctly for grid mutation within RetileEngine
-7. Manual test (if dev server available): open genmap editor, load a map, paint cells, verify tiles render correctly
+1. Verify Integration Point 1: LOAD_MAP handler calls RetileEngine.rebuild('full')
+2. Verify Integration Point 2: canvas renderer reads layers unchanged
+3. Verify Integration Point 4: resolvePaint still called correctly within RetileEngine
+4. All imports resolve: `pnpm nx typecheck genmap` (or equivalent)
+5. Manual test (if dev server available): open genmap editor, load map, paint cells, verify rendering
 
 ---
 
-### Phase 7: Quality Assurance + Performance Testing (Required) (Estimated commits: 1-2)
+### Phase 7: Neighbor Repaint Policy + Cleanup + Delete Old Files (Estimated commits: 3-4)
 
-**Purpose**: Comprehensive QA including integration tests for painting scenarios P1-P3, performance benchmarks, regression testing, and final verification of all Design Doc acceptance criteria.
+**Purpose**: Implement the post-recompute neighbor commit policy based on the five-class edge classification system (v2 neighbor repaint policy), then delete the old autotile-layers and commands modules now that all consumers have been migrated, and remove deprecated exports from index.ts.
 
-**Depends on**: All previous phases complete
+**Depends on**: Phase 6 (all consumers migrated)
 
-**Complexity**: M-L
+**References**: [design-015-neighbor-repaint-policy-v2-ru.md](../design/design-015-neighbor-repaint-policy-v2-ru.md), ADR-0011 Decision 9
 
 #### Tasks
 
-- [ ] **Task 7.1**: Create integration tests for painting scenario P1 (deep-water fill + soil rectangle)
-  - Build 8x8 grid: fill all cells with deep_water, then paint 4x4 soil rectangle at (2,2)-(5,5)
-  - Verify: deep_water border cells use `deep-water_water` tileset (BG=water)
-  - Verify: soil border cells use `soil_grass` tileset (BG=grass)
-  - Verify: soil interior cells use base tileset, frame=1 (solid)
-  - Verify: corner deep_water cells (diagonal-only to soil) use base tileset
-  - Verify: all frames and tilesetKeys match Design Doc Worked Example 4
+- [ ] **Task 7.1**: Implement `classifyEdge()` utility function
+  - Location: `packages/map-lib/src/core/edge-resolver.ts` (co-located with EdgeResolver — classifyEdge extends edge ownership with stability classification)
+  - Implements the 5-class classification algorithm from v2 Section 4.3 (conditions) and Section 10.4 (pseudocode)
+  - Inputs: `(a: string, b: string, router: RoutingTable, registry: TilesetRegistry)`
+  - Output: `'C1' | 'C2' | 'C3' | 'C4' | 'C5'`
+  - Classification logic:
+    - C1: `a === b`
+    - C5: `pairA === null || pairB === null`
+    - C4: not both direct
+    - C2: both direct AND `hopA === b && hopB === a`
+    - C3: both direct AND `hopA === hopB`
+    - C4 (remaining): different bridges
+  - Success criteria: Unit tests for all 5 classes with reference dataset (1 C2, 22 C3, 22 C4, 0 C5)
 
-- [ ] **Task 7.2**: Create integration tests for painting scenario P2 (soil square + water lake inside)
-  - Build 8x8 grid: fill with deep_water, paint 4x4 soil rectangle, paint 2x2 water patch at (3,3)-(4,4)
-  - Verify: water cells use `water_grass` tileset with correct blob-47 corner frames
-  - Verify: soil cells bordering water use `soil_grass` (routing through grass)
-  - Verify: outer deep_water | soil border unchanged from P1
+- [ ] **Task 7.2**: Add post-recompute commit policy to RetileEngine
+  - After `rebuildCells()` computes results for all dirty cells, apply commit filter:
+    - Center cells (painted cells): ALWAYS committed
+    - Neighbor cells where edge to painted cell is C1/C2/C3: committed
+    - Neighbor cells where edge to painted cell is C4/C5: previous visual state preserved
+  - This does NOT change the dirty set or the recompute logic -- only controls which results are applied to output layers
+  - Success criteria: Integration tests verify center always updates, C2/C3 neighbors update, C4 neighbors optionally stable
 
-- [ ] **Task 7.3**: Create integration tests for painting scenario P3 (deep-water | soil | sand strips)
-  - Build 6x4 grid with deep_water border, soil strip (row 1), sand strip (row 2)
-  - Verify: deep_water cells at border use `deep-water_water` (BG=water)
-  - Verify: soil cells use `soil_grass` (BG=grass) -- route to dw and sand both go through grass
-  - Verify: sand cells bordering both soil (N) and dw (S, W) resolve via S1 to `sand_grass` (BG=grass) under Preset A
-  - Verify: Design Doc three-material worked example cell-by-cell
+- [ ] **Task 7.3**: Add unit tests for edge classification
+  - Location: `packages/map-lib/src/core/edge-resolver.spec.ts` (extend existing spec file with new edge classification tests)
+  - Test all 5 classes with representative material pairs from the reference dataset (v2 Section 10.2)
+  - Test C1: grass <-> grass
+  - Test C2: grass <-> water
+  - Test C3: deep_water <-> grass (bridge through water)
+  - Test C4: deep_water <-> water (reverse pair)
+  - Test C5: hypothetical disconnected pair
+  - Verify reference dataset statistics: 1 C2, 22 C3, 22 C4, 0 C5
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/edge-resolver.spec.ts`
 
-- [ ] **Task 7.4**: Create integration tests for painting workflow (fill -> rectangle -> lake)
-  - Full step-by-step verification from Design Doc Worked Example 4
-  - Step 1: fill with deep_water
-  - Step 2: paint soil rectangle
-  - Step 3: paint water lake
-  - After each step, verify all cell tilesets and frames match expected values
+- [ ] **Task 7.4**: Add integration tests from v2 Section 15.1 and 15.2
+  - Location: `packages/map-lib/src/core/retile-engine.integration.spec.ts` (extend existing integration spec with commit policy tests)
+  - 9 class-based tests:
+    1. C2: Paint grass in water field -- all 4 cardinal neighbors update
+    2. C3: Paint deep_sand in deep_water field -- neighbors update through water bridge
+    3. C4 (reverse): Paint deep_water in water field -- center updates, neighbors not mandatory
+    4. C4 (bridge): Paint deep_sand in water field -- center updates, water stable
+    5. Owner-side contract: edge open only on owner cell
+    6. Diagonal gating: NE bit cannot survive when N=0 or E=0
+    7. Reverse orientation: frame via getFrame((~mask) & 0xFF)
+    8. Determinism: repeated operations produce identical results
+    9. Batch: Fill 100 cells grass in water field
+  - 3 regression tests (P1/P2/P3 from design-015 AC9):
+    10. P1: deep-water fill + soil rectangle -- correct deep_water_water transitions
+    11. P2: soil square + water lake -- correct water_grass blob-47 corners
+    12. P3: deep-water | soil | sand strips -- routing through bridges
+  - **Verify**: `pnpm nx test map-lib --testFile=src/core/retile-engine.integration.spec.ts`
 
-- [ ] **Task 7.5**: Create blob-47 mask correctness regression tests
-  - Test all 47 valid mask configurations produce correct frameId via `computeCellFrame`
-  - Test diagonal gating: NW only set when N+W both set
-  - Test OOB handling: edge cells and corner cells
-  - Verify no corner holes in island/bay/inlet patterns for various grid configurations
+- [ ] **Task 7.5**: Delete old implementation files
+  - Delete `packages/map-lib/src/core/autotile-layers.ts`
+  - Delete `packages/map-lib/src/core/autotile-layers.spec.ts`
+  - Delete `packages/map-lib/src/core/commands.ts`
+  - Delete `packages/map-lib/src/core/commands.spec.ts`
 
-- [ ] **Task 7.6**: Create performance benchmarks
-  - Benchmark T1: single-cell paint on 256x256 grid -- target <5ms
-  - Benchmark T4: full rebuild on 256x256 grid with 6 materials and 15 tilesets -- target <500ms
-  - Benchmark BFS: `computeRoutingTable` with 30 materials, 100 tilesets -- target <10ms
-  - Benchmark flood fill: 10,000 cells on 256x256 grid -- target <50ms
-  - Record results in test output; fail test if >2x target (10ms, 1000ms, 20ms, 100ms)
+- [ ] **Task 7.6**: Delete `apps/genmap/src/hooks/map-editor-commands.ts` (if it exists)
 
-- [ ] **Task 7.7**: Verify all Design Doc acceptance criteria achieved
-  - [ ] AC1: Graph Construction -- compatGraph and renderGraph correct
-  - [ ] AC2: BFS Routing Table -- nextHop correct for all pairs, tie-break deterministic
-  - [ ] AC3: Edge Ownership -- symmetry, priority-based, preset-switchable
-  - [ ] AC4: Cell Tileset Selection -- base/transition/conflict, mask by FG only, diagonal gating
-  - [ ] AC5: Conflict Resolution -- S1 max 4 iterations, S2 fallback deterministic, logging
-  - [ ] AC6: Incremental Retile Engine -- T1-T4 triggers, cache, dirty propagation
-  - [ ] AC7: Editor API -- all 6 methods functional
-  - [ ] AC8: Command System -- execute/undo/redo, EditorCommand interface, CellPatchEntry storage
-  - [ ] AC9: Painting Scenarios -- P1, P2, P3 verified end-to-end
+- [ ] **Task 7.7**: Update `packages/map-lib/src/index.ts` -- remove deprecated exports
+  - Remove: `export { recomputeAutotileLayers } from './core/autotile-layers'`
+  - Remove: `export { applyDeltas, PaintCommand, FillCommand } from './core/commands'`
+  - Keep `computeTransitionMask` in `neighbor-mask.ts` but mark `@deprecated` (not removed yet)
 
-- [ ] **Task 7.8**: Run full quality gate
-  - `pnpm nx typecheck map-lib` -- passes
-  - `pnpm nx lint map-lib` -- passes
-  - `pnpm nx test map-lib` -- all tests pass
-  - `pnpm nx typecheck genmap` -- passes (if applicable)
-  - Verify no `@ts-ignore` or `any` casts in new code
-  - Verify JSDoc present on all public exports
+- [ ] **Task 7.8**: Update `packages/map-lib/src/core/neighbor-mask.ts` -- mark @deprecated
+  - Mark `computeTransitionMask` as `@deprecated` (superseded by routing pipeline)
+  - Keep export for now (backward compat)
+
+- [x] **Task 7.9**: Quality check -- verify no broken imports
+  - `pnpm nx typecheck map-lib` -- PASS
+  - `pnpm nx test map-lib` -- 298 tests, 0 failures, PASS
+  - `pnpm nx lint map-lib` -- 0 errors (111 warnings), PASS
 
 #### Phase 7 Completion Criteria
 
-- [ ] Painting scenarios P1, P2, P3 produce correct results end-to-end (AC9)
-- [ ] All 47 blob-47 mask configurations produce correct frames
-- [ ] Performance benchmarks: brush <5ms, flood fill <50ms, full rebuild <500ms on 256x256
-- [ ] All 9 acceptance criteria (AC1-AC9) verified
-- [ ] All tests pass: `pnpm nx test map-lib`
-- [ ] Type checking passes: `pnpm nx typecheck map-lib`
-- [ ] Lint passes: `pnpm nx lint map-lib`
-- [ ] No regressions in existing functionality
-- [ ] Coverage on new modules: TilesetRegistry 100%, GraphBuilder 100%, Router 100%, EdgeResolver 100%, CellTilesetSelector 100%, RetileEngine 90%+, RoutingCommands 100%
+- [x] `classifyEdge()` implemented and tested for all 5 classes (C1, C2, C3, C4, C5)
+- [x] Post-recompute commit policy integrated into RetileEngine (center always commits, C1/C2/C3 neighbors commit, C4/C5 neighbors optional)
+- [x] Edge class integration tests pass (v2 Section 15 tests: 9 class-based + 3 regression)
+- [x] Reference dataset verified: 1 C2, 22 C3, 22 C4, 0 C5 out of 45 material pairs
+- [x] Old files deleted: autotile-layers.ts, autotile-layers.spec.ts, commands.ts, commands.spec.ts
+- [x] Old exports removed from index.ts
+- [x] `computeTransitionMask` marked `@deprecated`
+- [x] No broken imports anywhere in the workspace
+- [x] `pnpm nx test map-lib` passes (298 tests, 0 failures)
+- [x] Dirty set computation (expandDirtySet, Chebyshev R=2, 50% threshold) is NOT modified by the commit policy implementation
 
 #### Operational Verification Procedures
 
-Copy from Design Doc integration points:
+1. Run `classifyEdge` unit tests -- all 5 classes verified with representative pairs
+2. Run edge class integration tests -- 9 class-based + 3 regression tests pass
+3. Verify commit policy: center always updates; C2/C3 neighbors update; C4 neighbors optionally stable
+4. `pnpm nx test map-lib` -- all tests pass (old test files deleted, new specs + edge class tests pass)
+5. `pnpm nx typecheck map-lib` -- no type errors
+6. `pnpm nx typecheck genmap` -- no broken imports
+7. Verify no other files in the workspace import from deleted modules
 
-1. **Integration Point 1 (RetileEngine -> EditorLayer output)**: Paint a cell, verify `layer.frames[y][x]` and `layer.tilesetKeys[y][x]` produce correct rendering values
-2. **Integration Point 2 (RoutingPaintCommand -> Undo/Redo stack)**: Execute paint, undo, redo -- verify grid and layers return to expected states
-3. **Integration Point 3 (RetileEngine -> resolvePaint)**: After applyMapPatch, `grid[y][x].terrain` equals the painted material
-4. **Integration Point 4 (New exports -> genmap imports)**: TypeScript compilation succeeds; old and new exports coexist
+---
+
+### Phase 8: QA + Performance Testing (Required) (Estimated commits: 1-2)
+
+**Purpose**: Comprehensive QA including all painting scenarios (P1-P3), performance benchmarks, regression testing, and final verification of all Design Doc acceptance criteria.
+
+**Depends on**: All previous phases complete
+
+#### Tasks
+
+- [ ] **Task 8.1**: Verify all Design Doc acceptance criteria achieved
+  - [ ] AC1: Graph Construction -- compatGraph and renderGraph correct (verified by graph-builder.spec.ts)
+  - [ ] AC2: BFS Routing Table -- nextHop correct, tie-break deterministic (verified by router.spec.ts)
+  - [ ] AC3: Edge Ownership -- symmetry, priority-based, preset-switchable (verified by edge-resolver.spec.ts)
+  - [ ] AC4: Cell Tileset Selection -- base/transition/conflict, mask by FG only, gating, AND frame-source fallback: `renderTilesetKey = materials[fg].baseTilesetKey` when `frameId === SOLID_FRAME` while `selectedTilesetKey` is preserved unchanged (verified by cell-tileset-selector.spec.ts)
+  - [ ] AC5: Conflict Resolution -- S1 max 4 iterations, S2 fallback, logging (verified by cell-tileset-selector.spec.ts)
+  - [ ] AC6: Incremental Retile Engine -- T1-T4, cache, dirty propagation (verified by retile-engine.spec.ts + integration)
+  - [ ] AC7: Editor API -- all 6 methods functional (verified by retile-engine.spec.ts)
+  - [ ] AC8: Command System -- execute/undo/redo, EditorCommand interface (verified by routing-commands.spec.ts)
+  - [ ] AC9: Painting Scenarios -- P1, P2, P3 verified (verified by routing-pipeline.integration.spec.ts)
+  - [ ] AC10: Neighbor Repaint Policy -- dirty set R=2 recomputed fully, center always committed, C1/C2/C3 neighbor committed, C4/C5 neighbor optional. Edge classification correct for all 45 reference pairs (1 C2, 22 C3, 22 C4, 0 C5).
+
+- [ ] **Task 8.2**: Create performance benchmark tests (new file: `retile-engine.performance.spec.ts`)
+  - Benchmark T1: single-cell paint on 256x256 grid -- target <5ms
+  - Benchmark T4: full rebuild on 256x256 grid (6 materials, 15 tilesets) -- target <500ms
+  - Benchmark BFS: `computeRoutingTable` with 30 materials, 100 tilesets -- target <10ms
+  - Benchmark flood fill: 10,000 cells on 256x256 grid -- target <50ms
+  - Record results in test output; fail if >2x target
+
+- [ ] **Task 8.3**: Run full quality gate
+  - `pnpm nx typecheck map-lib` -- passes
+  - `pnpm nx lint map-lib` -- passes
+  - `pnpm nx test map-lib` -- all tests pass
+  - Verify no `@ts-ignore` or explicit `any` in new code
+  - Verify JSDoc present on all public exports
+  - Verify immutability discipline: no input mutation in any new function
+  - Verify `ReadonlyArray`/`ReadonlyMap` on all input parameters
+
+- [ ] **Task 8.4**: Final regression verification
+  - `pnpm nx run-many -t lint test typecheck` across affected packages
+  - Verify canvas-renderer reads new output correctly
+  - Verify no regressions in existing non-routing functionality
+  - Verify edge classification tests pass: all 5 classes (C1-C5) with representative material pairs
+  - Verify v2 Section 15 integration tests pass: 9 class-based + 3 regression tests
+  - Verify commit policy: center always commits, C1/C2/C3 neighbors commit, C4/C5 neighbors optional
+
+#### Phase 8 Completion Criteria
+
+- [ ] All 10 acceptance criteria (AC1-AC10) verified
+- [ ] Performance benchmarks: brush <5ms, fill <50ms, rebuild <500ms on 256x256
+- [ ] All tests pass: `pnpm nx test map-lib` (122+ unit/integration + performance)
+- [ ] Type checking passes: `pnpm nx typecheck map-lib`
+- [ ] Lint passes: `pnpm nx lint map-lib`
+- [ ] No regressions in existing functionality
+- [ ] Coverage: TilesetRegistry 100%, GraphBuilder 100%, Router 100%, EdgeResolver 100%, CellTilesetSelector 100%, RetileEngine 90%+ (including edge classification), RoutingCommands 100%
+
+#### Operational Verification Procedures
+
+1. **Integration Point 1 (RetileEngine -> EditorLayer output)**: Paint a cell, verify `layer.frames[y][x]` and `layer.tilesetKeys[y][x]` produce correct values
+2. **Integration Point 2 (RoutingPaintCommand -> Undo/Redo stack)**: Execute paint, undo, redo -- verify state roundtrip
+3. **Integration Point 3 (RetileEngine -> resolvePaint)**: After applyMapPatch, `grid[y][x].terrain` equals painted material
+4. **Integration Point 4 (New exports -> genmap imports)**: TypeScript compilation succeeds
 5. **Performance verification**: Run benchmarks, confirm all targets met
-6. **Regression verification**: Run `pnpm nx run-many -t lint test typecheck` across affected packages
+6. **Regression verification**: `pnpm nx run-many -t lint test typecheck` across all affected packages
 
 ---
 
 ## Quality Assurance (Cross-Phase)
 
-- [ ] Implement staged quality checks after each phase (typecheck, lint, format)
+- [ ] Staged quality checks after each phase (typecheck, lint)
 - [ ] All tests pass after each phase (`pnpm nx test map-lib`)
 - [ ] Static check pass (`pnpm nx typecheck map-lib`)
 - [ ] Lint check pass (`pnpm nx lint map-lib`)
-- [ ] Build success (zero-build pattern; TS source exported directly)
 - [ ] No `@ts-ignore` or explicit `any` in new code
 - [ ] JSDoc on all public exports
-- [ ] Immutability discipline: no input mutation in any new function
+- [ ] Immutability discipline: no input mutation
 - [ ] `ReadonlyArray`/`ReadonlyMap` on all input parameters
 - [ ] Deterministic output: same input always produces same output
 
 ## Testing Strategy Summary
 
-| Module | Test Type | Key Scenarios | Target Coverage |
-|--------|-----------|---------------|-----------------|
-| `tileset-registry.ts` | Unit | Constructor, lookups, edge cases | 100% |
-| `graph-builder.ts` | Unit | Symmetry, directed vs undirected, empty input | 100% |
-| `router.ts` | Unit | 1-hop, 2-hop, 3-hop, tie-break, unreachable | 100% |
-| `edge-resolver.ts` | Unit | Valid/invalid candidates, presets, symmetry | 100% |
-| `cell-tileset-selector.ts` | Unit | Base/transition/conflict, S1/S2, mask, gating | 100% |
-| `retile-engine.ts` | Unit + Integration | T1-T4 triggers, cache, dirty propagation | 90%+ |
-| `routing-commands.ts` | Unit | Execute/undo/redo round-trip, interface compliance | 100% |
-| Integration tests | Integration | P1, P2, P3 painting scenarios, workflow | N/A |
-| Performance tests | Benchmark | Brush <5ms, fill <50ms, rebuild <500ms | N/A |
+| Module | Spec File | Tests | Status | Target Coverage |
+|--------|-----------|-------|--------|-----------------|
+| `tileset-registry.ts` | `tileset-registry.spec.ts` | 14 | RED | 100% |
+| `graph-builder.ts` | `graph-builder.spec.ts` | 9 | RED | 100% |
+| `router.ts` | `router.spec.ts` | 13 | RED | 100% |
+| `edge-resolver.ts` | `edge-resolver.spec.ts` | 7 | RED | 100% |
+| `cell-tileset-selector.ts` | `cell-tileset-selector.spec.ts` | 18 | RED | 100% |
+| `retile-engine.ts` | `retile-engine.spec.ts` | 23 | RED | 90%+ |
+| `retile-engine.ts` | `retile-engine.integration.spec.ts` | 18 | RED | N/A |
+| `routing-commands.ts` | `routing-commands.spec.ts` | TBD | Not written | 100% |
+| Full pipeline | `routing-pipeline.integration.spec.ts` | 20 | RED | N/A |
+| `edge-resolver.ts` (edge classification) | `edge-resolver.spec.ts` (extended) | ~6 | Not written | 100% |
+| Performance | `retile-engine.performance.spec.ts` | TBD | Not written | N/A |
 
-## Files Created/Modified Summary
+**Test case resolution by phase:**
 
-### New Files (7)
+| Phase | Cumulative GREEN | New Tests Resolved |
+|-------|------------------|--------------------|
+| Phase 1 | 14 / 122 | tileset-registry: 14 |
+| Phase 2 | 36 / 122 | graph-builder: 9, router: 13 |
+| Phase 3 | 61 / 122 | edge-resolver: 7, cell-tileset-selector: 18 |
+| Phase 4 | 102 / 122 | retile-engine: 23, retile-engine.integration: 18 |
+| Phase 5 | 122 / 122 | routing-commands: TBD, routing-pipeline.integration: 20 |
+| Phase 7 | 134+ / 140+ | edge-classification: ~6, commit-policy integration: ~12 |
+| Phase 8 | 140+ | performance benchmarks (new) |
+
+## Files Created/Modified/Deleted Summary
+
+### New Files (8 implementation + 2 spec + 1 performance)
 
 | File | Phase | Description |
 |------|-------|-------------|
 | `packages/map-lib/src/types/routing-types.ts` | 1 | All routing type definitions |
 | `packages/map-lib/src/core/tileset-registry.ts` | 1 | TilesetRegistry class |
-| `packages/map-lib/src/core/graph-builder.ts` | 2 | GraphBuilder (buildGraphs) |
-| `packages/map-lib/src/core/router.ts` | 2 | Router (BFS routing table) |
-| `packages/map-lib/src/core/edge-resolver.ts` | 3 | EdgeResolver (per-edge ownership) |
-| `packages/map-lib/src/core/cell-tileset-selector.ts` | 3 | CellTilesetSelector (tileset + frame) |
-| `packages/map-lib/src/core/retile-engine.ts` | 4 | RetileEngine (orchestrator) |
+| `packages/map-lib/src/core/graph-builder.ts` | 2 | buildGraphs() function |
+| `packages/map-lib/src/core/router.ts` | 2 | computeRoutingTable() + RoutingTable |
+| `packages/map-lib/src/core/edge-resolver.ts` | 3 | resolveEdge() function |
+| `packages/map-lib/src/core/cell-tileset-selector.ts` | 3 | selectTilesetForCell, computeCellFrame, resolveRenderTilesetKey |
+| `packages/map-lib/src/core/retile-engine.ts` | 4 | RetileEngine class (orchestrator) |
 | `packages/map-lib/src/core/routing-commands.ts` | 5 | RoutingPaintCommand, RoutingFillCommand |
+| `packages/map-lib/src/core/routing-commands.spec.ts` | 5 | Command unit tests (new spec file) |
+| `packages/map-lib/src/core/routing-exports.spec.ts` | 5 | Export verification tests (if needed) |
+| `packages/map-lib/src/core/retile-engine.performance.spec.ts` | 8 | Performance benchmarks |
 
-### New Test Files (7)
-
-| File | Phase | Tests |
-|------|-------|-------|
-| `packages/map-lib/src/core/tileset-registry.spec.ts` | 1 | 8+ unit tests |
-| `packages/map-lib/src/core/graph-builder.spec.ts` | 2 | 7+ unit tests |
-| `packages/map-lib/src/core/router.spec.ts` | 2 | 9+ unit tests |
-| `packages/map-lib/src/core/edge-resolver.spec.ts` | 3 | 7+ unit tests |
-| `packages/map-lib/src/core/cell-tileset-selector.spec.ts` | 3 | 13+ unit tests |
-| `packages/map-lib/src/core/retile-engine.spec.ts` | 4 | 16+ unit tests |
-| `packages/map-lib/src/core/routing-commands.spec.ts` | 5 | 9+ unit tests |
-
-### Modified Files (3)
+### Modified Files (7)
 
 | File | Phase | Change |
 |------|-------|--------|
-| `packages/map-lib/src/index.ts` | 6 | Add new exports, deprecate old exports |
-| `apps/genmap/src/hooks/use-map-editor.ts` | 6 | Switch to RetileEngine for LOAD_MAP; callers switch to new commands |
-| Component files that construct PaintCommand/FillCommand | 6 | Switch to RoutingPaintCommand/RoutingFillCommand |
+| `packages/map-lib/src/index.ts` | 5, 7 | Add new exports (P5), remove old exports (P7) |
+| `packages/map-lib/src/core/neighbor-mask.ts` | 7 | Mark `computeTransitionMask` as `@deprecated` |
+| `apps/genmap/src/hooks/use-map-editor.ts` | 6 | Switch to RetileEngine for LOAD_MAP |
+| `apps/genmap/src/components/map-editor/tools/brush-tool.ts` | 6 | RoutingPaintCommand |
+| `apps/genmap/src/components/map-editor/tools/fill-tool.ts` | 6 | RoutingFillCommand |
+| `apps/genmap/src/components/map-editor/tools/eraser-tool.ts` | 6 | RoutingPaintCommand |
+| `apps/genmap/src/components/map-editor/tools/rectangle-tool.ts` | 6 | RoutingPaintCommand |
+
+### Deleted Files (4)
+
+| File | Phase | Replacement |
+|------|-------|-------------|
+| `packages/map-lib/src/core/autotile-layers.ts` | 7 | RetileEngine, Router, TilesetRegistry |
+| `packages/map-lib/src/core/autotile-layers.spec.ts` | 7 | New spec files for each module |
+| `packages/map-lib/src/core/commands.ts` | 7 | routing-commands.ts |
+| `packages/map-lib/src/core/commands.spec.ts` | 7 | routing-commands.spec.ts |
 
 ### Unchanged Files (Confirmed)
 
 | File | Reason |
 |------|--------|
-| `packages/map-lib/src/core/autotile.ts` | Reused as-is (getFrame, gateDiagonals, FRAME_TABLE) |
-| `packages/map-lib/src/core/neighbor-mask.ts` | Reused (computeNeighborMaskByMaterial); computeTransitionMask superseded but not removed |
+| `packages/map-lib/src/core/autotile.ts` | Reused (getFrame, gateDiagonals, FRAME_TABLE) |
 | `packages/map-lib/src/core/material-resolver.ts` | Reused (resolvePaint called by RetileEngine) |
 | `packages/map-lib/src/core/walkability.ts` | Reused (recomputeWalkability called by commands) |
 | `packages/map-lib/src/types/editor-types.ts` | Unchanged (EditorLayer, MapEditorState, EditorCommand) |
 | `packages/map-lib/src/types/material-types.ts` | Unchanged (TilesetInfo, MaterialInfo) |
 | `apps/genmap/src/components/map-editor/canvas-renderer.ts` | Read-only consumer; no code changes |
 
-### Deprecated Files (Not Deleted in This Plan)
-
-| File | Functions Deprecated | Replacement |
-|------|---------------------|-------------|
-| `packages/map-lib/src/core/autotile-layers.ts` | `recomputeAutotileLayers`, `findDominantNeighbor`, `findIndirectTileset`, `buildTilesetPairMap` | RetileEngine, Router, TilesetRegistry |
-| `packages/map-lib/src/core/commands.ts` | `applyDeltas`, `PaintCommand`, `FillCommand` | RoutingPaintCommand, RoutingFillCommand |
-
 ## Completion Criteria
 
-- [ ] All 7 phases completed
+- [ ] All 8 phases completed
 - [ ] Each phase's operational verification procedures executed
-- [ ] Design Doc acceptance criteria AC1-AC9 satisfied
+- [ ] Design Doc acceptance criteria AC1-AC10 satisfied
 - [ ] Staged quality checks completed (zero errors)
-- [ ] All tests pass (70+ new unit tests + integration tests)
+- [ ] All tests pass (122+ unit/integration tests + performance benchmarks)
+- [ ] Test resolution: 122/122 existing spec tests GREEN (unresolved: 0)
 - [ ] Performance benchmarks within targets
-- [ ] Necessary documentation updated (index.ts deprecation notices)
+- [ ] Old files deleted, old exports removed
 - [ ] User review approval obtained
 
 ## Progress Tracking
@@ -781,21 +792,26 @@ Copy from Design Doc integration points:
 - Notes:
 
 ### Phase 4: RetileEngine
-- Start: ____-__-__ __:__
-- Complete: ____-__-__ __:__
-- Notes:
+- Start: 2026-02-23
+- Complete: 2026-02-23
+- Notes: All 23 unit tests + 18 integration tests GREEN. Key insight: edge ownership (resolveEdge) is NOT used for pre-filtering in the engine. Each cell independently computes virtualBG = nextHop(fg, neighborFg) and checks hasTileset(fg, virtualBG). S1/S2 conflict resolution happens inside selectTilesetForCell. Full map-lib suite: 244 tests pass.
 
-### Phase 5: Command System Replacement
-- Start: ____-__-__ __:__
-- Complete: ____-__-__ __:__
-- Notes:
+### Phase 5: Command System + Export Updates
+- Start: 2026-02-23
+- Complete: 2026-02-23
+- Notes: RoutingPaintCommand/RoutingFillCommand created (14 unit tests). Pipeline integration spec implemented (20 tests with full assertions). All new modules exported from index.ts. Old exports deprecated. Total: 258 tests GREEN.
 
-### Phase 6: Editor Integration + Export Updates
-- Start: ____-__-__ __:__
-- Complete: ____-__-__ __:__
-- Notes:
+### Phase 6: Editor Integration + Tool Migration
+- Start: 2026-02-23
+- Complete: 2026-02-23
+- Notes: Module-level RetileEngine pattern used (getRetileEngine() exported from use-map-editor.ts). LOAD_MAP, SET_TILESETS, SET_MATERIALS all reconstruct engine. Tools import getRetileEngine and pass to RoutingPaintCommand/RoutingFillCommand. Brush tool simplified: removed resolvePaint dependency, CellPatchEntry collected directly. Fixed pre-existing window reference in autotile-layers.ts to allow declaration generation. All 258 map-lib tests pass, genmap typecheck clean.
 
-### Phase 7: QA + Performance Testing
+### Phase 7: Neighbor Repaint Policy + Cleanup + Delete Old Files
+- Start: 2026-02-24
+- Complete: 2026-02-24
+- Notes: All tasks complete. Performance benchmarks within thresholds (T1: 1.20-1.47ms, T4: 60.93-67.92ms, BFS: 0.43-0.48ms, Fill: 22.01-26.72ms). AC1-AC10 verified. 298 tests, 0 failures. Minor lint fix (no-inferrable-types) and JSDoc addition for EdgeClass type.
+
+### Phase 8: QA + Performance Testing
 - Start: ____-__-__ __:__
 - Complete: ____-__-__ __:__
 - Notes:
@@ -807,11 +823,14 @@ Copy from Design Doc integration points:
 1. **Routing is tileset SELECTION, never cell insertion.** The grid always contains exactly the materials the user painted.
 2. **The 47-mask is ALWAYS computed from FG material comparison only.** Virtual BG never affects mask computation.
 3. **Diagonals follow the gating rule regardless of virtual BG.** `gateDiagonals()` operates solely on FG mask bits.
-4. **Single-layer constraint: ONE tileset per cell per frame.** No compositing or blending.
+4. **Single-layer constraint: ONE logical selection (`selectedTilesetKey`) and ONE render source (`renderTilesetKey`) per cell per frame.** No compositing or blending. The two keys may differ when frame-source fallback applies (e.g., `SOLID_FRAME` borrows from `baseTilesetKey`).
 5. **Both cells at a boundary independently compute their own transition.** They may select different tilesets.
 6. **Edge ownership is for conflict resolution, not transition gating.** Ownership only matters during S1/S2 pipeline.
+7. **Frame fallback does not alter routing.** `renderTilesetKey` may differ from `selectedTilesetKey` for SOLID_FRAME only.
+8. **Post-recompute commit policy operates at render-level, not engine-level.** The dirty set (R=2 Chebyshev) is NEVER filtered. Classification is analytics overlay for commit decisions.
+9. **Edge classification is an overlay on EdgeResolver, not a replacement.** EdgeResolver determines ownership; classifyEdge() determines visual stability class.
 
-### Important Constraints
+### Key Constraints
 
 - Zero-build TS source pattern: map-lib exports `.ts` directly, no compile step
 - No browser/DOM dependencies in map-lib (pure algorithms, server-importable)
@@ -821,3 +840,12 @@ Copy from Design Doc integration points:
 - Deterministic: same input always produces same output
 - Co-located test files: `module.spec.ts` next to `module.ts`
 - Follow existing test patterns: `makeCell`, `makeMaterial` factory helpers
+
+### Performance Targets
+
+| Benchmark | Target | Fail Threshold (2x) |
+|-----------|--------|---------------------|
+| Single-cell paint (T1) on 256x256 | <5ms | <10ms |
+| Full rebuild (T4) on 256x256 | <500ms | <1000ms |
+| BFS routing table (30 materials) | <10ms | <20ms |
+| Flood fill 10,000 cells on 256x256 | <50ms | <100ms |

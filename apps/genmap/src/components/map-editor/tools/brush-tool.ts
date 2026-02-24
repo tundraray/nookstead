@@ -1,17 +1,16 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction, CellDelta } from '@nookstead/map-lib';
-import { bresenhamLine, PaintCommand, resolvePaint } from '@nookstead/map-lib';
-import type { Cell } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
+import { bresenhamLine, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /**
  * Creates brush tool handlers.
  * Click to paint a single cell; drag to paint along a Bresenham line path.
- * Collects CellDelta entries and dispatches a PaintCommand on mouse up.
+ * Collects CellPatchEntry entries and dispatches a RoutingPaintCommand on mouse up.
  *
- * Uses resolvePaint() per cell so material validation and grid update
- * follow the canonical pipeline. currentGrid tracks the accumulated grid
- * state during a stroke; state.grid provides oldTerrain for correct undo.
+ * The RetileEngine handles grid updates and autotile recomputation when the
+ * command executes. oldFg is taken from the original state.grid for correct undo.
  */
 export function createBrushTool(
   state: MapEditorState,
@@ -19,46 +18,23 @@ export function createBrushTool(
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
-  let currentGrid: Cell[][] = state.grid;
-  const paintedCells = new Map<string, CellDelta>();
+  const paintedCells = new Map<string, CellPatchEntry>();
 
   function tryPaint(x: number, y: number): void {
+    // Bounds check
+    if (x < 0 || x >= state.width || y < 0 || y >= state.height) return;
+
     const key = `${x},${y}`;
     if (paintedCells.has(key)) return;
 
-    // Same-terrain check against accumulated grid (not original -- supports multi-material strokes)
-    if (currentGrid[y]?.[x]?.terrain === state.activeMaterialKey) return;
-
-    const result = resolvePaint({
-      grid: currentGrid,
-      x,
-      y,
-      materialKey: state.activeMaterialKey,
-      width: state.width,
-      height: state.height,
-      materials: state.materials,
-    });
-
-    if (result.affectedCells.length === 0) return;
-
-    // Advance accumulated grid for next cell in stroke
-    currentGrid = result.updatedGrid;
-
-    const layerIndex = state.activeLayerIndex;
-    const oldFrame =
-      layerIndex >= 0 && layerIndex < state.layers.length
-        ? state.layers[layerIndex].frames[y][x]
-        : 0;
+    const oldFg = state.grid[y][x].terrain;
+    if (oldFg === state.activeMaterialKey) return;
 
     paintedCells.set(key, {
-      layerIndex,
       x,
       y,
-      // oldTerrain from ORIGINAL state.grid (not currentGrid) for correct undo
-      oldTerrain: state.grid[y][x].terrain,
-      newTerrain: state.activeMaterialKey,
-      oldFrame,
-      newFrame: 0, // Overridden by recomputeAutotileLayers in applyDeltas
+      oldFg,
+      newFg: state.activeMaterialKey,
     });
   }
 
@@ -66,7 +42,6 @@ export function createBrushTool(
     onMouseDown(tile: { x: number; y: number }) {
       isDrawing = true;
       paintedCells.clear();
-      currentGrid = state.grid; // Reset to original grid at stroke start
       lastTile = tile;
       tryPaint(tile.x, tile.y);
     },
@@ -95,7 +70,13 @@ export function createBrushTool(
 
       if (paintedCells.size === 0) return;
 
-      const command = new PaintCommand(Array.from(paintedCells.values()));
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      const command = new RoutingPaintCommand(
+        Array.from(paintedCells.values()),
+        engine
+      );
       dispatch({ type: 'PUSH_COMMAND', command });
       paintedCells.clear();
     },
