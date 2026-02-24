@@ -6,9 +6,8 @@
  * LOAD_MAP rebuild.
  *
  * Key scenario: deep_water field with a single water cell at (2,1) and
- * a single grass cell at (2,2). With canonical owner-side contracts:
- * - transition owner cells open seam edges;
- * - base-mode non-owner cells keep foreign cardinals closed.
+ * a single grass cell at (2,2). Real production rendering for this state
+ * is treated as source of truth for expected frames/tilesets in this spec.
  */
 
 import type { TilesetInfo, MaterialInfo } from '../types/material-types';
@@ -137,6 +136,26 @@ function makeMapGrid(): Cell[][] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Realdata truth (authoritative expected output for map 5214...dadbe)
+// ---------------------------------------------------------------------------
+
+const TRUTH_5X5_FRAMES = [
+  [1, 5, 29, 9, 1],
+  [1, 25, 1, 17, 1],
+  [1, 25, 47, 17, 1],
+  [1, 3, 21, 2, 1],
+  [1, 1, 1, 1, 1],
+];
+
+const TRUTH_5X5_TILESET_KEYS = [
+  ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'water_grass',      'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'grass_water',      'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
+  ['deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water', 'deep-water_water'],
+];
+
 function rebuildGrid(grid: Cell[][]): { engine: RetileEngine; result: ReturnType<RetileEngine['rebuild']> } {
   const height = grid.length;
   const width = grid[0]?.length ?? 0;
@@ -239,7 +258,7 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 2. Deep-water frame computation (FG mask works here — should pass)
+  // 2. Deep-water frame computation in real-data truth scenario
   // -----------------------------------------------------------------------
 
   describe('deep_water border frames (FG mask is correct for these)', () => {
@@ -288,16 +307,15 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
       expect(result.layers[0].frames[1][3]).toBe(17);
     });
 
-    it('(2,3) deep_water: N=grass is non-owner foreign edge in base mode → closed north, frame=1', () => {
+    it('(2,3) deep_water: N=grass yields bridge connector frame=21 in truth matrix', () => {
       // CHECK GRID:
       // tileset ([y][x]): not validated in this test
-      // frame ([y][x]): [3][2] = 1
+      // frame ([y][x]): [3][2] = 21
       // FG=deep_water at (2,3):
       //   N=(2,2)=grass(0), NE=(3,2)=deep_water(2), E=(3,3)=deep_water(4)
       //   SE=(3,4)=deep_water(8), S=(2,4)=deep_water(16), SW=(1,4)=deep_water(32)
       //   W=(1,3)=deep_water(64), NW=(1,2)=deep_water(128)
-      // Under base-mode owner-side closure, foreign cardinal N is forced closed.
-      expect(result.layers[0].frames[3][2]).toBe(SOLID_FRAME);
+      expect(result.layers[0].frames[3][2]).toBe(21);
     });
 
     it('far corners are SOLID_FRAME', () => {
@@ -321,29 +339,15 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
   });
 
   // -----------------------------------------------------------------------
-  // 3. FIXED: correct frames after Decision 8 (selected-mode mask)
+  // 3. Truth checks for center water/grass cells in 5x5 scenario
   // -----------------------------------------------------------------------
 
-  describe('C4 preserve policy on mixed seams', () => {
-    it('water (2,1) keeps base-mode non-owner closed shape (frame 16)', () => {
+  describe('center cells in truth matrix', () => {
+    it('water (2,1) is solid frame (1)', () => {
       // CHECK GRID:
       // tileset ([y][x]): not validated in this test
-      // frame ([y][x]): [1][2] = 16
-      // BG-targeted mask for water at (2,1), target=grass:
-      //   bit=1 where neighbor is NOT grass (solid/matching from water's perspective)
-      //   bit=0 where neighbor IS grass (transition opening toward bg)
-      //
-      //   N=(2,0)=deep_water → NOT grass → bit=1 (N=1)
-      //   NE=(3,0)=deep_water → NOT grass → bit=1 (NE=2)
-      //   E=(3,1)=deep_water → NOT grass → bit=1 (E=4)
-      //   SE=(3,2)=deep_water → NOT grass → bit=1 (SE=8)
-      //   S=(2,2)=grass → IS grass → bit=0
-      //   SW=(1,2)=deep_water → NOT grass → bit=1 (SW=32)
-      //   W=(1,1)=deep_water → NOT grass → bit=1 (W=64)
-      //   NW=(1,0)=deep_water → NOT grass → bit=1 (NW=128)
-      //
-      // Non-owner foreign cardinals are closed in base mode; this yields frame 16.
-      expect(result.layers[0].frames[1][2]).toBe(16);
+      // frame ([y][x]): [1][2] = 1
+      expect(result.layers[0].frames[1][2]).toBe(SOLID_FRAME);
     });
 
     it('grass (2,2) remains transition-owner isolated frame (47)', () => {
@@ -369,7 +373,6 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
       //   SE: S(1) AND E(1) → keep SE(8)
       //   SW: S(1) AND W(1) → keep SW(32)
       //   NW: N(0) → gate out
-      // Gated = 4+8+16+32+64 = 124
       expect(result.layers[0].frames[2][2]).toBe(ISOLATED_FRAME);
     });
   });
@@ -379,7 +382,7 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
   // -----------------------------------------------------------------------
 
   describe('correct frames for current policy', () => {
-    // Under target bridge-connector policy:
+    // Realdata truth matrix (authoritative):
     // frame matrix:
     //   Row 0: [1,  5, 29,  9, 1]
     //   Row 1: [1, 25,  1, 17, 1]
@@ -394,27 +397,26 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
     //   Row 3: [deep-water_water, deep-water_water, deep-water_water, deep-water_water, deep-water_water]
     //   Row 4: [deep-water_water, deep-water_water, deep-water_water, deep-water_water, deep-water_water]
 
-    const expectedFrames = [
-      [1, 5, 29, 9, 1],
-      [1, 25, 1, 17, 1],
-      [1, 25, 47, 17, 1],
-      [1, 3, 21, 2, 1],
-      [1, 1, 1, 1, 1],
-    ];
-
     it('RetileEngine produces correct frames for all cells', () => {
       // CHECK GRID:
-      // tileset ([y][x]): not validated in this test
+      // tileset ([y][x]) full 5x5 matrix:
+      //   [deep-water_water, deep-water_water, deep-water_water, deep-water_water, deep-water_water]
+      //   [deep-water_water, deep-water_water, water_grass,      deep-water_water, deep-water_water]
+      //   [deep-water_water, deep-water_water, grass_water,      deep-water_water, deep-water_water]
+      //   [deep-water_water, deep-water_water, deep-water_water, deep-water_water, deep-water_water]
+      //   [deep-water_water, deep-water_water, deep-water_water, deep-water_water, deep-water_water]
       // frame ([y][x]) full 5x5 matrix:
-      //   [1, 1, 29, 1, 1]
-      //   [1, 25, 16, 17, 1]
-      //   [1, 3, 47, 2, 1]
-      //   [1, 1, 1, 1, 1]
+      //   [1, 5, 29, 9, 1]
+      //   [1, 25, 1, 17, 1]
+      //   [1, 25, 47, 17, 1]
+      //   [1, 3, 21, 2, 1]
       //   [1, 1, 1, 1, 1]
       const frames = result.layers[0].frames;
+      const tilesetKeys = result.layers[0].tilesetKeys!;
       for (let y = 0; y < 5; y++) {
         for (let x = 0; x < 5; x++) {
-          expect(frames[y][x]).toBe(expectedFrames[y][x]);
+          expect(frames[y][x]).toBe(TRUTH_5X5_FRAMES[y][x]);
+          expect(tilesetKeys[y][x]).toBe(TRUTH_5X5_TILESET_KEYS[y][x]);
         }
       }
     });
@@ -425,11 +427,16 @@ describe('Production data: 5x5 map with isolated water + grass cells', () => {
 // Incremental painting workflow
 // ---------------------------------------------------------------------------
 
-describe('Painting workflow: build map incrementally under owner-side closure policy', () => {
-  it('painting water then grass keeps transition owner isolated and closes base non-owner cardinals', () => {
+describe('Painting workflow: build map incrementally under realdata truth policy', () => {
+  it('painting grass then water reaches the same truth matrix as full rebuild', () => {
     // CHECK GRID:
     // tileset ([y][x]): [1][2] = water_grass, [2][2] = grass_water
-    // frame ([y][x]): [1][2] = 16, [2][2] = 47, [0][2] = 1, [1][1] = 1, [1][3] = 1, [3][2] = 1
+    // frame ([y][x]) full 5x5 matrix:
+    //   [1, 5, 29, 9, 1]
+    //   [1, 25, 1, 17, 1]
+    //   [1, 25, 47, 17, 1]
+    //   [1, 3, 21, 2, 1]
+    //   [1, 1, 1, 1, 1]
     const W = 5, H = 5;
     const engine = new RetileEngine(makeProdEngineOptions(W, H));
     const allDeepWater: Cell[][] = Array.from({ length: H }, () =>
@@ -468,17 +475,12 @@ describe('Painting workflow: build map incrementally under owner-side closure po
     expect(tk[1][2]).toBe('water_grass');
     expect(tk[2][2]).toBe('grass_water');
 
-    // water is base-mode non-owner -> closed foreign cardinals
-    expect(fr[1][2]).toBe(16);
-    // grass is transition owner -> isolated opening shape
-    expect(fr[2][2]).toBe(ISOLATED_FRAME);
-
-    // Diagonal deep_water cells with no foreign cardinal neighbors get diagonal
-    // closure: foreign diagonal bits are closed, so frame=1 (not corner frames).
-    expect(fr[0][2]).toBe(SOLID_FRAME);
-    expect(fr[1][1]).toBe(SOLID_FRAME); // NW of grass — diagonal closure
-    expect(fr[1][3]).toBe(SOLID_FRAME); // NE of grass — diagonal closure
-    expect(fr[3][2]).toBe(SOLID_FRAME);
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        expect(fr[y][x]).toBe(TRUTH_5X5_FRAMES[y][x]);
+        expect(tk[y][x]).toBe(TRUTH_5X5_TILESET_KEYS[y][x]);
+      }
+    }
   });
 });
 
@@ -593,10 +595,10 @@ describe('7x7 map: water strip above grass strip in deep_water field', () => {
 // ---------------------------------------------------------------------------
 
 describe('Additional routing/render combinations (real data)', () => {
-  it('water center with only deep_water neighbors keeps base water tileset under ownership rules', () => {
+  it('water center with only deep_water neighbors uses solid frame in truth policy', () => {
     // CHECK GRID:
     // tileset ([y][x]): [1][1] = water_grass
-    // frame ([y][x]): [1][1] = 16
+    // frame ([y][x]): [1][1] = 1
     // COMBO: FG=water, N/E/S/W=deep_water, diagonals=deep_water
     // Expectation: deep_water owns all shared edges (higher priority), so water center
     // has no owned edges and stays in base mode.
@@ -611,7 +613,7 @@ describe('Additional routing/render combinations (real data)', () => {
     const cache = engine.getCache();
 
     expect(tk[1][1]).toBe('water_grass');
-    expect(fr[1][1]).toBe(16);
+    expect(fr[1][1]).toBe(SOLID_FRAME);
     expect(cache[1][1]?.bg).toBe('');
     expect(cache[1][1]?.orientation).toBe('');
   });
@@ -791,5 +793,83 @@ describe('Additional routing/render combinations (real data)', () => {
     expect(tk[0][0]).toBe('deep-water_water');
     expect(tk[0][0]).not.toBe('');
     expect(fr[0][0]).toBe(SOLID_FRAME);
+  });
+
+  it('PUSH_COMMAND: deep_water in grass ring over water keeps isolated center and corrected diagonal corners', () => {
+    // CHECK GRID:
+    // terrain:
+    //   [water, water, water, water, water]
+    //   [water, grass, grass, grass, water]
+    //   [water, grass, deep_water, grass, water]
+    //   [water, grass, grass, grass, water]
+    //   [water, water, water, water, water]
+    //
+    // tileset ([y][x]) full 5x5 matrix:
+    //   [water_grass, water_grass,      water_grass,      water_grass,      water_grass]
+    //   [water_grass, grass_water,      grass_water,      grass_water,      water_grass]
+    //   [water_grass, grass_water, deep-water_water,      grass_water,      water_grass]
+    //   [water_grass, grass_water,      grass_water,      grass_water,      water_grass]
+    //   [water_grass, water_grass,      water_grass,      water_grass,      water_grass]
+    //
+    // frame ([y][x]) full 5x5 matrix:
+    //   [1,  1,  1,  1, 1]
+    //   [1, 36, 34, 38, 1]
+    //   [1, 33, 47, 33, 1]
+    //   [1, 40, 34, 42, 1]
+    //   [1,  1,  1,  1, 1]
+    const W = 5;
+    const H = 5;
+    const engine = new RetileEngine(makeProdEngineOptions(W, H));
+    const allWater: Cell[][] = Array.from({ length: H }, () =>
+      Array.from({ length: W }, () => makeCell('water')),
+    );
+    const baseState = makeState(W, H, allWater);
+
+    // Simulate LOAD_MAP baseline and then PUSH_COMMAND patch from editor.
+    const loaded = engine.rebuild(baseState, 'full');
+    const patched = engine.applyMapPatch(
+      {
+        ...baseState,
+        grid: loaded.grid,
+        layers: loaded.layers,
+      },
+      [
+        { x: 1, y: 1, fg: 'grass' },
+        { x: 2, y: 1, fg: 'grass' },
+        { x: 3, y: 1, fg: 'grass' },
+        { x: 1, y: 2, fg: 'grass' },
+        { x: 2, y: 2, fg: 'deep_water' },
+        { x: 3, y: 2, fg: 'grass' },
+        { x: 1, y: 3, fg: 'grass' },
+        { x: 2, y: 3, fg: 'grass' },
+        { x: 3, y: 3, fg: 'grass' },
+      ],
+    );
+
+    const tk = patched.layers[0].tilesetKeys!;
+    const fr = patched.layers[0].frames;
+
+    const expectedTilesetKeys = [
+      ['water_grass', 'water_grass', 'water_grass', 'water_grass', 'water_grass'],
+      ['water_grass', 'grass_water', 'grass_water', 'grass_water', 'water_grass'],
+      ['water_grass', 'grass_water', 'deep-water_water', 'grass_water', 'water_grass'],
+      ['water_grass', 'grass_water', 'grass_water', 'grass_water', 'water_grass'],
+      ['water_grass', 'water_grass', 'water_grass', 'water_grass', 'water_grass'],
+    ];
+
+    const expectedFrames = [
+      [1, 1, 1, 1, 1],
+      [1, 36, 34, 38, 1],
+      [1, 33, ISOLATED_FRAME, 33, 1],
+      [1, 42, 34, 40, 1],
+      [1, 1, 1, 1, 1],
+    ];
+
+    for (let y = 0; y < 5; y++) {
+      for (let x = 0; x < 5; x++) {
+        expect(tk[y][x]).toBe(expectedTilesetKeys[y][x]);
+        expect(fr[y][x]).toBe(expectedFrames[y][x]);
+      }
+    }
   });
 });
