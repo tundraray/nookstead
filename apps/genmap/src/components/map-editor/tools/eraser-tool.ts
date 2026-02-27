@@ -1,6 +1,6 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
-import { bresenhamLine, RoutingPaintCommand } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry, BrushShape } from '@nookstead/map-lib';
+import { bresenhamLine, stampCells, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
 import { getRetileEngine } from '../../../hooks/use-map-editor';
 
@@ -11,10 +11,13 @@ const DEFAULT_TERRAIN = 'deep_water';
  * Creates eraser tool handlers.
  * Same interaction model as the brush (click and click-drag with Bresenham line)
  * but sets terrain to the default terrain ('deep_water') instead of the active terrain.
+ * Uses stampCells for multi-cell erasing based on brushSize/brushShape.
  */
 export function createEraserTool(
   state: MapEditorState,
-  dispatch: Dispatch<MapEditorAction>
+  dispatch: Dispatch<MapEditorAction>,
+  brushSize: number,
+  brushShape: BrushShape,
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
@@ -38,12 +41,19 @@ export function createEraserTool(
     });
   }
 
+  function eraseStamp(cx: number, cy: number): void {
+    const cells = stampCells(cx, cy, brushSize, brushShape, state.width, state.height);
+    for (const cell of cells) {
+      tryErase(cell.x, cell.y);
+    }
+  }
+
   return {
     onMouseDown(tile: { x: number; y: number }) {
       isDrawing = true;
       erasedCells.clear();
       lastTile = tile;
-      tryErase(tile.x, tile.y);
+      eraseStamp(tile.x, tile.y);
     },
 
     onMouseMove(tile: { x: number; y: number }) {
@@ -57,7 +67,7 @@ export function createEraserTool(
         tile.y
       );
       for (const pt of points) {
-        tryErase(pt.x, pt.y);
+        eraseStamp(pt.x, pt.y);
       }
       lastTile = tile;
     },

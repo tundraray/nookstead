@@ -1,5 +1,5 @@
-import { FRAMES_PER_TERRAIN, EMPTY_FRAME } from '@nookstead/map-lib';
-import type { MapEditorState, PlacedObject } from '@nookstead/map-lib';
+import { FRAMES_PER_TERRAIN, EMPTY_FRAME, stampCells } from '@nookstead/map-lib';
+import type { MapEditorState, PlacedObject, BrushShape } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -21,6 +21,12 @@ export interface PreviewRect {
   y: number;
   width: number;
   height: number;
+}
+
+/** Brush preview configuration for multi-cell cursor. */
+export interface BrushPreview {
+  brushSize: number;
+  brushShape: BrushShape;
 }
 
 /** Render data for a single game object sprite frame. */
@@ -45,7 +51,8 @@ export function renderMapCanvas(
   config: CanvasConfig,
   cursorTile: { x: number; y: number } | null,
   previewRect: PreviewRect | null,
-  objectRenderData?: Map<string, ObjectRenderEntry>
+  objectRenderData?: Map<string, ObjectRenderEntry>,
+  brushPreview?: BrushPreview,
 ): void {
   const { tileSize } = config;
   const canvasWidth = ctx.canvas.width;
@@ -202,7 +209,7 @@ export function renderMapCanvas(
     );
   }
 
-  // Cursor tile highlight
+  // Cursor tile highlight (multi-cell for brush/eraser with brushPreview)
   if (
     cursorTile &&
     cursorTile.x >= 0 &&
@@ -210,21 +217,69 @@ export function renderMapCanvas(
     cursorTile.y >= 0 &&
     cursorTile.y < state.height
   ) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(
-      cursorTile.x * tileSize,
-      cursorTile.y * tileSize,
-      tileSize,
-      tileSize
-    );
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(
-      cursorTile.x * tileSize,
-      cursorTile.y * tileSize,
-      tileSize,
-      tileSize
-    );
+    if (brushPreview && brushPreview.brushSize > 1) {
+      const cells = stampCells(
+        cursorTile.x,
+        cursorTile.y,
+        brushPreview.brushSize,
+        brushPreview.brushShape,
+        state.width,
+        state.height,
+      );
+      const cellSet = new Set(cells.map((c) => `${c.x},${c.y}`));
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      for (const cell of cells) {
+        ctx.fillRect(cell.x * tileSize, cell.y * tileSize, tileSize, tileSize);
+      }
+
+      // Draw boundary edges only (edges not shared with adjacent stamp cells)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1 / zoom;
+      ctx.beginPath();
+      for (const cell of cells) {
+        const px = cell.x * tileSize;
+        const py = cell.y * tileSize;
+        // Top edge
+        if (!cellSet.has(`${cell.x},${cell.y - 1}`)) {
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + tileSize, py);
+        }
+        // Bottom edge
+        if (!cellSet.has(`${cell.x},${cell.y + 1}`)) {
+          ctx.moveTo(px, py + tileSize);
+          ctx.lineTo(px + tileSize, py + tileSize);
+        }
+        // Left edge
+        if (!cellSet.has(`${cell.x - 1},${cell.y}`)) {
+          ctx.moveTo(px, py);
+          ctx.lineTo(px, py + tileSize);
+        }
+        // Right edge
+        if (!cellSet.has(`${cell.x + 1},${cell.y}`)) {
+          ctx.moveTo(px + tileSize, py);
+          ctx.lineTo(px + tileSize, py + tileSize);
+        }
+      }
+      ctx.stroke();
+    } else {
+      // Single-cell highlight (default for fill, rectangle, size=1, etc.)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fillRect(
+        cursorTile.x * tileSize,
+        cursorTile.y * tileSize,
+        tileSize,
+        tileSize
+      );
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1 / zoom;
+      ctx.strokeRect(
+        cursorTile.x * tileSize,
+        cursorTile.y * tileSize,
+        tileSize,
+        tileSize
+      );
+    }
   }
 
   ctx.restore();

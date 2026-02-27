@@ -1,4 +1,4 @@
-import { bresenhamLine, floodFill, rectangleFill } from './drawing-algorithms';
+import { bresenhamLine, floodFill, rectangleFill, stampCells } from './drawing-algorithms';
 import type { Cell } from '@nookstead/shared';
 import type { EditorLayer } from '../types/editor-types';
 
@@ -202,5 +202,73 @@ describe('rectangleFill', () => {
     });
     // Only cells within 3x3 grid should be returned
     expect(deltas).toHaveLength(9);
+  });
+});
+
+describe('stampCells', () => {
+  it('should return single cell for brushSize=1 (circle)', () => {
+    const cells = stampCells(5, 5, 1, 'circle', 10, 10);
+    expect(cells).toEqual([{ x: 5, y: 5 }]);
+  });
+
+  it('should return single cell for brushSize=1 (square)', () => {
+    const cells = stampCells(5, 5, 1, 'square', 10, 10);
+    expect(cells).toEqual([{ x: 5, y: 5 }]);
+  });
+
+  it('should return correct circle for brushSize=3', () => {
+    const cells = stampCells(5, 5, 3, 'circle', 10, 10);
+    // r=1, circle includes cells where dx*dx+dy*dy <= 1
+    // That's (0,0), (-1,0), (1,0), (0,-1), (0,1) = 5 cells (cross pattern)
+    expect(cells).toHaveLength(5);
+    const keys = cells.map((c) => `${c.x},${c.y}`).sort();
+    expect(keys).toEqual(['4,5', '5,4', '5,5', '5,6', '6,5']);
+  });
+
+  it('should return correct square for brushSize=3', () => {
+    const cells = stampCells(5, 5, 3, 'square', 10, 10);
+    // r=1, square is 3x3 = 9 cells
+    expect(cells).toHaveLength(9);
+    const keys = cells.map((c) => `${c.x},${c.y}`).sort();
+    expect(keys).toEqual([
+      '4,4', '4,5', '4,6',
+      '5,4', '5,5', '5,6',
+      '6,4', '6,5', '6,6',
+    ]);
+  });
+
+  it('should return correct circle for brushSize=5', () => {
+    const cells = stampCells(5, 5, 5, 'circle', 20, 20);
+    // r=2, circle: dx*dx+dy*dy <= 4
+    // Count: 13 cells (filled circle of radius 2)
+    expect(cells).toHaveLength(13);
+  });
+
+  it('should return correct square for brushSize=5', () => {
+    const cells = stampCells(5, 5, 5, 'square', 20, 20);
+    // r=2, square: 5x5 = 25 cells
+    expect(cells).toHaveLength(25);
+  });
+
+  it('should clip cells to map bounds', () => {
+    const cells = stampCells(0, 0, 5, 'square', 10, 10);
+    // r=2, center at (0,0): x range [-2,2] clipped to [0,2], y range [-2,2] clipped to [0,2]
+    // 3x3 = 9 cells
+    expect(cells).toHaveLength(9);
+    cells.forEach((c) => {
+      expect(c.x).toBeGreaterThanOrEqual(0);
+      expect(c.y).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('should handle even brushSize (circle)', () => {
+    // brushSize=2, r=1, same as brushSize=3
+    const cells = stampCells(5, 5, 2, 'circle', 10, 10);
+    expect(cells).toHaveLength(5);
+  });
+
+  it('should return empty array for fully out-of-bounds stamp', () => {
+    const cells = stampCells(-10, -10, 3, 'circle', 10, 10);
+    expect(cells).toHaveLength(0);
   });
 });

@@ -134,6 +134,8 @@ function createInitialState(): MapEditorState {
     activeLayerIndex: 0,
     activeTool: 'brush',
     activeMaterialKey: DEFAULT_MATERIAL_KEY,
+    brushSize: 1,
+    brushShape: 'circle' as const,
     undoStack: [],
     redoStack: [],
     metadata: {},
@@ -590,6 +592,21 @@ export function mapEditorReducer(
 
     case 'MARK_DIRTY':
       return { ...state, isDirty: true };
+
+    case 'SET_BRUSH_SIZE':
+      return {
+        ...state,
+        brushSize: Math.max(1, Math.min(15, Math.round(action.size))),
+      };
+
+    case 'ADJUST_BRUSH_SIZE':
+      return {
+        ...state,
+        brushSize: Math.max(1, Math.min(15, state.brushSize + action.delta)),
+      };
+
+    case 'SET_BRUSH_SHAPE':
+      return { ...state, brushShape: action.shape };
 
     case 'SET_TILESETS': {
       // Reconstruct RetileEngine when tilesets change

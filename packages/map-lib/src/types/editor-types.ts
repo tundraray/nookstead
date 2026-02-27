@@ -2,6 +2,9 @@ import type { Cell } from '@nookstead/shared';
 import type { MapType, ZoneData } from './map-types';
 import type { TilesetInfo, MaterialInfo } from './material-types';
 
+/** Brush shape for the brush and eraser tools. */
+export type BrushShape = 'circle' | 'square';
+
 /** Editor tool types. */
 export type EditorTool =
   | 'brush'
@@ -126,6 +129,8 @@ export interface MapEditorState {
   activeLayerIndex: number;
   activeTool: EditorTool;
   activeMaterialKey: string;
+  brushSize: number;
+  brushShape: BrushShape;
 
   // Undo/redo
   undoStack: EditorCommand[];
@@ -186,6 +191,11 @@ export type MapEditorAction =
   | { type: 'UNDO' }
   | { type: 'REDO' }
   | { type: 'PUSH_COMMAND'; command: EditorCommand }
+
+  // Brush settings
+  | { type: 'SET_BRUSH_SIZE'; size: number }
+  | { type: 'ADJUST_BRUSH_SIZE'; delta: number }
+  | { type: 'SET_BRUSH_SHAPE'; shape: BrushShape }
 
   // Tileset / material config
   | { type: 'SET_TILESETS'; tilesets: ReadonlyArray<TilesetInfo> }

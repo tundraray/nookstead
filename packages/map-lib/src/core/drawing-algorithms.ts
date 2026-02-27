@@ -1,5 +1,5 @@
 import type { Cell } from '@nookstead/shared';
-import type { CellDelta, EditorLayer } from '../types/editor-types';
+import type { CellDelta, EditorLayer, BrushShape } from '../types/editor-types';
 
 /**
  * Bresenham's line algorithm.
@@ -117,6 +117,39 @@ export function floodFill(
   }
 
   return deltas;
+}
+
+/**
+ * Compute all cells within a brush stamp centered at (cx, cy).
+ * Circle: cells where dx*dx + dy*dy <= r*r (filled disc).
+ * Square: cells in [cx-r, cx+r] x [cy-r, cy+r].
+ * Results are bounds-clipped to [0, width) x [0, height).
+ * When brushSize=1, returns just [{x: cx, y: cy}] (backward compatible).
+ */
+export function stampCells(
+  cx: number,
+  cy: number,
+  brushSize: number,
+  shape: BrushShape,
+  width: number,
+  height: number,
+): Array<{ x: number; y: number }> {
+  const r = Math.floor(brushSize / 2);
+  const cells: Array<{ x: number; y: number }> = [];
+  const r2 = r * r;
+
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      if (shape === 'circle' && dx * dx + dy * dy > r2) continue;
+      const x = cx + dx;
+      const y = cy + dy;
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        cells.push({ x, y });
+      }
+    }
+  }
+
+  return cells;
 }
 
 /** Options for rectangle fill. */

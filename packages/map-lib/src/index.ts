@@ -35,6 +35,7 @@ export type { MapEditorData, RawMaterial, RawTileset } from './core/map-editor-d
 
 // Editor types
 export type {
+  BrushShape,
   EditorTool,
   SidebarTab,
   BaseLayer,
@@ -56,7 +57,7 @@ export type { NeighborMaskOptions } from './core/neighbor-mask';
 
 export { recomputeWalkability } from './core/walkability';
 
-export { bresenhamLine, floodFill, rectangleFill } from './core/drawing-algorithms';
+export { bresenhamLine, floodFill, rectangleFill, stampCells } from './core/drawing-algorithms';
 export type { RectangleFillOptions } from './core/drawing-algorithms';
 
 export { computeRectBounds, clampBounds, isSimplePolygon, polygonArea, toZoneVertices } from './core/zone-geometry';

@@ -1,20 +1,20 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
-import { bresenhamLine, RoutingPaintCommand } from '@nookstead/map-lib';
+import type { MapEditorState, MapEditorAction, CellPatchEntry, BrushShape } from '@nookstead/map-lib';
+import { bresenhamLine, stampCells, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
 import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /**
  * Creates brush tool handlers.
- * Click to paint a single cell; drag to paint along a Bresenham line path.
+ * Click to paint cells within the brush stamp; drag to paint along a Bresenham
+ * line path with stamp expansion at each point.
  * Collects CellPatchEntry entries and dispatches a RoutingPaintCommand on mouse up.
- *
- * The RetileEngine handles grid updates and autotile recomputation when the
- * command executes. oldFg is taken from the original state.grid for correct undo.
  */
 export function createBrushTool(
   state: MapEditorState,
-  dispatch: Dispatch<MapEditorAction>
+  dispatch: Dispatch<MapEditorAction>,
+  brushSize: number,
+  brushShape: BrushShape,
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
@@ -38,12 +38,19 @@ export function createBrushTool(
     });
   }
 
+  function paintStamp(cx: number, cy: number): void {
+    const cells = stampCells(cx, cy, brushSize, brushShape, state.width, state.height);
+    for (const cell of cells) {
+      tryPaint(cell.x, cell.y);
+    }
+  }
+
   return {
     onMouseDown(tile: { x: number; y: number }) {
       isDrawing = true;
       paintedCells.clear();
       lastTile = tile;
-      tryPaint(tile.x, tile.y);
+      paintStamp(tile.x, tile.y);
     },
 
     onMouseMove(tile: { x: number; y: number }) {
@@ -58,7 +65,7 @@ export function createBrushTool(
         tile.y
       );
       for (const pt of points) {
-        tryPaint(pt.x, pt.y);
+        paintStamp(pt.x, pt.y);
       }
       lastTile = tile;
     },
