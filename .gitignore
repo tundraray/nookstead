@@ -55,3 +55,6 @@ docs/plans/tasks/*
 tmp/*
 next-env.d.ts
 *.tsbuildinfo
+
+# Dev/debug screenshots
+.screenshots/
