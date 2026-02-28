@@ -498,6 +498,24 @@ button {
   }
 }
 
+.coming-soon-badge {
+  display: inline-block;
+  padding: 14px 32px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.7rem;
+  color: #9090b0;
+  background-color: #1a1a2e;
+  border: 2px dashed #3a3a5a;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: coming-soon-pulse 3s ease-in-out infinite;
+}
+
+@keyframes coming-soon-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
 /* ==========================================================================
    Section 4: Game App Wrapper
    Flex column layout: fixed-height header + flexible canvas area.

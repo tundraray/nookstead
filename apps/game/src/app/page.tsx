@@ -1,11 +1,16 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import Image from 'next/image';
 import { LoginButton } from '@/components/auth/LoginButton';
 import { LandingContent } from '@/components/landing/LandingContent';
 
 export default async function LandingPage() {
   const session = await auth();
+  const headersList = await headers();
+  const host = headersList.get('host') ?? '';
+  const isLocalhost =
+    host.startsWith('localhost') || host.startsWith('127.0.0.1');
 
   if (session?.user) {
     redirect('/game');
@@ -99,13 +104,20 @@ export default async function LandingPage() {
 
           {/* Login buttons */}
           <div className="landing-hero__buttons">
-            <LoginButton provider="google" />
-            {/* <LoginButton provider="discord" /> */}
+            {!isLocalhost ? (
+              <LoginButton provider="google" />
+            ) : (
+              <div className="coming-soon-badge">
+                Coming soon
+              </div>
+            )}
           </div>
 
           {/* Footer hint */}
           <p className="landing-hero__hint">
-            Sign in to start your adventure
+            {!isLocalhost
+              ? 'Sign in to start your adventure'
+              : 'We\'re working hard to open the gates'}
           </p>
         </div>
       </section>
