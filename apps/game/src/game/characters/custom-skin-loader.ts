@@ -12,9 +12,7 @@ import {
   CUSTOM_SKIN_TEXTURE_WIDTH,
   registerCustomSkin,
 } from './skin-registry';
-
-const SKIN_RECIPE_KEY = 'nookstead:skin:recipe';
-const SKIN_SHEET_KEY = 'nookstead:skin:sheet';
+import { SKIN_RECIPE_KEY, SKIN_SHEET_KEY } from '@/components/character-generator/types';
 
 interface StoredRecipe {
   type: 'custom' | 'preset';

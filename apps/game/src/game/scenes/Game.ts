@@ -6,7 +6,7 @@ import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
-import { findSpawnTile } from '../systems/spawn';
+import { findSpawnTile } from '@nookstead/shared';
 
 export class Game extends Scene {
   private mapData: GeneratedMap | null = null;

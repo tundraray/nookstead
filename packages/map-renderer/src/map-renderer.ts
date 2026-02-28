@@ -54,62 +54,6 @@ export class MapRenderer {
     return this.rt;
   }
 
-  /**
-   * Re-render a 3x3 area around a changed cell for live editing.
-   * Recomputes autotile frames for the cell and its 8 neighbors.
-   */
-  updateCell(
-    map: GeneratedMap,
-    x: number,
-    y: number,
-    _newTerrain: string,
-  ): void {
-    if (!this.rt) return;
-
-    const { tileSize, frameSize } = this.config;
-    const tileScale = tileSize / frameSize;
-
-    const stamp = this.scene.add
-      .sprite(0, 0, '')
-      .setScale(tileScale)
-      .setOrigin(0, 0)
-      .setVisible(false);
-
-    // Clear and redraw the 3x3 neighborhood
-    const minX = Math.max(0, x - 1);
-    const maxX = Math.min(map.width - 1, x + 1);
-    const minY = Math.max(0, y - 1);
-    const maxY = Math.min(map.height - 1, y + 1);
-
-    // Erase the 3x3 area
-    this.rt.erase(
-      this.scene.add
-        .rectangle(
-          minX * tileSize,
-          minY * tileSize,
-          (maxX - minX + 1) * tileSize,
-          (maxY - minY + 1) * tileSize,
-          0xffffff,
-        )
-        .setOrigin(0, 0),
-    );
-
-    // Redraw all layers for the 3x3 area
-    for (const layerData of map.layers) {
-      for (let cy = minY; cy <= maxY; cy++) {
-        for (let cx = minX; cx <= maxX; cx++) {
-          const frame = layerData.frames[cy][cx];
-          if (frame === EMPTY_FRAME) continue;
-
-          stamp.setTexture(layerData.terrainKey, frame);
-          this.rt.draw(stamp, cx * tileSize, cy * tileSize);
-        }
-      }
-    }
-
-    stamp.destroy();
-  }
-
   /** Clean up resources. */
   destroy(): void {
     if (this.rt) {

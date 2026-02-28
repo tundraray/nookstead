@@ -16,7 +16,7 @@ import { ZONE_COLORS } from '@nookstead/map-lib';
 import type { ZoneType } from '@nookstead/map-lib';
 import type { UseZonesReturn } from '@/hooks/use-zones';
 import { zoneTypeToEditor } from './zone-properties';
-import { validateAllZones } from '@/lib/zone-validation';
+import { validateAllZones } from '@nookstead/map-lib';
 
 const ZONE_TYPES: ZoneType[] = [
   'crop_field',

@@ -10,10 +10,6 @@ export interface PlayerState {
   name: string;
 }
 
-export interface GameRoomState {
-  players: Map<string, PlayerState>;
-}
-
 export interface AuthData {
   userId: string;
   email: string;

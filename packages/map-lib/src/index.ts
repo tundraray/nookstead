@@ -6,9 +6,8 @@ export type {
 
 // Core autotile engine
 export {
-  N, NE, E, SE, S, SW, W, NW,
   FRAMES_PER_TERRAIN, SOLID_FRAME, ISOLATED_FRAME, EMPTY_FRAME,
-  getFrame, gateDiagonals, VALID_BLOB47_MASKS
+  getFrame,
 } from './core/autotile';
 
 // Map types, zone types, and template types
@@ -16,7 +15,6 @@ export type {
   MapType, MapDimensionConstraints,
   ZoneType, ZoneShape, ZoneBounds, ZoneVertex, ZoneData,
   DimensionValidationResult,
-  TemplateParameter, TemplateConstraintType, TemplateConstraint, MapTemplate,
 } from './types/index';
 export {
   MAP_TYPE_CONSTRAINTS, ZONE_COLORS, ZONE_OVERLAP_ALLOWED,
@@ -52,10 +50,7 @@ export type {
 export { SIDEBAR_TABS } from './types/editor-types';
 
 // Core algorithm modules (Phase 2)
-export { NEIGHBOR_OFFSETS, computeNeighborMask, computeNeighborMaskByMaterial } from './core/neighbor-mask';
-export type { NeighborMaskOptions } from './core/neighbor-mask';
-
-export { recomputeWalkability } from './core/walkability';
+export { computeNeighborMask } from './core/neighbor-mask';
 
 export { bresenhamLine, floodFill, rectangleFill, stampCells } from './core/drawing-algorithms';
 export type { RectangleFillOptions } from './core/drawing-algorithms';
@@ -65,16 +60,6 @@ export type { TileCoord } from './core/zone-geometry';
 
 export { getZoneTiles, rasterizePolygon, detectZoneOverlap, validateAllZones } from './core/zone-validation';
 export type { OverlapResult, ValidationError } from './core/zone-validation';
-
-// Material resolver (Phase 4)
-export { buildTransitionMap, resolvePaint } from './core/material-resolver';
-export type {
-  TransitionEntry,
-  TransitionMap,
-  TransitionWarning,
-  PaintResult,
-  ResolvePaintOptions,
-} from './core/material-resolver';
 
 // Routing pipeline modules (Phase 5)
 export { TilesetRegistry, type ResolvedPair } from './core/tileset-registry';
@@ -102,4 +87,3 @@ export type {
   EdgeOwner,
   MapPatchEntry,
 } from './types/routing-types';
-export type { EdgeClass } from './core/edge-classifier';

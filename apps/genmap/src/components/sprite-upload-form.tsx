@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '@/lib/s3';
+import { ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '@nookstead/s3';
 
 interface SpriteUploadFormProps {
   onSuccess?: () => void;

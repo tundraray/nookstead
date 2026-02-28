@@ -1,4 +1,5 @@
-import { findSpawnTile, isValidSpawn, SpawnTile } from '../../src/game/systems/spawn';
+import { findSpawnTile, isValidSpawn } from '@nookstead/shared';
+import type { SpawnTile } from '@nookstead/shared';
 import { Grid, TerrainCellType } from '../../src/game/mapgen/types';
 
 /**

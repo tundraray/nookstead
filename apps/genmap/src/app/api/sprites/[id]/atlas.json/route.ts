@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, getSprite, getFramesBySprite } from '@nookstead/db';
-import { withSignedUrl } from '@/lib/sprite-url';
+import { withSignedUrl } from '@/lib/signed-url';
 
 export async function GET(
   request: NextRequest,

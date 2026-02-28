@@ -28,7 +28,3 @@ export function getMaterialProperties(
 ): MaterialProperties {
   return cache?.get(terrainKey) ?? DEFAULT_PROPERTIES;
 }
-
-export function isMaterialWalkable(terrainKey: string): boolean {
-  return getMaterialProperties(terrainKey).walkable;
-}

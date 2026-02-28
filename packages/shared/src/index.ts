@@ -1,6 +1,5 @@
 export type {
   PlayerState,
-  GameRoomState,
   AuthData,
   ChunkRoomState,
   Location,
@@ -15,13 +14,8 @@ export type {
 } from './types/messages';
 export {
   COLYSEUS_PORT,
-  TICK_RATE,
-  TICK_INTERVAL_MS,
   PATCH_RATE_MS,
-  ROOM_NAME,
-  MAX_PLAYERS_PER_ROOM,
   AVAILABLE_SKINS,
-  POSITION_SYNC_INTERVAL_MS,
   CHUNK_SIZE,
   CHUNK_ROOM_NAME,
   MAX_SPEED,

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, createTileset, listTilesets, getTags } from '@nookstead/db';
-import { uploadToS3, buildS3Url, deleteS3Object, MAX_FILE_SIZE } from '@/lib/s3';
-import { withTilesetSignedUrls } from '@/lib/tileset-url';
+import { uploadToS3, buildS3Url, deleteS3Object, MAX_FILE_SIZE } from '@nookstead/s3';
+import { withSignedUrls } from '@/lib/signed-url';
 import {
   splitTilesetImage,
   validateTilesetDimensions,
@@ -245,7 +245,7 @@ export async function GET(request: NextRequest) {
       db,
       Object.keys(params).length > 0 ? params : undefined
     );
-    const signed = await withTilesetSignedUrls(tilesets);
+    const signed = await withSignedUrls(tilesets);
 
     // Include tags for each tileset so clients can group by tag
     const withTags = await Promise.all(
