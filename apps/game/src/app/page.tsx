@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import Image from 'next/image';
 import { LoginButton } from '@/components/auth/LoginButton';
 import { LandingContent } from '@/components/landing/LandingContent';
+import { HeroDayCycle } from '@/components/landing/HeroDayCycle';
 
 export default async function LandingPage() {
   const session = await auth();
@@ -20,21 +21,8 @@ export default async function LandingPage() {
     <main className="landing-page">
       {/* ── Hero (full-screen) ── */}
       <section className="landing-hero">
-        {/* Animated stars background */}
-        <div className="landing-hero__stars" aria-hidden="true">
-          {Array.from({ length: 30 }, (_, i) => (
-            <span
-              key={i}
-              className="landing-hero__star"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 4}s`,
-                animationDuration: `${2 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
-        </div>
+        {/* Day/night cycle sky overlay (client component) */}
+        <HeroDayCycle />
 
         {/* Drifting clouds */}
         <div className="landing-hero__clouds" aria-hidden="true">
