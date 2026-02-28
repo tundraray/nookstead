@@ -42,7 +42,7 @@ export function createFillTool(
         newFg: d.newTerrain,
       }));
 
-      const command = new RoutingFillCommand(patches, engine);
+      const command = new RoutingFillCommand(patches, engine, state.activeLayerIndex);
       dispatch({ type: 'PUSH_COMMAND', command });
     },
 

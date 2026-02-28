@@ -3,7 +3,7 @@ import type { EdgeDirection, MaterialPriorityMap } from '../types/routing-types'
 import type { MaterialInfo } from '../types/material-types';
 import type { TilesetRegistry } from './tileset-registry';
 import { NEIGHBOR_OFFSETS, computeNeighborMaskByMaterial } from './neighbor-mask';
-import { E, N, NE, NW, S, SE, SW, W, gateDiagonals, getFrame, SOLID_FRAME } from './autotile';
+import { E, N, S, W, gateDiagonals, getFrame, SOLID_FRAME } from './autotile';
 
 // ---------------------------------------------------------------------------
 // Types

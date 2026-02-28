@@ -83,7 +83,7 @@ export function createRectangleTool(
         newFg: d.newTerrain,
       }));
 
-      const command = new RoutingPaintCommand(patches, engine);
+      const command = new RoutingPaintCommand(patches, engine, state.activeLayerIndex);
       dispatch({ type: 'PUSH_COMMAND', command });
 
       startTile = null;

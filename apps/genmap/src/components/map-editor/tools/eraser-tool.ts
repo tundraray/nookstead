@@ -84,7 +84,8 @@ export function createEraserTool(
 
       const command = new RoutingPaintCommand(
         Array.from(erasedCells.values()),
-        engine
+        engine,
+        state.activeLayerIndex,
       );
       dispatch({ type: 'PUSH_COMMAND', command });
       erasedCells.clear();

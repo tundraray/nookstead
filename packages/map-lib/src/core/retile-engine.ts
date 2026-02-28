@@ -140,11 +140,13 @@ export class RetileEngine {
    *
    * @param state - Current editor state (never mutated).
    * @param patch - Array of cells to paint.
+   * @param activeLayerIndex - Index of the layer to write frames to (default 0).
    * @returns RetileResult with updated grid, layers, patches, and metrics.
    */
   applyMapPatch(
     state: MapEditorState,
     patch: ReadonlyArray<MapPatchEntry>,
+    activeLayerIndex = 0,
   ): RetileResult {
     if (this.width === 0 || this.height === 0) {
       return {
@@ -195,7 +197,7 @@ export class RetileEngine {
 
     // Clone layers and rebuild dirty cells
     const newLayers = this.cloneLayers(state.layers);
-    const cellPatches = this.rebuildCells(newGrid, newLayers, dirtySet, paintedPatches);
+    const cellPatches = this.rebuildCells(newGrid, newLayers, dirtySet, paintedPatches, activeLayerIndex);
 
     return {
       layers: newLayers,
@@ -273,7 +275,14 @@ export class RetileEngine {
       };
 
       this.updateCacheEntry(x, y, newCache);
-      this.writeToLayers(newLayers, x, y, frameId, renderKey);
+
+      // Write to every tile layer (object layers are skipped)
+      for (let layerIndex = 0; layerIndex < newLayers.length; layerIndex++) {
+        if (this.isObjectLayer(newLayers[layerIndex])) {
+          continue;
+        }
+        this.writeToLayers(newLayers, x, y, frameId, renderKey, layerIndex);
+      }
 
       patches.push({ x, y, oldFg: fg, newFg: fg, oldCache, newCache });
     }
@@ -397,6 +406,35 @@ export class RetileEngine {
           dirtySet.add(y * this.width + x);
         }
       }
+
+      const newLayers = this.cloneLayers(state.layers);
+
+      // For full rebuild, write frames to every tile layer.
+      // Object layers (type === 'object') are skipped.
+      let patches: CellPatchEntry[] = [];
+      let firstTileLayerDone = false;
+
+      for (let i = 0; i < newLayers.length; i++) {
+        if (this.isObjectLayer(newLayers[i])) continue;
+
+        const layerPatches = this.rebuildCells(state.grid, newLayers, dirtySet, [], i);
+        if (!firstTileLayerDone) {
+          patches = layerPatches;
+          firstTileLayerDone = true;
+        }
+      }
+
+      // If no tile layer exists, still run once to get patches (writes nowhere)
+      if (!firstTileLayerDone) {
+        patches = this.rebuildCells(state.grid, newLayers, dirtySet, []);
+      }
+
+      return {
+        layers: newLayers,
+        patches,
+        rebuiltCells: dirtySet.size,
+        grid: state.grid,
+      };
     } else {
       const positions = changedCells
         ? Array.from(changedCells)
@@ -453,6 +491,7 @@ export class RetileEngine {
    * @param layers - Mutable layers to write frames and tilesetKeys to.
    * @param dirtySet - Set of flat cell indices to recompute.
    * @param paintedPatches - Cells whose terrain was changed (for patch oldFg/newFg).
+   * @param activeLayerIndex - Index of the user-selected layer (default 0).
    * @returns Array of CellPatchEntry for undo support.
    */
   private rebuildCells(
@@ -465,6 +504,7 @@ export class RetileEngine {
       oldFg: string;
       newFg: string;
     }>,
+    activeLayerIndex = 0,
   ): CellPatchEntry[] {
     const patches: CellPatchEntry[] = [];
 
@@ -695,6 +735,7 @@ export class RetileEngine {
         computedCell.y,
         cacheToCommit.frameId,
         cacheToCommit.renderTilesetKey,
+        activeLayerIndex,
       );
 
       // Create patch entry for committed cells.
@@ -1077,7 +1118,25 @@ export class RetileEngine {
     // Expand by R=2 and rebuild
     const dirtySet = this.expandDirtySet(positions);
     const newLayers = this.cloneLayers(state.layers);
-    const patches = this.rebuildCells(state.grid, newLayers, dirtySet, []);
+
+    // T3b all-layers policy: write recomputed frames to every tile layer,
+    // skipping object layers that have no frames/tilesetKeys arrays.
+    let patches: CellPatchEntry[] = [];
+    let firstTileLayerDone = false;
+
+    for (let i = 0; i < newLayers.length; i++) {
+      if (this.isObjectLayer(newLayers[i])) continue;
+      const layerPatches = this.rebuildCells(state.grid, newLayers, dirtySet, [], i);
+      if (!firstTileLayerDone) {
+        patches = layerPatches;
+        firstTileLayerDone = true;
+      }
+    }
+
+    // If no tile layer exists, still run once to get patches (writes nowhere)
+    if (!firstTileLayerDone) {
+      patches = this.rebuildCells(state.grid, newLayers, dirtySet, []);
+    }
 
     return {
       layers: newLayers,
@@ -1092,6 +1151,16 @@ export class RetileEngine {
   // -------------------------------------------------------------------------
 
   /**
+   * Check whether a layer is an object layer (no frames/tilesetKeys).
+   *
+   * Uses a defensive cast because EditorLayer does not expose a
+   * discriminated `type` field at the type level.
+   */
+  private isObjectLayer(layer: EditorLayer): boolean {
+    return (layer as unknown as { type: string }).type === 'object';
+  }
+
+  /**
    * Deep-clone the cell grid (row by row, cell by cell).
    */
   private cloneGrid(grid: Cell[][]): Cell[][] {
@@ -1104,7 +1173,7 @@ export class RetileEngine {
   private cloneLayers(layers: EditorLayer[]): EditorLayer[] {
     return layers.map(layer => {
       // Object layers have no frames/tilesetKeys — shallow-clone only
-      if ((layer as unknown as { type: string }).type === 'object') {
+      if (this.isObjectLayer(layer)) {
         return { ...layer };
       }
       return {
@@ -1120,7 +1189,18 @@ export class RetileEngine {
   }
 
   /**
-   * Write frame and tileset key to layer[0] at the given position.
+   * Write frame and tileset key to a layer at the given position.
+   *
+   * Targets `layers[activeLayerIndex]` when the index is valid and
+   * points to a tile layer. Falls back to the first tile layer when
+   * the index is out of bounds or points to an object layer.
+   *
+   * @param layers - Mutable layer array (already cloned).
+   * @param x - Column index.
+   * @param y - Row index.
+   * @param frameId - Computed autotile frame id.
+   * @param tilesetKey - Resolved render tileset key.
+   * @param activeLayerIndex - Index of the user-selected layer (default 0).
    */
   private writeToLayers(
     layers: EditorLayer[],
@@ -1128,13 +1208,20 @@ export class RetileEngine {
     y: number,
     frameId: number,
     tilesetKey: string,
+    activeLayerIndex = 0,
   ): void {
     if (layers.length === 0) return;
-    // Find the first tile layer (object layers have no frames)
-    const layer = layers.find(
-      l => (l as unknown as { type: string }).type !== 'object',
-    );
+
+    // Target the requested layer, falling back to the first tile layer
+    // if the index is out of bounds or points to an object layer.
+    let layer: EditorLayer | undefined = layers[activeLayerIndex];
+
+    if (!layer || this.isObjectLayer(layer)) {
+      layer = layers.find(l => !this.isObjectLayer(l));
+    }
+
     if (!layer) return;
+
     if (layer.frames[y]) {
       layer.frames[y][x] = frameId;
     }

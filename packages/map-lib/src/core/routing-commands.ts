@@ -27,10 +27,12 @@ export class RoutingPaintCommand implements EditorCommand {
    *
    * @param patches - Cell-level before/after patch entries from RetileEngine.
    * @param engine - RetileEngine instance for recomputing autotile data.
+   * @param activeLayerIndex - Layer to target when painting/undoing (captured at creation, default 0).
    */
   constructor(
     private readonly patches: ReadonlyArray<CellPatchEntry>,
     private readonly engine: RetileEngine,
+    private readonly activeLayerIndex = 0,
   ) {
     const changedPatches = patches.filter(p => p.oldFg !== p.newFg);
     const count = changedPatches.length;
@@ -56,7 +58,7 @@ export class RoutingPaintCommand implements EditorCommand {
       return state;
     }
 
-    const result = this.engine.applyMapPatch(state, mapPatches);
+    const result = this.engine.applyMapPatch(state, mapPatches, this.activeLayerIndex);
     const newWalkable = recomputeWalkability(
       result.grid,
       state.width,
@@ -90,7 +92,7 @@ export class RoutingPaintCommand implements EditorCommand {
       return state;
     }
 
-    const result = this.engine.applyMapPatch(state, mapPatches);
+    const result = this.engine.applyMapPatch(state, mapPatches, this.activeLayerIndex);
     const newWalkable = recomputeWalkability(
       result.grid,
       state.width,
@@ -128,10 +130,12 @@ export class RoutingFillCommand implements EditorCommand {
    *
    * @param patches - Cell-level before/after patch entries from RetileEngine.
    * @param engine - RetileEngine instance for recomputing autotile data.
+   * @param activeLayerIndex - Layer to target when filling/undoing (captured at creation, default 0).
    */
   constructor(
     private readonly patches: ReadonlyArray<CellPatchEntry>,
     private readonly engine: RetileEngine,
+    private readonly activeLayerIndex = 0,
   ) {
     const changedPatches = patches.filter(p => p.oldFg !== p.newFg);
     const count = changedPatches.length;
@@ -154,7 +158,7 @@ export class RoutingFillCommand implements EditorCommand {
       return state;
     }
 
-    const result = this.engine.applyMapPatch(state, mapPatches);
+    const result = this.engine.applyMapPatch(state, mapPatches, this.activeLayerIndex);
     const newWalkable = recomputeWalkability(
       result.grid,
       state.width,
@@ -185,7 +189,7 @@ export class RoutingFillCommand implements EditorCommand {
       return state;
     }
 
-    const result = this.engine.applyMapPatch(state, mapPatches);
+    const result = this.engine.applyMapPatch(state, mapPatches, this.activeLayerIndex);
     const newWalkable = recomputeWalkability(
       result.grid,
       state.width,

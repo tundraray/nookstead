@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -34,6 +34,7 @@ import { ActivityBar } from '@/components/map-editor/activity-bar';
 import { EditorSidebar } from '@/components/map-editor/editor-sidebar';
 import { useZones } from '@/hooks/use-zones';
 import { useZoneApi } from '@/hooks/use-zone-api';
+import { useObjectRenderData } from '@/hooks/use-object-render-data';
 import { SIDEBAR_TABS } from '@nookstead/map-lib';
 import type { SidebarTab, PlacedObject, MaterialInfo } from '@nookstead/map-lib';
 import type { Camera } from '@/components/map-editor/canvas-renderer';
@@ -153,6 +154,21 @@ export default function MapEditorPage() {
     },
     [selectedObjectId, state.layers, state.activeLayerIndex, dispatch]
   );
+
+  // Derive unique object IDs from object layers for render data fetching
+  const objectIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const layer of state.layers) {
+      if ((layer as unknown as { type: string }).type !== 'object') continue;
+      const objectLayer = layer as unknown as { objects: Array<{ objectId: string }> };
+      for (const obj of objectLayer.objects ?? []) {
+        ids.add(obj.objectId);
+      }
+    }
+    return Array.from(ids);
+  }, [state.layers]);
+
+  const objectRenderData = useObjectRenderData(objectIds);
 
   // Zone creation dialog state
   const [pendingZone, setPendingZone] = useState<{
@@ -545,6 +561,7 @@ export default function MapEditorPage() {
               zoneVisibility={zoneState.zoneVisibility}
               showWalkability={showWalkability}
               onObjectPlace={handleObjectPlace}
+              objectRenderData={objectRenderData}
               onCursorMove={setCursorPosition}
               selectedObjectId={selectedObjectId}
             />

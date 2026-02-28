@@ -82,7 +82,8 @@ export function createBrushTool(
 
       const command = new RoutingPaintCommand(
         Array.from(paintedCells.values()),
-        engine
+        engine,
+        state.activeLayerIndex,
       );
       dispatch({ type: 'PUSH_COMMAND', command });
       paintedCells.clear();

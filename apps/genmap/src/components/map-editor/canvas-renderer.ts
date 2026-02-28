@@ -29,13 +29,22 @@ export interface BrushPreview {
   brushShape: BrushShape;
 }
 
-/** Render data for a single game object sprite frame. */
-export interface ObjectRenderEntry {
+/** Render data for a single sprite frame layer within a game object. */
+export interface ObjectRenderLayer {
   image: HTMLImageElement;
   frameX: number;
   frameY: number;
   frameW: number;
   frameH: number;
+  /** Pixel offset within the object's local space. */
+  xOffset: number;
+  /** Pixel offset within the object's local space. */
+  yOffset: number;
+}
+
+/** Render data for a game object (may contain multiple layers). */
+export interface ObjectRenderEntry {
+  layers: ObjectRenderLayer[];
 }
 
 /**
@@ -138,19 +147,22 @@ export function renderMapCanvas(
 
       for (const obj of objects) {
         const entry = objectRenderData.get(obj.objectId);
-        if (!entry || !entry.image.complete) continue;
+        if (!entry || entry.layers.length === 0) continue;
 
-        ctx.drawImage(
-          entry.image,
-          entry.frameX,
-          entry.frameY,
-          entry.frameW,
-          entry.frameH,
-          obj.gridX * tileSize,
-          obj.gridY * tileSize,
-          entry.frameW,
-          entry.frameH
-        );
+        for (const rl of entry.layers) {
+          if (!rl.image.complete) continue;
+          ctx.drawImage(
+            rl.image,
+            rl.frameX,
+            rl.frameY,
+            rl.frameW,
+            rl.frameH,
+            obj.gridX * tileSize + rl.xOffset,
+            obj.gridY * tileSize + rl.yOffset,
+            rl.frameW,
+            rl.frameH
+          );
+        }
       }
     }
   }
@@ -302,7 +314,7 @@ export function drawGhostPreview(
   camera: Camera
 ): void {
   const entry = objectRenderData.get(ghostObjectId);
-  if (!entry || !entry.image.complete) return;
+  if (!entry || entry.layers.length === 0) return;
 
   const screenX = (ghostGridX * tileSize - camera.x) * camera.zoom;
   const screenY = (ghostGridY * tileSize - camera.y) * camera.zoom;
@@ -311,17 +323,20 @@ export function drawGhostPreview(
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = 0.5;
   try {
-    ctx.drawImage(
-      entry.image,
-      entry.frameX,
-      entry.frameY,
-      entry.frameW,
-      entry.frameH,
-      screenX,
-      screenY,
-      entry.frameW * camera.zoom,
-      entry.frameH * camera.zoom
-    );
+    for (const rl of entry.layers) {
+      if (!rl.image.complete) continue;
+      ctx.drawImage(
+        rl.image,
+        rl.frameX,
+        rl.frameY,
+        rl.frameW,
+        rl.frameH,
+        screenX + rl.xOffset * camera.zoom,
+        screenY + rl.yOffset * camera.zoom,
+        rl.frameW * camera.zoom,
+        rl.frameH * camera.zoom
+      );
+    }
   } finally {
     ctx.globalAlpha = 1.0;
     ctx.restore();
