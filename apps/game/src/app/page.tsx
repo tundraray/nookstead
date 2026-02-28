@@ -104,7 +104,7 @@ export default async function LandingPage() {
 
           {/* Login buttons */}
           <div className="landing-hero__buttons">
-            {!isLocalhost ? (
+            {isLocalhost ? (
               <LoginButton provider="google" />
             ) : (
               <div className="coming-soon-badge">
@@ -115,7 +115,7 @@ export default async function LandingPage() {
 
           {/* Footer hint */}
           <p className="landing-hero__hint">
-            {!isLocalhost
+            {isLocalhost
               ? 'Sign in to start your adventure'
               : 'We\'re working hard to open the gates'}
           </p>
