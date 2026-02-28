@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 const CYCLE_MS =
   Number(process.env.NEXT_PUBLIC_DAY_CYCLE_MS) || 3_600_000; // default 1 hour
@@ -116,28 +116,35 @@ export interface DayCycleState {
   sunGlowColor: string;
 }
 
+function computeState(phase: number): DayCycleState {
+  const sky = interpolateSky(phase);
+  const sunGlow = computeSunGlow(phase);
+  return {
+    phase,
+    ...sky,
+    starOpacity: computeStarOpacity(phase),
+    moonOpacity: computeMoonOpacity(phase),
+    sunGlowOpacity: sunGlow.opacity,
+    sunGlowColor: sunGlow.color,
+  };
+}
+
+/** Fixed initial state (midnight) used for SSR to avoid hydration mismatch */
+const INITIAL_STATE = computeState(0);
+
 export function useDayCycle(): DayCycleState {
-  const compute = useCallback((): DayCycleState => {
-    const phase = (Date.now() % CYCLE_MS) / CYCLE_MS;
-    const sky = interpolateSky(phase);
-    const sunGlow = computeSunGlow(phase);
-
-    return {
-      phase,
-      ...sky,
-      starOpacity: computeStarOpacity(phase),
-      moonOpacity: computeMoonOpacity(phase),
-      sunGlowOpacity: sunGlow.opacity,
-      sunGlowColor: sunGlow.color,
-    };
-  }, []);
-
-  const [state, setState] = useState<DayCycleState>(compute);
+  const [state, setState] = useState<DayCycleState>(INITIAL_STATE);
 
   useEffect(() => {
-    const id = setInterval(() => setState(compute()), 1000);
+    // Immediately sync to real time on mount
+    const tick = () => {
+      const phase = (Date.now() % CYCLE_MS) / CYCLE_MS;
+      setState(computeState(phase));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [compute]);
+  }, []);
 
   return state;
 }

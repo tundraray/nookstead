@@ -3,15 +3,24 @@
 import { useMemo } from 'react';
 import { useDayCycle } from './useDayCycle';
 
-/** Pre-generate star positions so they don't change between renders */
+/** Simple seeded PRNG (Lehmer / MINSTD) for deterministic star positions */
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed * 16807) % 2147483647;
+    return (seed - 1) / 2147483646;
+  };
+}
+
+/** Pre-generate star positions deterministically so server and client match */
 function generateStars(count: number) {
+  const rand = seededRandom(42);
   const stars: { left: string; top: string; delay: string; duration: string }[] = [];
   for (let i = 0; i < count; i++) {
     stars.push({
-      left: `${(Math.random() * 100).toFixed(2)}%`,
-      top: `${(Math.random() * 100).toFixed(2)}%`,
-      delay: `${(Math.random() * 4).toFixed(2)}s`,
-      duration: `${(2 + Math.random() * 3).toFixed(2)}s`,
+      left: `${(rand() * 100).toFixed(2)}%`,
+      top: `${(rand() * 100).toFixed(2)}%`,
+      delay: `${(rand() * 4).toFixed(2)}s`,
+      duration: `${(2 + rand() * 3).toFixed(2)}s`,
     });
   }
   return stars;
