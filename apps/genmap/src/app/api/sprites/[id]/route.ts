@@ -4,8 +4,8 @@ import {
   getSprite,
   deleteSprite,
 } from '@nookstead/db';
-import { deleteS3Object } from '@/lib/s3';
-import { withSignedUrl } from '@/lib/sprite-url';
+import { deleteS3Object } from '@nookstead/s3';
+import { withSignedUrl } from '@/lib/signed-url';
 
 export async function GET(
   request: NextRequest,

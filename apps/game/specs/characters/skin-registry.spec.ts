@@ -1,6 +1,6 @@
 import {
   getSkins,
-  getDefaultSkin,
+  getActiveSkin,
   getSkinByKey,
   SkinDefinition,
 } from '../../src/game/characters/skin-registry';
@@ -57,30 +57,30 @@ describe('skin-registry', () => {
     });
   });
 
-  describe('getDefaultSkin()', () => {
-    it('should return the first Scout skin as the default', () => {
-      const defaultSkin = getDefaultSkin();
-      expect(defaultSkin.key).toBe('scout_1');
+  describe('getActiveSkin()', () => {
+    it('should return the first Scout skin as the default when no custom skin is set', () => {
+      const activeSkin = getActiveSkin();
+      expect(activeSkin.key).toBe('scout_1');
     });
 
     it('should return a SkinDefinition with all required fields', () => {
-      const defaultSkin = getDefaultSkin();
-      expect(defaultSkin).toHaveProperty('key');
-      expect(defaultSkin).toHaveProperty('sheetPath');
-      expect(defaultSkin).toHaveProperty('sheetKey');
-      expect(defaultSkin).toHaveProperty('type');
-      expect(defaultSkin).toHaveProperty('textureWidth');
+      const activeSkin = getActiveSkin();
+      expect(activeSkin).toHaveProperty('key');
+      expect(activeSkin).toHaveProperty('sheetPath');
+      expect(activeSkin).toHaveProperty('sheetKey');
+      expect(activeSkin).toHaveProperty('type');
+      expect(activeSkin).toHaveProperty('textureWidth');
     });
 
-    it('should return the first entry in the registry', () => {
+    it('should return the first entry in the registry when no custom skin', () => {
       const skins = getSkins();
-      const defaultSkin = getDefaultSkin();
-      expect(defaultSkin).toEqual(skins[0]);
+      const activeSkin = getActiveSkin();
+      expect(activeSkin).toEqual(skins[0]);
     });
 
     it('should have sheetKey matching its key', () => {
-      const defaultSkin = getDefaultSkin();
-      expect(defaultSkin.sheetKey).toBe(defaultSkin.key);
+      const activeSkin = getActiveSkin();
+      expect(activeSkin.sheetKey).toBe(activeSkin.key);
     });
   });
 

@@ -18,7 +18,7 @@ function getRequiredEnvVar(name: string): string {
   if (!value) {
     throw new Error(
       `Missing required environment variable: ${name}. ` +
-        `Check apps/genmap/.env.example for configuration instructions.`
+        `Required: S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY`
     );
   }
   return value;

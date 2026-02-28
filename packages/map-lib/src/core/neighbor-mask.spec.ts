@@ -1,4 +1,4 @@
-import { computeNeighborMask, computeNeighborMaskByMaterial, checkTerrainPresence } from './neighbor-mask';
+import { computeNeighborMask, computeNeighborMaskByMaterial } from './neighbor-mask';
 import type { TilesetInfo } from '../types/material-types';
 import type { Cell } from '@nookstead/shared';
 import { N, S, E, W, NE, NW, SE, SW } from './autotile';
@@ -83,24 +83,6 @@ describe('computeNeighborMask', () => {
     // corner cell (2,2): S, SE, E are OOB -- with OOB=true these should be set
     const mask = computeNeighborMask(grid, 2, 2, 3, 3, 'terrain-01', tilesets);
     expect(mask).toBe(255); // all neighbors match (in-bounds = grass, OOB = true)
-  });
-});
-
-describe('checkTerrainPresence', () => {
-  it('should return true when terrain matches the tileset name', () => {
-    expect(checkTerrainPresence('grass', 'terrain-01', tilesets)).toBe(true);
-  });
-
-  it('should return false when terrain does not match the tileset name', () => {
-    expect(checkTerrainPresence('sand', 'terrain-01', tilesets)).toBe(false);
-  });
-
-  it('should return false when terrainKey is not found in tilesets', () => {
-    expect(checkTerrainPresence('grass', 'terrain-99', tilesets)).toBe(false);
-  });
-
-  it('should handle empty tilesets array', () => {
-    expect(checkTerrainPresence('grass', 'terrain-01', [])).toBe(false);
   });
 });
 

@@ -10,8 +10,8 @@ import {
   getTags,
   setTags,
 } from '@nookstead/db';
-import { deleteS3Object } from '@/lib/s3';
-import { withTilesetSignedUrl } from '@/lib/tileset-url';
+import { deleteS3Object } from '@nookstead/s3';
+import { withSignedUrl } from '@/lib/signed-url';
 
 export async function GET(
   request: NextRequest,
@@ -30,7 +30,7 @@ export async function GET(
     }
 
     const tags = await getTags(db, id);
-    const signed = await withTilesetSignedUrl(tileset);
+    const signed = await withSignedUrl(tileset);
 
     return NextResponse.json({ ...signed, tags });
   } catch (err) {
@@ -118,7 +118,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Tileset not found after update' }, { status: 404 });
     }
     const freshTags = await getTags(db, id);
-    const signed = await withTilesetSignedUrl(freshTileset);
+    const signed = await withSignedUrl(freshTileset);
 
     return NextResponse.json({ ...signed, tags: freshTags });
   } catch (err) {

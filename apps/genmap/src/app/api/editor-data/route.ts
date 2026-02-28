@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDb, listMaterials, listTilesets } from '@nookstead/db';
 import { buildMapEditorData } from '@nookstead/map-lib';
-import { generatePresignedGetUrl } from '@/lib/s3';
+import { generatePresignedGetUrl } from '@nookstead/s3';
 
 export async function GET() {
   try {

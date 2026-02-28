@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, createSprite, listSprites, batchSaveFrames } from '@nookstead/db';
 import type { FrameInput } from '@nookstead/db';
-import { uploadToS3, buildS3Url, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '@/lib/s3';
-import { generateS3Key } from '@/lib/validation';
-import { withSignedUrl, withSignedUrls } from '@/lib/sprite-url';
+import { uploadToS3, buildS3Url, ALLOWED_MIME_TYPES, MAX_FILE_SIZE } from '@nookstead/s3';
+import { generateS3Key } from '@/lib/s3-key';
+import { withSignedUrl, withSignedUrls } from '@/lib/signed-url';
 
 interface AtlasFrame {
   filename: string;

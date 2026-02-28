@@ -43,7 +43,7 @@ export interface NeighborMaskOptions {
  * @param tilesets - Available tileset descriptors for key-to-name lookup.
  * @returns true if the terrain matches the tileset identified by terrainKey.
  */
-export function checkTerrainPresence(
+function checkTerrainPresence(
   terrain: string,
   terrainKey: string,
   tilesets: ReadonlyArray<TilesetInfo>,

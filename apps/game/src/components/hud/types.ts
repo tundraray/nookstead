@@ -34,12 +34,3 @@ export interface HUDState {
   hotbarItems: (HotbarItem | null)[]; // length 10
   selectedSlot: number; // 0-9
 }
-
-export const DEFAULT_HUD_STATE: HUDState = {
-  day: 1,
-  time: '08:00',
-  season: 'spring',
-  gold: 0,
-  hotbarItems: Array(10).fill(null),
-  selectedSlot: 0,
-};

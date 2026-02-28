@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb, getZonesForMap } from '@nookstead/db';
 import type { ZoneData } from '@nookstead/map-lib';
-import { validateAllZones } from '@/lib/zone-validation';
+import { validateAllZones } from '@nookstead/map-lib';
 
 export async function POST(
   request: NextRequest,
