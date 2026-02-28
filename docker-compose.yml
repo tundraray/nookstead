@@ -28,8 +28,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.game
-      args:
-        - NEXT_PUBLIC_COLYSEUS_URL=${NEXT_PUBLIC_COLYSEUS_URL:-ws://localhost:2567}
     ports:
       - '3000:3000'
     env_file: .env

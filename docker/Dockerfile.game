@@ -30,9 +30,6 @@ COPY . .
 RUN pnpm install --frozen-lockfile
 RUN pnpm nx sync
 
-ARG NEXT_PUBLIC_COLYSEUS_URL
-ENV NEXT_PUBLIC_COLYSEUS_URL=$NEXT_PUBLIC_COLYSEUS_URL
-
 RUN pnpm nx build game --skip-nx-cache
 
 # ── Stage 3: Production runner ──

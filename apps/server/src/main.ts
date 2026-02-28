@@ -24,6 +24,10 @@ console.log('[Server] World, ChunkManager, and SessionTracker initialized');
 const gameServer = new Server({
   transport: new WebSocketTransport({ pingInterval: 10000 }),
   express: (app) => {
+    // Trust reverse proxy (Cloudflare / nginx) so req.ip and req.protocol
+    // reflect the real client, not the proxy.
+    app.set('trust proxy', 1);
+
     // CORS middleware
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', config.corsOrigin);

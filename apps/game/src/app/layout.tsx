@@ -1,5 +1,6 @@
 import './global.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import { RuntimeConfigProvider } from '@/config/RuntimeConfigProvider';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -38,6 +39,9 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <RuntimeConfigProvider
+          colyseusUrl={process.env['COLYSEUS_URL']}
+        />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
