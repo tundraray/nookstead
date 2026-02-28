@@ -1923,88 +1923,23 @@ export type MapEditorAction =
 > The delta approach stores only the cells that were actually modified,
 > keeping memory proportional to edit size rather than map size.
 
-```typescript
-/** A cell-level delta entry: stores position and before/after terrain. */
-export interface CellDelta {
-  x: number;
-  y: number;
-  oldTerrain: TerrainCellType;
-  newTerrain: TerrainCellType;
-}
+Реализация: `packages/map-lib/src/core/commands.ts`
 
-/** A reversible editor command. */
-export interface EditorCommand {
-  /** Apply the command (do/redo). */
-  execute(state: MapEditorState): MapEditorState;
-  /** Reverse the command (undo). */
-  undo(state: MapEditorState): MapEditorState;
-  /** Human-readable description. */
-  description: string;
-}
+**Структуры данных:**
 
-/**
- * Apply a set of cell deltas to the grid in-place (forward direction).
- * Mutates grid[y][x].terrain for each delta, then recomputes autotile
- * layers and walkability only for the affected cells.
- */
-function applyDeltas(
-  state: MapEditorState,
-  deltas: CellDelta[],
-  direction: 'forward' | 'reverse'
-): MapEditorState {
-  const grid = state.grid;
-  const affectedCells: Array<{ x: number; y: number }> = [];
+- **CellDelta** — дельта одной ячейки: координаты (x, y), старый и новый terrain. Хранит минимум данных для обратимости операции.
+- **EditorCommand** — интерфейс реверсивной команды с методами `execute(state)` и `undo(state)`, плюс текстовое описание.
 
-  for (const delta of deltas) {
-    const terrain = direction === 'forward' ? delta.newTerrain : delta.oldTerrain;
-    grid[delta.y][delta.x] = { ...grid[delta.y][delta.x], terrain };
-    affectedCells.push({ x: delta.x, y: delta.y });
-  }
+**Применение дельт (`applyDeltas`):**
 
-  const layers = recomputeAutotileLayers(grid, state.layers, affectedCells);
-  const walkable = recomputeWalkability(grid);
-  return { ...state, grid, layers, walkable, isDirty: true };
-}
+Общая функция для execute и undo. Для каждой дельты обновляет terrain в grid (forward — новое значение, reverse — старое). После применения всех дельт вызывает `recomputeAutotileLayers` для затронутых ячеек с передачей materials, paintedCells и tilesets из состояния редактора, а затем `recomputeWalkability`. При forward-направлении формирует `paintedCells` (set координат) для оптимизации skip; при undo — пересчитывает всё без paintedCells.
 
-/** Command: paint a set of cells to a new terrain. */
-export class PaintCommand implements EditorCommand {
-  description: string;
-  constructor(
-    private layerIndex: number,
-    private deltas: CellDelta[]
-  ) {
-    this.description = `Paint ${deltas.length} cell(s) with ${deltas[0]?.newTerrain ?? 'unknown'}`;
-  }
+**Команды:**
 
-  execute(state: MapEditorState): MapEditorState {
-    return applyDeltas(state, this.deltas, 'forward');
-  }
+- **PaintCommand** — рисование кистью. Хранит layerIndex и массив CellDelta. Execute/undo делегируют в applyDeltas.
+- **FillCommand** — заливка. Аналогичная структура, только без layerIndex.
 
-  undo(state: MapEditorState): MapEditorState {
-    return applyDeltas(state, this.deltas, 'reverse');
-  }
-}
-
-/** Command: flood fill. */
-export class FillCommand implements EditorCommand {
-  description: string;
-  constructor(
-    private deltas: CellDelta[]
-  ) {
-    this.description = `Fill ${deltas.length} cell(s) with ${deltas[0]?.newTerrain ?? 'unknown'}`;
-  }
-
-  execute(state: MapEditorState): MapEditorState {
-    return applyDeltas(state, this.deltas, 'forward');
-  }
-
-  undo(state: MapEditorState): MapEditorState {
-    return applyDeltas(state, this.deltas, 'reverse');
-  }
-}
-
-const MAX_UNDO_STACK = 50;
-```
+Стек undo ограничен 50 операциями (MAX_UNDO_STACK).
 
 ### 3.4 Canvas Rendering Architecture
 
@@ -2072,64 +2007,22 @@ export function renderMapCanvas(
 
 ### 3.5 Autotile Real-Time Computation
 
-When a cell is painted, autotile frames must be recomputed for the cell and its 8 neighbors. This uses the same `getFrame()` and neighbor mask logic from `@nookstead/map-lib`, but operates on the in-memory editor state rather than generating full layers.
+При закрашивании ячейки система пересчитывает автотайл-фреймы и per-cell tileset keys для самой ячейки и её 8 соседей. Реализация находится в `packages/map-lib/src/core/autotile-layers.ts` (функция `recomputeAutotileLayers`).
 
-```typescript
-import { getFrame, N, NE, E, SE, S, SW, W, NW, SOLID_FRAME, EMPTY_FRAME } from '@nookstead/map-lib';
+Для каждой ячейки в зоне пересчёта выполняется следующий алгоритм:
 
-/**
- * Recompute autotile frames for affected cells after a paint operation.
- * For each affected cell, recalculates the cell and its 8 neighbors.
- */
-export function recomputeAutotileLayers(
-  grid: Grid,
-  layers: EditorLayer[],
-  affectedCells: Array<{ x: number; y: number }>
-): EditorLayer[] {
-  // Collect the set of all cells that need recalculation
-  // (affected cells + their neighbors = up to 9 cells per affected cell)
-  const recalcSet = new Set<string>();
-  const width = grid[0].length;
-  const height = grid.length;
+1. **Оптимизация skip.** Если ячейка имеет тот же материал, что рисуется, не была напрямую закрашена, и уже имеет SOLID-фрейм (маска 255), — она пропускается. Добавление ещё одного same-material соседа не может изменить маску 255. Если же ячейка не SOLID (transition frame), она пересчитывается, т.к. новый сосед может изменить её маску.
 
-  for (const { x, y } of affectedCells) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const nx = x + dx;
-        const ny = y + dy;
-        if (nx >= 0 && ny >= 0 && nx < width && ny < height) {
-          recalcSet.add(`${nx},${ny}`);
-        }
-      }
-    }
-  }
+2. **Вычисление маски.** Бит соседа устанавливается в 1, когда terrain соседа совпадает с terrain текущей ячейки (строгое сравнение строк). Все ячейки, включая напрямую закрашенные кистью, вычисляют маску нормально.
 
-  // Update frames for each layer for each cell in the recalc set
-  return layers.map((layer) => {
-    const newFrames = layer.frames.map((row) => [...row]);
+3. **Определение тайлсета (маска < 255).** Находится доминирующий чужой сосед (материал с максимальным количеством из 8 соседей). Затем ищется переходной тайлсет:
+   - **Прямой поиск:** пара "текущий материал → доминирующий сосед" в словаре тайлсетов.
+   - **Indirect поиск:** если прямой пары нет, ищется промежуточный материал B, такой что "текущий → B" и "B ↔ сосед" оба существуют. Используется тайлсет "текущий → B".
+   - **Fallback:** базовый тайлсет материала (baseTilesetKey).
 
-    for (const key of recalcSet) {
-      const [xStr, yStr] = key.split(',');
-      const cx = parseInt(xStr, 10);
-      const cy = parseInt(yStr, 10);
+4. **SOLID (маска = 255).** Все соседи совпадают — используется базовый тайлсет напрямую.
 
-      // Determine if this cell is present in this layer
-      const isPresent = checkTerrainPresence(grid[cy][cx].terrain, layer.terrainKey);
-
-      if (!isPresent) {
-        newFrames[cy][cx] = EMPTY_FRAME;
-        continue;
-      }
-
-      // Compute neighbor mask
-      const mask = computeNeighborMask(grid, cx, cy, width, height, layer.terrainKey);
-      newFrames[cy][cx] = getFrame(mask);
-    }
-
-    return { ...layer, frames: newFrames };
-  });
-}
-```
+Подробная спецификация алгоритма: `docs/autotile-transition-mechanics.md`.
 
 ### 3.6 Flood Fill Algorithm
 

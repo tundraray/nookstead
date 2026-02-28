@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paintbrush, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
-import { getFrame, N, NE, E, SE, S, SW, W, NW } from '@nookstead/map-lib';
+import { getFrame, computeNeighborMask } from '@nookstead/map-lib';
+import type { TilesetInfo, Cell } from '@nookstead/map-lib';
 
 const GRID_SIZE = 10;
 const BASE_TILE_SIZE = 16;
@@ -13,6 +14,27 @@ const ZOOM_STEP = 100;
 const SRC_COLS = 12;
 
 type CellValue = 'A' | 'B';
+
+/**
+ * Fake tilesets for the transition test canvas.
+ * Maps synthetic terrain names 'A' and 'B' to tileset entries
+ * so computeNeighborMask can perform neighbor matching.
+ */
+const TEST_TILESETS: ReadonlyArray<TilesetInfo> = [
+  { key: 'A', name: 'A' },
+  { key: 'B', name: 'B' },
+];
+
+/**
+ * Convert a CellValue grid to a Cell-compatible grid for computeNeighborMask.
+ * Uses a type assertion because 'A'/'B' are not production TerrainCellType values,
+ * but computeNeighborMask only performs string comparison at runtime.
+ */
+function toCellGrid(grid: CellValue[][]): Cell[][] {
+  return grid.map((row) =>
+    row.map((val) => ({ terrain: val, elevation: 0, meta: {} }))
+  ) as unknown as Cell[][];
+}
 
 interface TransitionTestCanvasProps {
   tilesetSrc: string;
@@ -31,41 +53,20 @@ function createEmptyGrid(): CellValue[][] {
 }
 
 /**
- * Compute the 8-neighbor bitmask for a cell at (row, col) in the grid.
- * A neighbor is considered present if it is also 'A'.
- * Uses the standard Blob-47 bit layout from map-lib autotile engine.
- */
-export function computeBitmask(grid: CellValue[][], row: number, col: number): number {
-  const rows = grid.length;
-  const cols = grid[0].length;
-
-  function isA(r: number, c: number): boolean {
-    if (r < 0 || r >= rows || c < 0 || c >= cols) return false;
-    return grid[r][c] === 'A';
-  }
-
-  let mask = 0;
-  if (isA(row - 1, col)) mask |= N;
-  if (isA(row - 1, col + 1)) mask |= NE;
-  if (isA(row, col + 1)) mask |= E;
-  if (isA(row + 1, col + 1)) mask |= SE;
-  if (isA(row + 1, col)) mask |= S;
-  if (isA(row + 1, col - 1)) mask |= SW;
-  if (isA(row, col - 1)) mask |= W;
-  if (isA(row - 1, col - 1)) mask |= NW;
-
-  return mask;
-}
-
-/**
  * Compute the frame grid for all 'A' cells using the Blob-47 autotile algorithm.
  * Returns a 2D array where each cell is a frame index (0-47) or -1 for 'B' cells.
  */
 function computeFrameGrid(grid: CellValue[][]): number[][] {
+  const cellGrid = toCellGrid(grid);
+  const height = grid.length;
+  const width = grid[0].length;
   return grid.map((row, r) =>
     row.map((cell, c) => {
       if (cell === 'B') return -1;
-      const mask = computeBitmask(grid, r, c);
+      const mask = computeNeighborMask(
+        cellGrid, c, r, width, height, 'A', TEST_TILESETS,
+        { outOfBoundsMatches: false },
+      );
       return getFrame(mask);
     })
   );
@@ -76,25 +77,16 @@ function computeFrameGrid(grid: CellValue[][]): number[][] {
  * with neighbors being other 'B' cells (for inverse tileset rendering).
  */
 function computeInverseFrameGrid(grid: CellValue[][]): number[][] {
+  const cellGrid = toCellGrid(grid);
+  const height = grid.length;
+  const width = grid[0].length;
   return grid.map((row, r) =>
     row.map((cell, c) => {
       if (cell === 'A') return -1;
-      // For B perspective, a neighbor is present if it is also 'B'
-      const rows = grid.length;
-      const cols = grid[0].length;
-      function isB(rr: number, cc: number): boolean {
-        if (rr < 0 || rr >= rows || cc < 0 || cc >= cols) return false;
-        return grid[rr][cc] === 'B';
-      }
-      let mask = 0;
-      if (isB(r - 1, c)) mask |= N;
-      if (isB(r - 1, c + 1)) mask |= NE;
-      if (isB(r, c + 1)) mask |= E;
-      if (isB(r + 1, c + 1)) mask |= SE;
-      if (isB(r + 1, c)) mask |= S;
-      if (isB(r + 1, c - 1)) mask |= SW;
-      if (isB(r, c - 1)) mask |= W;
-      if (isB(r - 1, c - 1)) mask |= NW;
+      const mask = computeNeighborMask(
+        cellGrid, c, r, width, height, 'B', TEST_TILESETS,
+        { outOfBoundsMatches: false },
+      );
       return getFrame(mask);
     })
   );

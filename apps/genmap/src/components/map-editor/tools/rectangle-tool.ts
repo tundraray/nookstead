@@ -1,14 +1,16 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
-import type { CellDelta } from '@/hooks/map-editor-commands';
-import { PaintCommand } from '@/hooks/map-editor-commands';
+import type { MapEditorState, MapEditorAction, CellPatchEntry } from '@nookstead/map-lib';
+import { rectangleFill, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { PreviewRect } from '../canvas-renderer';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /**
  * Creates rectangle fill tool handlers.
  * Click to set start corner, drag to show preview rectangle overlay,
  * release to fill all cells in the rectangle with the active terrain.
+ * Converts CellDelta results from rectangleFill into CellPatchEntry format
+ * for RoutingPaintCommand.
  */
 export function createRectangleTool(
   state: MapEditorState,
@@ -52,39 +54,36 @@ export function createRectangleTool(
       isDrawing = false;
       setPreviewRect(null);
 
+      if (!state.materials.has(state.activeMaterialKey)) return;
+
       const { minX, minY, maxX, maxY } = computeBounds(startTile, tile);
-      const layerIndex = state.activeLayerIndex;
-      const deltas: CellDelta[] = [];
-
-      for (let y = minY; y <= maxY; y++) {
-        for (let x = minX; x <= maxX; x++) {
-          // Bounds check
-          if (x < 0 || x >= state.width || y < 0 || y >= state.height)
-            continue;
-
-          const oldTerrain = state.grid[y][x].terrain;
-          if (oldTerrain === state.activeTerrainKey) continue;
-
-          const oldFrame =
-            layerIndex >= 0 && layerIndex < state.layers.length
-              ? state.layers[layerIndex].frames[y][x]
-              : 0;
-
-          deltas.push({
-            layerIndex,
-            x,
-            y,
-            oldTerrain,
-            newTerrain: state.activeTerrainKey,
-            oldFrame,
-            newFrame: 0,
-          });
-        }
-      }
+      const deltas = rectangleFill({
+        grid: state.grid,
+        minX,
+        minY,
+        maxX,
+        maxY,
+        newTerrain: state.activeMaterialKey,
+        width: state.width,
+        height: state.height,
+        layerIndex: state.activeLayerIndex,
+        layers: state.layers,
+      });
 
       if (deltas.length === 0) return;
 
-      const command = new PaintCommand(deltas, 'Rectangle fill');
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      // Convert CellDelta[] to CellPatchEntry[]
+      const patches: CellPatchEntry[] = deltas.map((d) => ({
+        x: d.x,
+        y: d.y,
+        oldFg: d.oldTerrain,
+        newFg: d.newTerrain,
+      }));
+
+      const command = new RoutingPaintCommand(patches, engine, state.activeLayerIndex);
       dispatch({ type: 'PUSH_COMMAND', command });
 
       startTile = null;

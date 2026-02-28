@@ -22,3 +22,21 @@ export type {
   TemplateConstraint,
   MapTemplate,
 } from './template-types';
+
+export type { TilesetInfo, MaterialInfo } from './material-types';
+
+export type {
+  EditorTool,
+  SidebarTab,
+  BaseLayer,
+  TileLayer,
+  PlacedObject,
+  ObjectLayer,
+  EditorLayer,
+  CellDelta,
+  EditorCommand,
+  MapEditorState,
+  MapEditorAction,
+  LoadMapPayload,
+} from './editor-types';
+export { SIDEBAR_TABS } from './editor-types';

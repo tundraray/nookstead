@@ -6,9 +6,14 @@ import { world } from '../world/World';
 import { chunkManager } from '../world/ChunkManager';
 import { sessionTracker } from '../sessions';
 import { createServerPlayer } from '../models/Player';
-import { createMapGenerator } from '@nookstead/map-lib';
 import { getGameDb } from '@nookstead/db/adapters/colyseus';
-import { savePosition, loadPosition, saveMap, loadMap } from '@nookstead/db';
+import {
+  savePosition,
+  loadPosition,
+  saveMap,
+  loadMap,
+  listEditorMaps,
+} from '@nookstead/db';
 import {
   PATCH_RATE_MS,
   CHUNK_SIZE,
@@ -141,33 +146,45 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           walkable: mapWalkable,
         };
       } else {
-        // New player or load failed: generate and save
-        const seed = Math.floor(Math.random() * 0x7FFFFFFF);
+        // New player or load failed: pick random editor template from DB
+        const editorMaps = await listEditorMaps(db, {
+          mapType: 'player_homestead',
+        });
+
+        if (editorMaps.length === 0) {
+          client.send(ServerMessage.ERROR, {
+            message: 'No template maps available',
+          });
+          return;
+        }
+
+        const template =
+          editorMaps[Math.floor(Math.random() * editorMaps.length)];
+        const seed =
+          template.seed ?? Math.floor(Math.random() * 0x7fffffff);
+
         console.log(
-          `[ChunkRoom] Generating map for new player: userId=${userId}, seed=${seed}`
+          `[ChunkRoom] Assigning template map for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
         );
 
-        const generator = createMapGenerator(CHUNK_SIZE, CHUNK_SIZE);
-        const generated = generator.generate(seed);
-
-        mapWalkable = generated.walkable;
-        mapGrid = generated.grid;
+        mapWalkable = template.walkable as boolean[][];
+        mapGrid = template.grid as unknown as Grid;
         mapPayload = {
-          seed: generated.seed,
-          width: generated.width,
-          height: generated.height,
-          grid: generated.grid as MapDataPayload['grid'],
-          layers: generated.layers as MapDataPayload['layers'],
-          walkable: generated.walkable,
+          seed,
+          width: template.width,
+          height: template.height,
+          grid: template.grid as MapDataPayload['grid'],
+          layers: template.layers as MapDataPayload['layers'],
+          walkable: mapWalkable,
         };
 
         // Save to DB (fire and forget with error logging)
         saveMap(db, {
           userId,
-          seed: generated.seed,
-          grid: generated.grid,
-          layers: generated.layers,
-          walkable: generated.walkable,
+          seed,
+          grid: template.grid,
+          layers: template.layers,
+          walkable: template.walkable,
         }).catch((err: unknown) => {
           console.error(
             `[ChunkRoom] Map save failed (non-fatal): userId=${userId}`,

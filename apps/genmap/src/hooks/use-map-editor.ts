@@ -2,8 +2,9 @@
 
 import { useReducer, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
-import type { Cell } from '@nookstead/map-lib';
 import type {
+  Cell,
+  MapType,
   MapEditorState,
   MapEditorAction,
   EditorTool,
@@ -11,14 +12,41 @@ import type {
   LoadMapPayload,
   PlacedObject,
   ObjectLayer,
-} from './map-editor-types';
-import type { MapType } from '@nookstead/map-lib';
+  MaterialInfo,
+} from '@nookstead/map-lib';
+import {
+  RetileEngine,
+} from '@nookstead/map-lib';
 
 const DEFAULT_WIDTH = 32;
 const DEFAULT_HEIGHT = 32;
 const DEFAULT_TERRAIN = 'deep_water' as const;
 const DEFAULT_TERRAIN_KEY = 'terrain-01';
+const DEFAULT_MATERIAL_KEY = 'deep_water';
 const DEFAULT_LAYER_NAME = 'ground';
+
+/**
+ * Module-level RetileEngine instance.
+ * Created in LOAD_MAP and reconstructed in SET_TILESETS/SET_MATERIALS.
+ * Tool files access this via getRetileEngine().
+ */
+let currentEngine: RetileEngine | null = null;
+
+/** Return the current RetileEngine instance (or null if no map loaded). */
+export function getRetileEngine(): RetileEngine | null {
+  return currentEngine;
+}
+
+/** Extract a MaterialPriorityMap from the materials config. */
+function buildMaterialPriority(
+  materials: ReadonlyMap<string, MaterialInfo>
+): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const [key, info] of materials) {
+    m.set(key, info.renderPriority);
+  }
+  return m;
+}
 
 /** Maximum number of commands in the undo stack. */
 export const MAX_UNDO_STACK = 50;
@@ -101,9 +129,13 @@ function createInitialState(): MapEditorState {
     grid: createEmptyGrid(DEFAULT_WIDTH, DEFAULT_HEIGHT),
     layers: [createDefaultLayer(DEFAULT_WIDTH, DEFAULT_HEIGHT)],
     walkable: createEmptyWalkable(DEFAULT_WIDTH, DEFAULT_HEIGHT),
+    tilesets: [],
+    materials: new Map(),
     activeLayerIndex: 0,
     activeTool: 'brush',
-    activeTerrainKey: DEFAULT_TERRAIN_KEY,
+    activeMaterialKey: DEFAULT_MATERIAL_KEY,
+    brushSize: 1,
+    brushShape: 'circle' as const,
     undoStack: [],
     redoStack: [],
     metadata: {},
@@ -228,7 +260,10 @@ function normalizeLayer(
     terrainKey: (l.terrainKey as string) || DEFAULT_TERRAIN_KEY,
     visible: l.visible !== undefined ? (l.visible as boolean) : true,
     opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
-    frames: (l.frames as number[][]) || createEmptyFrames(width, height),
+    frames:
+      Array.isArray(l.frames) && (l.frames as number[][]).length === height
+        ? (l.frames as number[][])
+        : createEmptyFrames(width, height),
   } as EditorLayer;
 }
 
@@ -254,29 +289,60 @@ export function mapEditorReducer(
     case 'SET_TOOL':
       return { ...state, activeTool: action.tool };
 
-    case 'SET_TERRAIN':
-      return { ...state, activeTerrainKey: action.terrainKey };
+    case 'SET_MATERIAL':
+      return { ...state, activeMaterialKey: action.materialKey };
 
     case 'SET_ACTIVE_LAYER':
       return { ...state, activeLayerIndex: action.index };
 
     case 'LOAD_MAP': {
       const { map } = action;
+
+      // Use grid dimensions as source of truth in case stored width/height are stale
+      const height = map.grid.length;
+      const width = height > 0 ? map.grid[0].length : 0;
+
       const editorLayers = toEditorLayers(
         map.layers,
-        map.width,
-        map.height
+        width,
+        height
       );
+
+      // Construct RetileEngine and perform full autotile rebuild
+      currentEngine = new RetileEngine({
+        width,
+        height,
+        tilesets: state.tilesets,
+        materials: state.materials,
+        materialPriority: buildMaterialPriority(state.materials),
+      });
+
+      const tempState: MapEditorState = {
+        ...state,
+        width,
+        height,
+        grid: map.grid,
+        layers: editorLayers,
+      };
+      const result = currentEngine.rebuild(tempState, 'full');
+
+      // Debug: log map state after load
+      console.log('[LOAD_MAP] tilesets count:', state.tilesets.length, state.tilesets.map((t) => (t as { key: string }).key));
+      console.log('[LOAD_MAP] materials count:', state.materials.size, [...state.materials.keys()]);
+      console.log('[LOAD_MAP] Grid terrain:', map.grid.map((row: Cell[]) => row.map((c: Cell) => c.terrain).join(' ')));
+      console.log('[LOAD_MAP] Layers frames:', result.layers[0]?.frames);
+      console.log('[LOAD_MAP] Layers tilesetKeys:', result.layers[0]?.tilesetKeys);
+
       return {
         ...state,
         mapId: map.id,
         name: map.name,
         mapType: (map.mapType as MapType) || null,
-        width: map.width,
-        height: map.height,
+        width,
+        height,
         seed: map.seed ?? 0,
         grid: map.grid,
-        layers: editorLayers,
+        layers: result.layers,
         walkable: map.walkable,
         metadata: (map.metadata as Record<string, string>) ?? {},
         activeLayerIndex: 0,
@@ -330,6 +396,18 @@ export function mapEditorReducer(
         newWidth,
         newHeight
       );
+
+      // Recreate engine with new dimensions so bounds checks are correct
+      if (currentEngine) {
+        currentEngine = new RetileEngine({
+          width: newWidth,
+          height: newHeight,
+          tilesets: state.tilesets,
+          materials: state.materials,
+          materialPriority: buildMaterialPriority(state.materials),
+        });
+      }
+
       return {
         ...state,
         width: newWidth,
@@ -465,6 +543,16 @@ export function mapEditorReducer(
       const newUndoStack = [...state.undoStack, action.command].slice(
         -MAX_UNDO_STACK
       );
+
+      // Debug: log state after painting
+      console.log('[PUSH_COMMAND]', action.command.description);
+      console.log('[PUSH_COMMAND] tilesets count:', state.tilesets.length);
+      console.log('[PUSH_COMMAND] materials count:', state.materials.size);
+      console.log('[PUSH_COMMAND] rebuiltCells:', (executed as unknown as { rebuiltCells?: number }).rebuiltCells);
+      console.log('[PUSH_COMMAND] Grid terrain:', executed.grid.map((row: Cell[]) => row.map((c: Cell) => c.terrain).join(' ')));
+      console.log('[PUSH_COMMAND] Layers frames:', executed.layers[0]?.frames);
+      console.log('[PUSH_COMMAND] Layers tilesetKeys:', executed.layers[0]?.tilesetKeys);
+
       return {
         ...executed,
         undoStack: newUndoStack,
@@ -504,6 +592,49 @@ export function mapEditorReducer(
 
     case 'MARK_DIRTY':
       return { ...state, isDirty: true };
+
+    case 'SET_BRUSH_SIZE':
+      return {
+        ...state,
+        brushSize: Math.max(1, Math.min(15, Math.round(action.size))),
+      };
+
+    case 'ADJUST_BRUSH_SIZE':
+      return {
+        ...state,
+        brushSize: Math.max(1, Math.min(15, state.brushSize + action.delta)),
+      };
+
+    case 'SET_BRUSH_SHAPE':
+      return { ...state, brushShape: action.shape };
+
+    case 'SET_TILESETS': {
+      // Reconstruct RetileEngine when tilesets change
+      if (state.width > 0 && state.height > 0) {
+        currentEngine = new RetileEngine({
+          width: state.width,
+          height: state.height,
+          tilesets: action.tilesets,
+          materials: state.materials,
+          materialPriority: buildMaterialPriority(state.materials),
+        });
+      }
+      return { ...state, tilesets: action.tilesets };
+    }
+
+    case 'SET_MATERIALS': {
+      // Reconstruct RetileEngine when materials change
+      if (state.width > 0 && state.height > 0) {
+        currentEngine = new RetileEngine({
+          width: state.width,
+          height: state.height,
+          tilesets: state.tilesets,
+          materials: action.materials,
+          materialPriority: buildMaterialPriority(action.materials),
+        });
+      }
+      return { ...state, materials: action.materials };
+    }
 
     case 'ADD_OBJECT_LAYER':
       return {
@@ -608,8 +739,8 @@ export function useMapEditor() {
     []
   );
 
-  const setTerrain = useCallback(
-    (terrainKey: string) => dispatch({ type: 'SET_TERRAIN', terrainKey }),
+  const setMaterial = useCallback(
+    (materialKey: string) => dispatch({ type: 'SET_MATERIAL', materialKey }),
     []
   );
 
@@ -633,6 +764,8 @@ export function useMapEditor() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: state.name,
+          width: state.width,
+          height: state.height,
           grid: state.grid,
           layers: state.layers,
           walkable: state.walkable,
@@ -716,7 +849,7 @@ export function useMapEditor() {
     state,
     dispatch,
     setTool,
-    setTerrain,
+    setMaterial,
     setActiveLayer,
     loadMap,
     save,

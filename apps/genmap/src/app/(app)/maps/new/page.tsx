@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import {
   validateMapDimensions,
   MAP_TYPE_CONSTRAINTS,
-  isWalkable,
   type MapType,
   type Cell,
 } from '@nookstead/map-lib';
@@ -70,7 +69,8 @@ function buildWalkableGrid(width: number, height: number): boolean[][] {
   for (let y = 0; y < height; y++) {
     const row: boolean[] = [];
     for (let x = 0; x < width; x++) {
-      row.push(isWalkable('deep_water'));
+      // New maps are filled with deep_water which is always non-walkable
+      row.push(false);
     }
     walkable.push(row);
   }

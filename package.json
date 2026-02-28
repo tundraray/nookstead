@@ -8,7 +8,9 @@
     "dev:genmap": "nx dev genmap",
     "dev:all": "nx run-many -t dev serve --projects=game,server",
     "db:generate": "nx run db:db:generate",
-    "db:migrate": "nx run db:db:migrate"
+    "db:migrate": "nx run db:db:migrate",
+    "generate:terrain-types": "npx tsx scripts/generate-terrain-types.ts",
+    "test:realdata": "nx test map-lib -- --testPathPatterns=retile-engine.realdata --no-coverage"
   },
   "private": true,
   "dependencies": {

@@ -8,7 +8,20 @@ import {
   useMemo,
   type Dispatch,
 } from 'react';
-import type { MapEditorState, MapEditorAction, PlacedObject } from '@/hooks/map-editor-types';
+import type {
+  MapEditorState,
+  MapEditorAction,
+  PlacedObject,
+  ZoneBounds,
+  ZoneVertex,
+  TileCoord as TilePos,
+} from '@nookstead/map-lib';
+import {
+  computeRectBounds,
+  clampBounds,
+  isSimplePolygon,
+  toZoneVertices,
+} from '@nookstead/map-lib';
 import {
   renderMapCanvas,
   drawGhostPreview,
@@ -16,19 +29,12 @@ import {
   type CanvasConfig,
   type PreviewRect,
   type ObjectRenderEntry,
+  type BrushPreview,
 } from './canvas-renderer';
 import { createBrushTool } from './tools/brush-tool';
 import { createFillTool } from './tools/fill-tool';
 import { createRectangleTool } from './tools/rectangle-tool';
 import { createEraserTool } from './tools/eraser-tool';
-import {
-  computeRectBounds,
-  clampBounds,
-  isSimplePolygon,
-  toZoneVertices,
-  type TilePos,
-} from './zone-drawing';
-import type { ZoneBounds, ZoneVertex } from '@nookstead/map-lib';
 import { drawZoneOverlay } from './zone-overlay';
 
 const TILE_SIZE = 16;
@@ -222,13 +228,13 @@ export function MapEditorCanvas({
 
     switch (state.activeTool) {
       case 'brush':
-        return createBrushTool(state, dispatch);
+        return createBrushTool(state, dispatch, state.brushSize, state.brushShape);
       case 'fill':
         return createFillTool(state, dispatch);
       case 'rectangle':
         return createRectangleTool(state, dispatch, setPreviewRect);
       case 'eraser':
-        return createEraserTool(state, dispatch);
+        return createEraserTool(state, dispatch, state.brushSize, state.brushShape);
       case 'zone-rect':
         return {
           onMouseDown: (tile) => {
@@ -262,7 +268,7 @@ export function MapEditorCanvas({
         // Object placement handled by onObjectPlace callback in handlePointerDown
         return noopHandlers;
     }
-  }, [state.activeTool, state.activeTerrainKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
+  }, [state.activeTool, state.activeMaterialKey, state.activeLayerIndex, dispatch, state, onZoneRectComplete]);
 
   // Clear previews when tool changes
   useEffect(() => {
@@ -296,6 +302,10 @@ export function MapEditorCanvas({
       canvas.height = containerSize.h;
     }
 
+    const isBrushLike = state.activeTool === 'brush' || state.activeTool === 'eraser';
+    const brushPreview: BrushPreview | undefined =
+      isBrushLike ? { brushSize: state.brushSize, brushShape: state.brushShape } : undefined;
+
     renderMapCanvas(
       ctx,
       state,
@@ -304,7 +314,8 @@ export function MapEditorCanvas({
       config,
       cursorTile,
       previewRect,
-      objectRenderData
+      objectRenderData,
+      brushPreview
     );
 
     // Ghost preview: render selected object at cursor grid-snapped position

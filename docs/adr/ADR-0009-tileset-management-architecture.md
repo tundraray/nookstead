@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -505,7 +505,7 @@ tilesets (
 - **Seed migration dependency**: The application will not function without a seeded database. Development setup gains a mandatory step (`drizzle-kit push` or `drizzle-kit migrate` + seed script).
 - **Server-side image processing**: The upload flow requires `sharp` for image splitting, adding CPU load during upload. At expected upload frequency (a few times per session), this is negligible.
 - **Bidirectional inverse maintenance**: The `inverse_tileset_id` self-reference must be kept in sync at the application layer. If A.inverse is set to B, B.inverse must be updated to A in the same transaction.
-- **`TerrainCellType` migration**: The compile-time string union type must be replaced with a runtime-compatible approach (string type, or a generated union from DB values). This affects type safety in `packages/shared/`.
+- **`TerrainCellType` migration**: Resolved via codegen script that generates the union type from DB material keys. Compile-time type safety is preserved. Run `pnpm generate:terrain-types` after material changes.
 
 ### Neutral Consequences
 
@@ -526,14 +526,14 @@ tilesets (
 - Refactor `map-lib` exported functions to accept tileset/material data as parameters rather than importing static constants (dependency injection pattern)
 - Preserve `terrain-XX` key format in the seed migration so existing saved maps continue to resolve
 - Replace `SURFACE_PROPERTIES` lookups with material property queries (or cache all materials at application startup)
-- The `TerrainCellType` union in `packages/shared/` should be widened to `string` for forward compatibility with user-created materials, or maintained as a generated type from seed data for compile-time safety during the transition period
+- The `TerrainCellType` union in `packages/shared/` is maintained as a generated type from DB data via `scripts/generate-terrain-types.ts`, preserving compile-time safety. Run `pnpm generate:terrain-types` after adding or removing materials.
 
 ## Related Information
 
 - [ADR-0007: Sprite Management Storage and Schema](ADR-0007-sprite-management-storage-and-schema.md) -- Established the S3 storage pattern, presigned URL flow, JSONB schema conventions, and `getDb` adapter reuse that this ADR extends to tilesets
 - [ADR-0008: Object Editor Collision Zones and Metadata](ADR-0008-object-editor-collision-zones-and-metadata.md) -- Most recent schema extension following the same Drizzle patterns
-- Current terrain system: `packages/map-lib/src/core/terrain.ts` (26 hardcoded `TERRAINS`, `TILESETS` object, `TilesetRelationship` interface)
-- Current surface properties: `packages/map-lib/src/core/terrain-properties.ts` (`SURFACE_PROPERTIES` record, `isWalkable()`, `getSurfaceProperties()`)
+- Current terrain system: `packages/map-lib/src/core/terrain.ts` (26 hardcoded `TERRAINS`, `TILESETS` object, `TilesetRelationship` interface) (removed in Design-012 migration)
+- Current surface properties: `packages/map-lib/src/core/terrain-properties.ts` (`SURFACE_PROPERTIES` record, `isWalkable()`, `getSurfaceProperties()`) (removed in Design-012 migration)
 - Current tileset image loading: `apps/genmap/src/components/map-editor/use-tileset-images.ts` (hardcoded 26 static PNGs)
 - Current terrain palette: `apps/genmap/src/components/map-editor/terrain-palette.tsx` (imports `TERRAINS`, `TILESETS` constants)
 - Shared types: `packages/shared/src/types/map.ts` (`TerrainCellType` union, 26 string literals)
@@ -551,6 +551,18 @@ tilesets (
 - [Drizzle ORM Documentation](https://orm.drizzle.team/docs/overview) -- ORM used for schema definitions and migrations
 - [Tiled Map Editor](https://thorbjorn.itch.io/tiled) -- Industry-standard tile map editor, reference for tileset management patterns
 - [Tiles and Tilemaps Overview (MDN)](https://developer.mozilla.org/en-US/docs/Games/Techniques/Tilemaps) -- MDN guide on tilemap concepts including autotile and terrain transitions
+
+## Implementation Notes
+
+**Design-011 (Tileset Management):** DB schema, services, and seed migration fully implemented. Materials table, tilesets table, and tileset_tags table all operational with CRUD services.
+
+**Design-012 (DB Migration):** Full migration completed 2026-02-21. All hardcoded terrain definitions removed. Key implementation details:
+- `TerrainCellType` handled via codegen script (`scripts/generate-terrain-types.ts`) that reads material keys from DB and generates a TypeScript union type at `packages/shared/src/types/terrain-cell-type.generated.ts`. This preserves compile-time type safety while sourcing from the database.
+- Game client Preloader fetches tileset metadata from `/api/tilesets` API endpoint; loads spritesheets from S3 presigned URLs
+- Movement system uses in-memory material cache (`material-cache.ts`) loaded from `/api/materials` API endpoint
+- New player map provisioning uses random editor map selection from DB via `listEditorMaps`
+- 21 deprecated files deleted (terrain.ts, terrain-properties.ts, generation pipeline, server mapgen re-exports, game client shims)
+- All generation constants removed from shared package
 
 ## Date
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/select';
 import { useMapEditor } from '@/hooks/use-map-editor';
 import { useTilesetImages } from '@/components/map-editor/use-tileset-images';
-import { useTilesets } from '@/hooks/use-tilesets';
 import { MapEditorCanvas } from '@/components/map-editor/map-editor-canvas';
 import { EditorOptionsBar } from '@/components/map-editor/editor-options-bar';
 import { EditorStatusBar } from '@/components/map-editor/editor-status-bar';
@@ -35,8 +34,9 @@ import { ActivityBar } from '@/components/map-editor/activity-bar';
 import { EditorSidebar } from '@/components/map-editor/editor-sidebar';
 import { useZones } from '@/hooks/use-zones';
 import { useZoneApi } from '@/hooks/use-zone-api';
-import { SIDEBAR_TABS } from '@/hooks/map-editor-types';
-import type { SidebarTab, PlacedObject } from '@/hooks/map-editor-types';
+import { useObjectRenderData } from '@/hooks/use-object-render-data';
+import { SIDEBAR_TABS } from '@nookstead/map-lib';
+import type { SidebarTab, PlacedObject, MaterialInfo } from '@nookstead/map-lib';
 import type { Camera } from '@/components/map-editor/canvas-renderer';
 import type { ZoneBounds, ZoneVertex, ZoneType } from '@nookstead/map-lib';
 
@@ -154,6 +154,21 @@ export default function MapEditorPage() {
     },
     [selectedObjectId, state.layers, state.activeLayerIndex, dispatch]
   );
+
+  // Derive unique object IDs from object layers for render data fetching
+  const objectIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const layer of state.layers) {
+      if ((layer as unknown as { type: string }).type !== 'object') continue;
+      const objectLayer = layer as unknown as { objects: Array<{ objectId: string }> };
+      for (const obj of objectLayer.objects ?? []) {
+        ids.add(obj.objectId);
+      }
+    }
+    return Array.from(ids);
+  }, [state.layers]);
+
+  const objectRenderData = useObjectRenderData(objectIds);
 
   // Zone creation dialog state
   const [pendingZone, setPendingZone] = useState<{
@@ -331,21 +346,51 @@ export default function MapEditorPage() {
     }
   }, [state.isDirty, saveStatus]);
 
+  // Tileset data fetched from /api/editor-data — passed to useTilesetImages
+  const [fetchedTilesets, setFetchedTilesets] = useState<
+    { key: string; s3Url: string }[] | null
+  >(null);
+
   const {
     images: tilesetImages,
     isLoading: tilesetLoading,
     loadedCount,
     totalCount,
-  } = useTilesetImages();
-
-  // Fetch tileset records from API for the terrain palette grouping/naming
-  const { tilesets: apiTilesets } = useTilesets();
+  } = useTilesetImages(fetchedTilesets);
 
   const fetchMap = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     setNotFound(false);
     try {
+      // 1. Load editor data (materials + tilesets with signed URLs)
+      const editorRes = await fetch('/api/editor-data');
+      if (editorRes.ok) {
+        const { materials, tilesets } = await editorRes.json() as {
+          materials: MaterialInfo[];
+          tilesets: Array<{
+            key: string;
+            name: string;
+            fromMaterialKey?: string;
+            toMaterialKey?: string;
+            s3Url: string;
+          }>;
+        };
+
+        const materialsMap = new Map<string, MaterialInfo>();
+        for (const m of materials) {
+          materialsMap.set(m.key, m);
+        }
+
+        // 2. Dispatch materials + tilesets BEFORE loading the map
+        dispatch({ type: 'SET_MATERIALS', materials: materialsMap });
+        dispatch({ type: 'SET_TILESETS', tilesets });
+
+        // 3. Pass tilesets to useTilesetImages for image loading
+        setFetchedTilesets(tilesets);
+      }
+
+      // 4. Now load the map (LOAD_MAP will find tilesets already in state)
       await load(id);
       const zones = await loadZones(id);
       dispatch({ type: 'SET_ZONES', zones });
@@ -488,7 +533,6 @@ export default function MapEditorPage() {
           state={state}
           dispatch={dispatch}
           tilesetImages={tilesetImages}
-          tilesets={apiTilesets}
           zoneState={zoneState}
           onObjectSelect={handleObjectSelect}
         />
@@ -517,6 +561,7 @@ export default function MapEditorPage() {
               zoneVisibility={zoneState.zoneVisibility}
               showWalkability={showWalkability}
               onObjectPlace={handleObjectPlace}
+              objectRenderData={objectRenderData}
               onCursorMove={setCursorPosition}
               selectedObjectId={selectedObjectId}
             />

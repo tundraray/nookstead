@@ -8,7 +8,29 @@ import {
   loadCustomSkinTexture,
 } from '../characters/custom-skin-loader';
 import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
-import { TERRAINS } from '@nookstead/map-lib';
+import { loadMaterialCacheFromData } from '../services/material-cache';
+import type { MaterialProperties } from '@nookstead/map-lib';
+
+interface TilesetMeta {
+  key: string;
+  name: string;
+  s3Url: string;
+}
+
+interface GameData {
+  materials: MaterialProperties[];
+  tilesets: TilesetMeta[];
+}
+
+async function fetchGameData(): Promise<GameData> {
+  const res = await fetch('/api/game-data');
+  if (!res.ok) {
+    throw new Error(
+      `[Preloader] Failed to fetch game data: ${res.status} ${res.statusText}`
+    );
+  }
+  return res.json();
+}
 
 export class Preloader extends Scene {
   constructor() {
@@ -31,14 +53,7 @@ export class Preloader extends Scene {
   preload() {
     this.load.setPath('assets');
 
-    for (const terrain of TERRAINS) {
-      this.load.spritesheet(terrain.key, `tilesets/${terrain.file}`, {
-        frameWidth: FRAME_SIZE,
-        frameHeight: FRAME_SIZE,
-      });
-    }
-
-    // Load all preset character spritesheets
+    // Load all preset character spritesheets (local assets)
     for (const skin of getSkins()) {
       this.load.spritesheet(skin.sheetKey, skin.sheetPath, {
         frameWidth: TILE_SIZE,
@@ -48,6 +63,32 @@ export class Preloader extends Scene {
   }
 
   async create() {
+    // Fetch combined game data (materials + tilesets with signed URLs)
+    let tilesets: TilesetMeta[] = [];
+    try {
+      const gameData = await fetchGameData();
+      loadMaterialCacheFromData(gameData.materials);
+      tilesets = gameData.tilesets;
+    } catch (err) {
+      console.error('[Preloader] Failed to load game data:', err);
+    }
+
+    // Queue tileset spritesheets from S3 presigned URLs
+    if (tilesets.length > 0) {
+      for (const tileset of tilesets) {
+        this.load.spritesheet(tileset.key, tileset.s3Url, {
+          frameWidth: FRAME_SIZE,
+          frameHeight: FRAME_SIZE,
+        });
+      }
+
+      // Manually start the loader and wait for completion
+      await new Promise<void>((resolve) => {
+        this.load.once('complete', resolve);
+        this.load.start();
+      });
+    }
+
     // Register animations for all preset skins
     for (const skin of getSkins()) {
       const texture = this.textures.get(skin.sheetKey);
