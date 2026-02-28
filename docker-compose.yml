@@ -1,0 +1,48 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.server
+    ports:
+      - '2567:2567'
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  game:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.game
+      args:
+        - NEXT_PUBLIC_COLYSEUS_URL=${NEXT_PUBLIC_COLYSEUS_URL:-ws://localhost:2567}
+    ports:
+      - '3000:3000'
+    env_file: .env
+
+  genmap:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.genmap
+    ports:
+      - '3001:3001'
+    env_file: .env
+    profiles:
+      - full
+
+volumes:
+  redis-data:
