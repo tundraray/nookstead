@@ -43,7 +43,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Next.js standalone output
-COPY --from=builder /app/apps/game/public ./public
+COPY --from=builder /app/apps/game/public ./apps/game/public
 COPY --from=builder --chown=nookstead:nookstead /app/apps/game/.next/standalone ./
 COPY --from=builder --chown=nookstead:nookstead /app/apps/game/.next/static ./apps/game/.next/static
 

@@ -48,7 +48,7 @@ function getS3Client(): S3Client {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
-      forcePathStyle: true,
+      forcePathStyle: false,
     });
   }
   return s3Client;
@@ -99,5 +99,9 @@ export async function deleteS3Object(key: string): Promise<void> {
 
 export function buildS3Url(key: string): string {
   const endpoint = getRequiredEnvVar('S3_ENDPOINT');
-  return `${endpoint}/${getBucket()}/${key}`;
+  // Virtual-hosted style: https://bucket.endpoint/key
+  const url = new URL(endpoint);
+  url.hostname = `${getBucket()}.${url.hostname}`;
+  url.pathname = `/${key}`;
+  return url.toString();
 }
