@@ -42,7 +42,16 @@ export type {
   GeneratedMap,
   SerializedCell,
   SerializedGrid,
+  SerializedTileLayer,
+  SerializedPlacedObject,
+  SerializedObjectLayer,
   SerializedLayer,
   MapDataPayload,
+  GameObjectLayerDef,
+  CollisionZoneDef,
+  GameObjectDefinition,
+  SpriteMeta,
+  AtlasFrameMeta,
   SessionKickedPayload,
 } from './types/map';
+export { isTileLayer, isObjectLayer } from './types/map';

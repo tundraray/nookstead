@@ -13,6 +13,7 @@ export interface CreateTemplateData {
   constraints?: unknown;
   grid: unknown;
   layers: unknown;
+  walkable?: unknown;
   zones?: unknown;
 }
 
@@ -23,6 +24,7 @@ export interface UpdateTemplateData {
   constraints?: unknown;
   grid?: unknown;
   layers?: unknown;
+  walkable?: unknown;
   zones?: unknown;
   version?: number;
   isPublished?: boolean;

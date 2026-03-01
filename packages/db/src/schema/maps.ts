@@ -13,6 +13,8 @@ export const maps = pgTable('maps', {
     .unique()
     .primaryKey(),
   seed: integer('seed').notNull(),
+  width: integer('width').notNull().default(64),
+  height: integer('height').notNull().default(64),
   grid: jsonb('grid').notNull(),
   layers: jsonb('layers').notNull(),
   walkable: jsonb('walkable').notNull(),

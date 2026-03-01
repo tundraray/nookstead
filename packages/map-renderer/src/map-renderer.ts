@@ -39,12 +39,19 @@ export class MapRenderer {
       .setVisible(false);
 
     for (const layerData of map.layers) {
-      for (let y = 0; y < map.height; y++) {
-        for (let x = 0; x < map.width; x++) {
-          const frame = layerData.frames[y][x];
+      if (!layerData.frames) continue;
+      const rowCount = Math.min(map.height, layerData.frames.length);
+      for (let y = 0; y < rowCount; y++) {
+        const row = layerData.frames[y];
+        if (!row) continue;
+        const colCount = Math.min(map.width, row.length);
+        for (let x = 0; x < colCount; x++) {
+          const frame = row[x];
           if (frame === EMPTY_FRAME) continue;
 
-          stamp.setTexture(layerData.terrainKey, frame);
+          const textureKey = layerData.tilesetKeys?.[y]?.[x] || layerData.terrainKey;
+          if (!this.scene.textures.exists(textureKey)) continue;
+          stamp.setTexture(textureKey, frame);
           this.rt.draw(stamp, x * tileSize, y * tileSize);
         }
       }

@@ -1,5 +1,5 @@
 export default {
-  displayName: '@nookstead/map-lib',
+  displayName: '@nookstead/shared',
   preset: '../../jest.preset.js',
   transform: {
     '^.+\\.tsx?$': [
@@ -11,7 +11,6 @@ export default {
     ],
   },
   moduleFileExtensions: ['ts', 'js'],
-  coverageDirectory: '../../coverage/packages/map-lib',
-  testPathIgnorePatterns: ['\\.performance\\.spec\\.ts$'],
+  coverageDirectory: '../../coverage/packages/shared',
   testEnvironment: 'node',
 };

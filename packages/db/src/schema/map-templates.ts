@@ -20,6 +20,7 @@ export const mapTemplates = pgTable('map_templates', {
   constraints: jsonb('constraints'),
   grid: jsonb('grid').notNull(),
   layers: jsonb('layers').notNull(),
+  walkable: jsonb('walkable'),
   zones: jsonb('zones'),
   version: integer('version').notNull().default(1),
   isPublished: boolean('is_published').notNull().default(false),

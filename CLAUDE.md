@@ -47,7 +47,7 @@ New `@nx/next` applications use `css` for styles and `eslint` for linting.
 
 ### Nx Cloud
 
-Connected to Nx Cloud (ID: `698f7db0be3518f0d42a6547`). Default comparison base: `master`.
+Connected to Nx Cloud (ID: `698f7db0be3518f0d42a6547`). Default comparison base: `main`.
 
 ### Installed Nx Plugins
 
@@ -96,6 +96,12 @@ pnpm nx g @nx/js:lib shared           # New JS/TS library (for shared types)
 pnpm nx reset                 # Clear local Nx cache
 ```
 
+## Workflow Conventions
+
+- **Pull Requests**: Always create as draft (`gh pr create --draft`)
+- **Commits**: Only commit when explicitly asked by the user
+- **Screenshots**: Save to `.screenshots/` directory (gitignored), never to project root
+
 ## Code Style
 
 - **Prettier**: single quotes, 2-space indent (see `.prettierrc` and `.editorconfig`)
@@ -115,7 +121,7 @@ The planned architecture has three layers:
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `master` and all PRs:
-`pnpm nx run-many -t lint test build typecheck e2e`
+GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and all PRs:
+`pnpm nx affected -t lint test build typecheck`
 
-Default base branch in Nx config is `master`.
+Default base branch in Nx config is `main`.

@@ -3,14 +3,18 @@ import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
 import { MapRenderer } from '@nookstead/map-renderer';
 import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
+import { isTileLayer, isObjectLayer, findSpawnTile } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
-import { findSpawnTile } from '@nookstead/shared';
+import { ObjectRenderer } from '../objects/ObjectRenderer';
+import type { GameObjectCache } from '../services/game-object-cache';
 
 export class Game extends Scene {
+  private rawMapData: MapDataPayload | null = null;
   private mapData: GeneratedMap | null = null;
   private mapRenderer?: MapRenderer;
+  private objectRenderer?: ObjectRenderer;
   private hover!: Phaser.GameObjects.Graphics;
   private playerManager!: PlayerManager;
   private player!: Player;
@@ -27,28 +31,48 @@ export class Game extends Scene {
    * Receives mapData and room from LoadingScene.
    */
   init(data: { mapData: MapDataPayload; room?: Room }): void {
-    // Cast MapDataPayload to GeneratedMap at the network boundary.
-    // The structures are identical at runtime; the server generates
-    // map data using the same pipeline. The only type-level difference
-    // is SerializedCell.terrain (string) vs Cell.terrain (TerrainCellType).
-    this.mapData = data.mapData as unknown as GeneratedMap;
+    this.rawMapData = data.mapData;
     this.room = data.room ?? null;
     this.serverSpawnX = data.mapData.spawnX;
     this.serverSpawnY = data.mapData.spawnY;
   }
 
   create() {
-    if (!this.mapData) {
+    if (!this.rawMapData) {
       console.error('[Game] No mapData received from LoadingScene!');
       return;
     }
 
-    const mapPixelW = this.mapData.width * TILE_SIZE;
-    const mapPixelH = this.mapData.height * TILE_SIZE;
+    // Separate tile layers from object layers using type guards
+    const tileLayers = this.rawMapData.layers.filter(isTileLayer);
+    const objectLayers = this.rawMapData.layers.filter(isObjectLayer);
 
-    // Render all layers to a single RenderTexture via MapRenderer.
+    // Build a GeneratedMap-compatible object from tile layers for MapRenderer.
+    // SerializedTileLayer is structurally compatible with LayerData.
+    // The grid cast bridges SerializedCell.terrain (string) vs Cell.terrain (TerrainCellType).
+    const tileMap = {
+      width: this.rawMapData.width,
+      height: this.rawMapData.height,
+      layers: tileLayers,
+      grid: this.rawMapData.grid,
+      walkable: this.rawMapData.walkable,
+    } as unknown as GeneratedMap;
+
+    // Keep a GeneratedMap reference for subsystems that need walkable/grid data
+    this.mapData = tileMap;
+
+    const mapPixelW = this.rawMapData.width * TILE_SIZE;
+    const mapPixelH = this.rawMapData.height * TILE_SIZE;
+
+    // Render tile layers to a single RenderTexture via MapRenderer.
     this.mapRenderer = new MapRenderer(this, { tileSize: TILE_SIZE, frameSize: FRAME_SIZE });
-    this.mapRenderer.render(this.mapData);
+    this.mapRenderer.render(tileMap);
+
+    // Render object layers using ObjectRenderer (if cache is available)
+    const cache = this.game.registry.get('gameObjectCache') as GameObjectCache | undefined;
+    if (cache && objectLayers.length > 0) {
+      this.objectRenderer = new ObjectRenderer(this, objectLayers, cache, TILE_SIZE);
+    }
 
     // Determine spawn position: prefer server-computed, fall back to client-side
     let spawnX: number;
@@ -67,6 +91,17 @@ export class Game extends Scene {
       spawnY = (spawn.tileY + 1) * TILE_SIZE;
     }
     this.player = new Player(this, spawnX, spawnY, this.mapData);
+
+    // Enable Arcade Physics on the player for collision detection
+    this.physics.add.existing(this.player);
+
+    // Register collider between player and object collision bodies (AC-5.2)
+    if (this.objectRenderer) {
+      this.physics.add.collider(
+        this.player,
+        this.objectRenderer.getCollisionGroup(),
+      );
+    }
 
     // Camera: follow player with lerp smoothing, bounded by map
     const cam = this.cameras.main;
@@ -159,5 +194,6 @@ export class Game extends Scene {
 
   shutdown(): void {
     this.playerManager.destroy();
+    this.objectRenderer?.destroy();
   }
 }
