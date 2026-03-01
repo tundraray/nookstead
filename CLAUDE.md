@@ -47,7 +47,7 @@ New `@nx/next` applications use `css` for styles and `eslint` for linting.
 
 ### Nx Cloud
 
-Connected to Nx Cloud (ID: `698f7db0be3518f0d42a6547`). Default comparison base: `master`.
+Connected to Nx Cloud (ID: `698f7db0be3518f0d42a6547`). Default comparison base: `main`.
 
 ### Installed Nx Plugins
 
@@ -115,7 +115,7 @@ The planned architecture has three layers:
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `master` and all PRs:
-`pnpm nx run-many -t lint test build typecheck e2e`
+GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and all PRs:
+`pnpm nx affected -t lint test build typecheck e2e`
 
-Default base branch in Nx config is `master`.
+Default base branch in Nx config is `main`.

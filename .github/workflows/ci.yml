@@ -3,8 +3,12 @@ name: CI
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   actions: read
@@ -33,12 +37,15 @@ jobs:
           cache: 'pnpm'
 
       - run: pnpm install --frozen-lockfile
+
+      - uses: nrwl/nx-set-shas@v4
+
       - run: pnpm exec playwright install --with-deps
 
       # Prepend any command with "nx record --" to record its logs to Nx Cloud
       # - run: pnpm nx record -- echo Hello World
       # When you enable task distribution, run the e2e-ci task instead of e2e
-      - run: pnpm nx run-many -t lint test build typecheck e2e
+      - run: pnpm nx affected -t lint test build typecheck e2e
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
       - run: pnpm nx fix-ci
         if: always()
