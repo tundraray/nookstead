@@ -6,8 +6,9 @@
  * state management via {@link StateMachine}, and map-aware movement.
  *
  * The sprite uses a bottom-center anchor (origin 0.5, 1.0) so the
- * character's feet align to tile centers. Renders at depth 2, above
- * the hover highlight layer (depth 1) and the map texture (depth 0).
+ * character's feet align to tile centers. Depth is y-sorted each
+ * frame via `setDepth(this.y)` so the player correctly occludes
+ * game objects based on vertical screen position.
  *
  * Seven states are registered in the FSM:
  * - **idle** and **walk** are fully implemented MVP states
@@ -72,8 +73,6 @@ export class Player extends Phaser.GameObjects.Sprite {
 
     // Bottom-center anchor (feet alignment)
     this.setOrigin(0.5, 1.0);
-    // Above hover highlight (depth 1), map render texture (depth 0)
-    this.setDepth(2);
 
     // Add to scene display list
     scene.add.existing(this);
@@ -109,6 +108,9 @@ export class Player extends Phaser.GameObjects.Sprite {
    */
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+
+    // Y-sorted depth: player renders in front of objects with lower y (AC-4.6)
+    this.setDepth(this.y);
 
     // Apply reconciliation interpolation if active (FR-16)
     if (this.isInterpolating) {

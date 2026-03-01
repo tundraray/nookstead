@@ -9,7 +9,13 @@ import {
 } from '../characters/custom-skin-loader';
 import { CHARACTER_FRAME_HEIGHT, FRAME_SIZE, TILE_SIZE } from '../constants';
 import { loadMaterialCacheFromData } from '../services/material-cache';
+import { GameObjectCache } from '../services/game-object-cache';
 import type { MaterialProperties } from '@nookstead/map-lib';
+import type {
+  GameObjectDefinition,
+  SpriteMeta,
+  AtlasFrameMeta,
+} from '@nookstead/shared';
 
 interface TilesetMeta {
   key: string;
@@ -20,6 +26,9 @@ interface TilesetMeta {
 interface GameData {
   materials: MaterialProperties[];
   tilesets: TilesetMeta[];
+  gameObjects: Record<string, GameObjectDefinition>;
+  sprites: Record<string, SpriteMeta>;
+  atlasFrames: Record<string, AtlasFrameMeta>;
 }
 
 async function fetchGameData(): Promise<GameData> {
@@ -63,30 +72,92 @@ export class Preloader extends Scene {
   }
 
   async create() {
-    // Fetch combined game data (materials + tilesets with signed URLs)
+    // Fetch combined game data (materials + tilesets + game objects with signed URLs)
     let tilesets: TilesetMeta[] = [];
+    const objectCache = new GameObjectCache();
     try {
       const gameData = await fetchGameData();
       loadMaterialCacheFromData(gameData.materials);
       tilesets = gameData.tilesets;
+
+      // Populate the game object cache from API response
+      objectCache.populate({
+        gameObjects: gameData.gameObjects,
+        sprites: gameData.sprites,
+        atlasFrames: gameData.atlasFrames,
+      });
     } catch (err) {
       console.error('[Preloader] Failed to load game data:', err);
     }
 
-    // Queue tileset spritesheets from S3 presigned URLs
-    if (tilesets.length > 0) {
-      for (const tileset of tilesets) {
-        this.load.spritesheet(tileset.key, tileset.s3Url, {
-          frameWidth: FRAME_SIZE,
-          frameHeight: FRAME_SIZE,
-        });
-      }
+    // Store the cache in Phaser's global registry for Game scene access
+    this.game.registry.set('gameObjectCache', objectCache);
 
-      // Manually start the loader and wait for completion
+    // Collect object sprite IDs for loading
+    const objectSpriteIds = objectCache.getAllSpriteIds();
+
+    // Track which object sprites fail to load so we can skip their frames
+    const failedSpriteIds = new Set<string>();
+    this.load.on(
+      'loaderror',
+      (file: Phaser.Loader.File) => {
+        const spriteId = objectSpriteIds.find((id) => id === file.key);
+        if (spriteId) {
+          console.warn(
+            `[Preloader] Failed to load object sprite: ${spriteId}`
+          );
+          failedSpriteIds.add(spriteId);
+        }
+      }
+    );
+
+    // Queue tileset spritesheets from S3 presigned URLs
+    const hasAssetsToLoad = tilesets.length > 0 || objectSpriteIds.length > 0;
+
+    for (const tileset of tilesets) {
+      this.load.spritesheet(tileset.key, tileset.s3Url, {
+        frameWidth: FRAME_SIZE,
+        frameHeight: FRAME_SIZE,
+      });
+    }
+
+    // Queue object sprite images from S3 presigned URLs
+    for (const spriteId of objectSpriteIds) {
+      const s3Url = objectCache.getSpriteUrl(spriteId);
+      if (s3Url) {
+        this.load.image(spriteId, s3Url);
+      }
+    }
+
+    // Manually start the loader and wait for completion
+    if (hasAssetsToLoad) {
       await new Promise<void>((resolve) => {
         this.load.once('complete', resolve);
         this.load.start();
       });
+    }
+
+    // Define named frame regions on each successfully loaded object sprite texture
+    for (const spriteId of objectSpriteIds) {
+      if (failedSpriteIds.has(spriteId)) continue;
+
+      const texture = this.textures.get(spriteId);
+      if (!texture || texture.key === '__MISSING') continue;
+
+      // Add all atlas frames belonging to this sprite as named texture regions
+      for (const frameId of objectCache.getFrameIdsForSprite(spriteId)) {
+        const frame = objectCache.getFrameData(frameId);
+        if (frame) {
+          texture.add(
+            frameId,
+            0,
+            frame.frameX,
+            frame.frameY,
+            frame.frameW,
+            frame.frameH
+          );
+        }
+      }
     }
 
     // Register animations for all preset skins

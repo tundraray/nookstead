@@ -13,6 +13,7 @@ import {
   saveMap,
   loadMap,
   getPublishedTemplates,
+  getGameObject,
 } from '@nookstead/db';
 import {
   PATCH_RATE_MS,
@@ -22,12 +23,16 @@ import {
   ClientMessage,
   ServerMessage,
   findSpawnTile,
+  isObjectLayer,
   type MovePayload,
   type AuthData,
   type ChunkTransitionPayload,
   type MapDataPayload,
   type Grid,
+  type SerializedLayer,
+  type CollisionZoneDef,
 } from '@nookstead/shared';
+import { applyObjectCollisionZones } from '@nookstead/map-lib';
 
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
@@ -200,6 +205,72 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
       client.send(ServerMessage.ERROR, { message: 'Map data unavailable' });
       return;
+    }
+
+    // 3b. Apply object collision zones to walkability grid
+    if (mapWalkable) {
+      try {
+        const layers = mapPayload.layers as SerializedLayer[];
+        const placedObjects: Array<{
+          objectId: string;
+          gridX: number;
+          gridY: number;
+        }> = [];
+        const objectIdSet = new Set<string>();
+
+        for (const layer of layers) {
+          if (isObjectLayer(layer)) {
+            for (const obj of layer.objects) {
+              placedObjects.push({
+                objectId: obj.objectId,
+                gridX: obj.gridX,
+                gridY: obj.gridY,
+              });
+              objectIdSet.add(obj.objectId);
+            }
+          }
+        }
+
+        if (placedObjects.length > 0) {
+          // Fetch game object definitions from DB
+          const objectDefinitions = new Map<
+            string,
+            { collisionZones: CollisionZoneDef[] }
+          >();
+
+          const fetchResults = await Promise.all(
+            [...objectIdSet].map((id) => getGameObject(db, id))
+          );
+
+          for (const gameObj of fetchResults) {
+            if (gameObj) {
+              objectDefinitions.set(gameObj.id, {
+                collisionZones:
+                  (gameObj.collisionZones as CollisionZoneDef[]) ?? [],
+              });
+            }
+          }
+
+          applyObjectCollisionZones(
+            mapWalkable,
+            placedObjects,
+            objectDefinitions,
+            TILE_SIZE
+          );
+
+          // Update walkable in mapPayload
+          mapPayload.walkable = mapWalkable;
+
+          console.log(
+            `[ChunkRoom] Object collision zones applied: userId=${userId}, objects=${placedObjects.length}, definitions=${objectDefinitions.size}`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[ChunkRoom] Object collision zone application failed (non-fatal): userId=${userId}`,
+          err
+        );
+      }
     }
 
     // 3. Determine spawn position

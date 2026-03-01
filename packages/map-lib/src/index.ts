@@ -71,6 +71,9 @@ export { selectTilesetForCell, computeCellFrame, resolveRenderTilesetKey } from 
 export { RetileEngine } from './core/retile-engine';
 export { RoutingPaintCommand, RoutingFillCommand } from './core/routing-commands';
 
+// Walkability
+export { recomputeWalkability, applyObjectCollisionZones } from './core/walkability';
+
 // Routing types
 export type {
   CompatGraph,
