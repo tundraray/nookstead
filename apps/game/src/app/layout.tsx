@@ -1,6 +1,7 @@
 import './global.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { RuntimeConfigProvider } from '@/config/RuntimeConfigProvider';
+import { connection } from 'next/server';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -19,11 +20,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   return (
     <html lang="en">
       <head>
