@@ -105,8 +105,8 @@ jobs:
           file: docker/Dockerfile.server
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/nookstead/server:v${{ steps.next-version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/nookstead/server:latest
+            ghcr.io/${{ github.repository_owner }}/nookstead-server:v${{ steps.next-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/nookstead-server:latest
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
@@ -118,8 +118,8 @@ jobs:
           file: docker/Dockerfile.game
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/nookstead/game:v${{ steps.next-version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/nookstead/game:latest
+            ghcr.io/${{ github.repository_owner }}/nookstead-game:v${{ steps.next-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/nookstead-game:latest
           cache-from: type=gha,scope=game
           cache-to: type=gha,mode=max,scope=game
 
@@ -131,8 +131,8 @@ jobs:
           file: docker/Dockerfile.genmap
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/nookstead/genmap:v${{ steps.next-version.outputs.version }}
-            ghcr.io/${{ github.repository_owner }}/nookstead/genmap:latest
+            ghcr.io/${{ github.repository_owner }}/nookstead-genmap:v${{ steps.next-version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/nookstead-genmap:latest
           cache-from: type=gha,scope=genmap
           cache-to: type=gha,mode=max,scope=genmap
 
