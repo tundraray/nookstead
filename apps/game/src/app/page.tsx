@@ -1,6 +1,5 @@
 import { auth } from '@/auth';
-import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
+import Link from 'next/link';
 import Image from 'next/image';
 import { LoginButton } from '@/components/auth/LoginButton';
 import { LandingContent } from '@/components/landing/LandingContent';
@@ -8,14 +7,9 @@ import { HeroDayCycle } from '@/components/landing/HeroDayCycle';
 
 export default async function LandingPage() {
   const session = await auth();
-  const headersList = await headers();
-  const host = headersList.get('host') ?? '';
-  const isLocalhost =
-    host.startsWith('localhost') || host.startsWith('127.0.0.1');
-
-  if (session?.user) {
-    redirect('/game');
-  }
+  const isAuthenticated = !!session?.user;
+  const displayName = session?.user?.name;
+  const registrationOpen = process.env.REGISTRATION_OPEN === 'true';
 
   return (
     <main className="landing-page">
@@ -52,7 +46,6 @@ export default async function LandingPage() {
                 }}
               >
                 <div style={{ animation: `cloud-bob ${bobDuration}s ease-in-out ${bobDelay}s infinite` }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     className="cloud__img"
                     style={{ width: `${width}px` }}
@@ -90,9 +83,18 @@ export default async function LandingPage() {
             <span />
           </div>
 
-          {/* Login buttons */}
+          {/* Auth-aware action area */}
           <div className="landing-hero__buttons">
-            {isLocalhost ? (
+            {isAuthenticated ? (
+              <>
+                <p className="landing-hero__welcome">
+                  Welcome back{displayName ? `, ${displayName}` : ''}
+                </p>
+                <Link href="/game" className="landing-hero__enter-btn">
+                  Enter
+                </Link>
+              </>
+            ) : registrationOpen ? (
               <LoginButton provider="google" />
             ) : (
               <div className="coming-soon-badge">
@@ -103,9 +105,11 @@ export default async function LandingPage() {
 
           {/* Footer hint */}
           <p className="landing-hero__hint">
-            {isLocalhost
-              ? 'Sign in to start your adventure'
-              : 'We\'re working hard to open the gates'}
+            {isAuthenticated
+              ? 'Ready to continue your adventure'
+              : registrationOpen
+                ? 'Sign in to start your adventure'
+                : 'We\'re working hard to open the gates'}
           </p>
         </div>
       </section>
