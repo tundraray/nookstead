@@ -252,6 +252,7 @@ export default function MapEditorPage() {
           baseHeight: state.height,
           grid: state.grid,
           layers: state.layers,
+          walkable: state.walkable,
           zones: state.zones.length > 0 ? state.zones : undefined,
         }),
       });

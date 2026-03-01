@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, description, mapType, baseWidth, baseHeight, parameters, constraints, grid, layers, zones } =
+    const { name, description, mapType, baseWidth, baseHeight, parameters, constraints, grid, layers, walkable, zones } =
       body as Record<string, unknown>;
 
     if (!name || typeof name !== 'string') {
@@ -75,6 +75,7 @@ export async function POST(request: NextRequest) {
       constraints: constraints ?? undefined,
       grid,
       layers,
+      walkable: walkable ?? undefined,
       zones: zones ?? undefined,
     });
 

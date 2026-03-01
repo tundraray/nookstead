@@ -37,8 +37,9 @@ export type Grid = Cell[][];
 /** Rendering layer with autotile frame data. */
 export interface LayerData {
   name: string;
-  terrainKey: string; // Phaser spritesheet key
+  terrainKey: string; // Phaser spritesheet key (fallback)
   frames: number[][]; // [y][x] frame index (0 = empty, 1-47 = autotile)
+  tilesetKeys?: string[][]; // [y][x] per-cell tileset key for transition rendering
 }
 
 /** Complete output of the generation pipeline. */
@@ -72,6 +73,7 @@ export interface SerializedLayer {
   name: string;
   terrainKey: string;
   frames: number[][];
+  tilesetKeys?: string[][];
 }
 
 /**

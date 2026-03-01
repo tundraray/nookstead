@@ -12,11 +12,10 @@ import {
   loadPosition,
   saveMap,
   loadMap,
-  listEditorMaps,
+  getPublishedTemplates,
 } from '@nookstead/db';
 import {
   PATCH_RATE_MS,
-  CHUNK_SIZE,
   AVAILABLE_SKINS,
   DEFAULT_SPAWN,
   TILE_SIZE,
@@ -139,40 +138,40 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         mapGrid = savedMap.grid as unknown as Grid;
         mapPayload = {
           seed: savedMap.seed,
-          width: CHUNK_SIZE,
-          height: CHUNK_SIZE,
+          width: savedMap.width,
+          height: savedMap.height,
           grid: savedMap.grid as MapDataPayload['grid'],
           layers: savedMap.layers as MapDataPayload['layers'],
           walkable: mapWalkable,
         };
       } else {
-        // New player or load failed: pick random editor template from DB
-        const editorMaps = await listEditorMaps(db, {
-          mapType: 'player_homestead',
-        });
+        // New player or load failed: pick random published template
+        const templates = await getPublishedTemplates(
+          db,
+          'player_homestead'
+        );
 
-        if (editorMaps.length === 0) {
+        if (templates.length === 0) {
           client.send(ServerMessage.ERROR, {
-            message: 'No template maps available',
+            message: 'No published template maps available',
           });
           return;
         }
 
         const template =
-          editorMaps[Math.floor(Math.random() * editorMaps.length)];
-        const seed =
-          template.seed ?? Math.floor(Math.random() * 0x7fffffff);
+          templates[Math.floor(Math.random() * templates.length)];
+        const seed = Math.floor(Math.random() * 0x7fffffff);
 
         console.log(
-          `[ChunkRoom] Assigning template map for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
+          `[ChunkRoom] Assigning published template for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
         );
 
-        mapWalkable = template.walkable as boolean[][];
+        mapWalkable = (template.walkable as boolean[][]) ?? [];
         mapGrid = template.grid as unknown as Grid;
         mapPayload = {
           seed,
-          width: template.width,
-          height: template.height,
+          width: template.baseWidth,
+          height: template.baseHeight,
           grid: template.grid as MapDataPayload['grid'],
           layers: template.layers as MapDataPayload['layers'],
           walkable: mapWalkable,
@@ -182,6 +181,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         saveMap(db, {
           userId,
           seed,
+          width: template.baseWidth,
+          height: template.baseHeight,
           grid: template.grid,
           layers: template.layers,
           walkable: template.walkable,
@@ -222,8 +223,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           const spawn = findSpawnTile(
             mapWalkable,
             mapGrid,
-            CHUNK_SIZE,
-            CHUNK_SIZE
+            mapPayload.width,
+            mapPayload.height
           );
           worldX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
           worldY = (spawn.tileY + 1) * TILE_SIZE;

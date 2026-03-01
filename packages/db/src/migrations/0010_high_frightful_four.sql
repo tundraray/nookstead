@@ -1,0 +1,1 @@
+ALTER TABLE "map_templates" ADD COLUMN "walkable" jsonb;

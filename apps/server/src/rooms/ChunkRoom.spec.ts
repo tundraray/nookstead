@@ -104,7 +104,7 @@ const mockLoadPosition = jest.fn<(db: unknown, userId: string) => Promise<LoadPo
 const mockSavePosition = jest.fn<(db: unknown, data: SavePositionData) => Promise<void>>();
 const mockLoadMap = jest.fn<(db: unknown, userId: string) => Promise<unknown>>();
 const mockSaveMap = jest.fn<(db: unknown, data: unknown) => Promise<void>>();
-const mockListEditorMaps = jest.fn<(db: unknown, params?: unknown) => Promise<unknown[]>>();
+const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
 
 jest.mock('@nookstead/db', () => ({
@@ -113,7 +113,7 @@ jest.mock('@nookstead/db', () => ({
   loadPosition: mockLoadPosition,
   loadMap: mockLoadMap,
   saveMap: mockSaveMap,
-  listEditorMaps: mockListEditorMaps,
+  getPublishedTemplates: mockGetPublishedTemplates,
 }));
 
 jest.mock('@nookstead/db/adapters/colyseus', () => ({
@@ -172,19 +172,22 @@ describe('ChunkRoom', () => {
     mockChunkManager.canTransition.mockReturnValue(true);
     mockLoadMap.mockResolvedValue(null);
     mockSaveMap.mockResolvedValue(undefined);
-    mockListEditorMaps.mockResolvedValue([
+    mockGetPublishedTemplates.mockResolvedValue([
       {
         id: 'template-1',
         name: 'Homestead Template',
         mapType: 'player_homestead',
-        width: 64,
-        height: 64,
-        seed: 42,
+        baseWidth: 64,
+        baseHeight: 64,
         grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
         layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
         walkable: [[true]],
-        metadata: null,
-        createdBy: null,
+        parameters: null,
+        constraints: null,
+        zones: null,
+        description: null,
+        version: 1,
+        isPublished: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
@@ -523,10 +526,10 @@ describe('ChunkRoom', () => {
       // Verify: loadMap was called with db instance and userId
       expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-new');
 
-      // Verify: listEditorMaps was called with player_homestead filter
-      expect(mockListEditorMaps).toHaveBeenCalledWith(
+      // Verify: getPublishedTemplates was called with player_homestead
+      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
         {},
-        { mapType: 'player_homestead' }
+        'player_homestead'
       );
 
       // Verify: saveMap was called with template data
@@ -534,7 +537,8 @@ describe('ChunkRoom', () => {
         {},
         expect.objectContaining({
           userId: 'user-map-new',
-          seed: 42,
+          width: 64,
+          height: 64,
           grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
           layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
           walkable: [[true]],
@@ -545,7 +549,6 @@ describe('ChunkRoom', () => {
       expect(mockClient.send).toHaveBeenCalledWith(
         ServerMessage.MAP_DATA,
         expect.objectContaining({
-          seed: 42,
           width: 64,
           height: 64,
           grid: expect.anything(),
@@ -586,8 +589,8 @@ describe('ChunkRoom', () => {
       // Verify: loadMap was called with userId
       expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-returning');
 
-      // Verify: listEditorMaps was NOT called (map loaded from DB)
-      expect(mockListEditorMaps).not.toHaveBeenCalled();
+      // Verify: getPublishedTemplates was NOT called (map loaded from DB)
+      expect(mockGetPublishedTemplates).not.toHaveBeenCalled();
 
       // Verify: saveMap was NOT called (no new map to save)
       expect(mockSaveMap).not.toHaveBeenCalled();
@@ -599,10 +602,10 @@ describe('ChunkRoom', () => {
       );
     });
 
-    it('onJoin no editor maps available: sends ERROR, does not crash', async () => {
-      // Arrange: loadMap returns null, no editor templates in DB
+    it('onJoin no published templates available: sends ERROR, does not crash', async () => {
+      // Arrange: loadMap returns null, no published templates in DB
       mockLoadMap.mockResolvedValue(null);
-      mockListEditorMaps.mockResolvedValue([]);
+      mockGetPublishedTemplates.mockResolvedValue([]);
 
       const authData: AuthData = {
         userId: 'user-map-error',
@@ -617,16 +620,16 @@ describe('ChunkRoom', () => {
         room.onJoin(mockClient as never, {}, authData)
       ).resolves.not.toThrow();
 
-      // Verify: listEditorMaps was called
-      expect(mockListEditorMaps).toHaveBeenCalledWith(
+      // Verify: getPublishedTemplates was called
+      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
         {},
-        { mapType: 'player_homestead' }
+        'player_homestead'
       );
 
       // Verify: ERROR message was sent to client
       expect(mockClient.send).toHaveBeenCalledWith(
         ServerMessage.ERROR,
-        { message: 'No template maps available' }
+        { message: 'No published template maps available' }
       );
 
       // Verify: MAP_DATA was NOT sent
