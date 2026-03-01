@@ -218,6 +218,44 @@ button {
     letter-spacing: 0.5px;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 6px rgba(0, 0, 0, 0.2);
   }
+
+  & .landing-hero__welcome {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.7rem;
+    color: #e0e0e0;
+    text-align: center;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 0, 0, 0.3);
+  }
+
+  & .landing-hero__enter-btn {
+    display: inline-block;
+    padding: 14px 48px;
+    font-family: 'Press Start 2P', monospace;
+    font-size: 0.7rem;
+    color: #0a0a1a;
+    background-color: #48c7aa;
+    border: 2px solid #3aad94;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    transition: background-color 0.15s, transform 0.1s, box-shadow 0.15s;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 0 #1a3a2e;
+      background-color: #5ad4b8;
+    }
+
+    &:active {
+      transform: translateY(0);
+      box-shadow: none;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #ffdd57;
+      outline-offset: 2px;
+    }
+  }
 }
 
 /* --- Hero Day/Night Sky Overlay (rendered by HeroDayCycle) --- */
@@ -583,43 +621,14 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(
-    180deg,
-    #0a0a1a 0%,
-    #0d1117 40%,
-    #101828 100%
-  );
+  background: #0a0a1a; /* fallback; HeroDayCycle provides animated gradient */
   z-index: 20;
   transition: opacity 0.4s ease-out;
   overflow: hidden;
 
-  & .loading-screen__clouds {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 50%;
-    pointer-events: none;
-    overflow: hidden;
-  }
-
-  & .loading-screen__stars {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  & .loading-screen__star {
-    position: absolute;
-    width: 2px;
-    height: 2px;
-    background-color: #fff;
-    animation: twinkle ease-in-out infinite;
-  }
-
   & .loading-screen__content {
     position: relative;
-    z-index: 1;
+    z-index: 2;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -632,32 +641,27 @@ button {
     animation: float 4s ease-in-out infinite;
   }
 
-  & .loading-screen__logo {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2rem;
-    color: #48c7aa;
-    letter-spacing: 4px;
-    animation: glow-pulse 3s ease-in-out infinite;
+  & .loading-screen__logo-img {
+    width: 400px;
+    height: auto;
+    filter: drop-shadow(0 0 12px rgba(72, 199, 170, 0.4))
+      drop-shadow(0 0 24px rgba(72, 199, 170, 0.2));
     user-select: none;
-    margin: 0;
   }
 
-  & .loading-screen__logo-shadow {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2rem;
-    color: #1a3a2e;
-    letter-spacing: 4px;
-    z-index: -1;
-    user-select: none;
-    pointer-events: none;
+  & .loading-screen__tagline {
+    font-size: 0.7rem;
+    color: #c0c0d8;
+    text-align: center;
+    letter-spacing: 1px;
+    max-width: 400px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6), 0 0 8px rgba(0, 0, 0, 0.3);
   }
 
   & .loading-screen__divider {
     display: flex;
     gap: 8px;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 
     & span {
       display: block;
@@ -690,6 +694,30 @@ button {
     color: #8a8aaa;
     letter-spacing: 1px;
     margin: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .loading-screen {
+    & .loading-screen__logo-img {
+      width: 260px;
+    }
+
+    & .loading-screen__tagline {
+      font-size: 0.6rem;
+    }
+  }
+}
+
+@media (min-width: 768px) {
+  .loading-screen {
+    & .loading-screen__logo-img {
+      width: 500px;
+    }
+
+    & .loading-screen__tagline {
+      font-size: 0.8rem;
+    }
   }
 }
 

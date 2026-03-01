@@ -32,10 +32,15 @@
 - But they DO fail typecheck - always update import paths
 
 ## Quality Check Commands
-- Lint: `pnpm nx lint genmap`
-- Test: `pnpm nx test genmap`
-- TypeScript: `cd apps/genmap && npx tsc --noEmit`
+- Lint: `pnpm nx lint genmap` / `pnpm nx lint game`
+- Test: `pnpm nx test genmap` / `pnpm nx test game`
+- TypeScript (genmap): `cd apps/genmap && npx tsc --noEmit`
+- TypeScript (game): `cd apps/game && npx tsc --noEmit` (no Nx `typecheck` target)
+- Build: `pnpm nx build game`
 - Full gate: `pnpm nx run-many -t lint test build typecheck e2e`
+
+## Game App ESLint Notes
+- `@next/next/no-img-element` rule is not active; do not add eslint-disable for it
 
 ## DB Package Lint Warnings (known, non-blocking)
 - `tilesets.ts:30` - @typescript-eslint/no-explicit-any
