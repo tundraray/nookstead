@@ -106,10 +106,13 @@ export class World {
       Math.min(WORLD_BOUNDS.maxY, newWorldY)
     );
 
-    // Compute new chunk
+    // Compute new chunk (skip for non-positional chunks like player homesteads)
     const oldChunkId = player.chunkId;
-    const newChunkId = computeChunkId(newWorldX, newWorldY);
-    const chunkChanged = newChunkId !== oldChunkId;
+    const isPositionalChunk = oldChunkId.startsWith('world:');
+    const newChunkId = isPositionalChunk
+      ? computeChunkId(newWorldX, newWorldY)
+      : oldChunkId;
+    const chunkChanged = isPositionalChunk && newChunkId !== oldChunkId;
 
     // Derive direction from delta (keep current if no movement)
     const newDirection = deriveDirection(clampedDx, clampedDy);
