@@ -96,6 +96,12 @@ pnpm nx g @nx/js:lib shared           # New JS/TS library (for shared types)
 pnpm nx reset                 # Clear local Nx cache
 ```
 
+## Workflow Conventions
+
+- **Pull Requests**: Always create as draft (`gh pr create --draft`)
+- **Commits**: Only commit when explicitly asked by the user
+- **Screenshots**: Save to `.screenshots/` directory (gitignored), never to project root
+
 ## Code Style
 
 - **Prettier**: single quotes, 2-space indent (see `.prettierrc` and `.editorconfig`)
