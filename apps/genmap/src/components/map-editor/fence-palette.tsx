@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, type Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 
 /** Shape of a fence type record returned by GET /api/fence-types. */
 interface FenceTypeRecord {

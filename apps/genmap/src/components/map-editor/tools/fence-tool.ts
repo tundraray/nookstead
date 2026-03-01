@@ -1,5 +1,5 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 import type { PreviewRect } from '../canvas-renderer';
 import type { ToolHandlers } from '../map-editor-canvas';
 

@@ -33,8 +33,6 @@ import type {
   MapEditorState,
   MapEditorAction,
   EditorLayerUnion,
-  EditorLayer,
-  ObjectLayer,
 } from '@nookstead/map-lib';
 
 /** Minimal fence type shape returned by GET /api/fence-types. */

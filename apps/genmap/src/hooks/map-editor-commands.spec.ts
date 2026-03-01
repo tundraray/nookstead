@@ -1,5 +1,5 @@
 import type { FenceCellData } from '@nookstead/shared';
-import type { MapEditorState, FenceLayer } from './map-editor-types';
+import type { MapEditorState, FenceLayer } from '@nookstead/map-lib';
 import {
   FencePlaceCommand,
   FenceEraseCommand,

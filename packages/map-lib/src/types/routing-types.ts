@@ -1,5 +1,5 @@
 import type { Cell } from '@nookstead/shared';
-import type { EditorLayer } from './editor-types';
+import type { EditorLayerUnion } from './editor-types';
 import type { TilesetInfo, MaterialInfo } from './material-types';
 
 // ---------------------------------------------------------------------------
@@ -125,7 +125,7 @@ export interface CellPatchEntry {
  */
 export interface RetileResult {
   /** Updated editor layers with recomputed frames and tilesetKeys. */
-  readonly layers: EditorLayer[];
+  readonly layers: EditorLayerUnion[];
   /** Cell-level patches for undo/redo support. */
   readonly patches: ReadonlyArray<CellPatchEntry>;
   /** Number of cells that were recomputed in this operation. */

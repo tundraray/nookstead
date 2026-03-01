@@ -1,5 +1,5 @@
 import { FRAMES_PER_TERRAIN, EMPTY_FRAME, stampCells } from '@nookstead/map-lib';
-import type { MapEditorState, PlacedObject, BrushShape, FenceLayer } from '@nookstead/map-lib';
+import type { MapEditorState, BrushShape, FenceLayer } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -113,11 +113,7 @@ export function renderMapCanvas(
     if (!layer.visible) continue;
     ctx.globalAlpha = layer.opacity;
 
-    // Determine layer type: layers without a `type` field are treated as tile layers
-    // for backward compatibility with maps saved before the discriminated union was added.
-    const layerType = (layer as { type?: string }).type ?? 'tile';
-
-    if (layerType === 'tile') {
+    if (layer.type === 'tile') {
       // TileLayer rendering — per-cell tileset lookup via material baseTilesetKey
       const TILESET_COLS = FRAMES_PER_TERRAIN / 4; // 12
       const TILE_PX = 16;

@@ -432,13 +432,6 @@ export function mapEditorReducer(
       };
       const result = currentEngine.rebuild(tempState, 'full');
 
-      // Debug: log map state after load
-      console.log('[LOAD_MAP] tilesets count:', state.tilesets.length, state.tilesets.map((t) => (t as { key: string }).key));
-      console.log('[LOAD_MAP] materials count:', state.materials.size, [...state.materials.keys()]);
-      console.log('[LOAD_MAP] Grid terrain:', map.grid.map((row: Cell[]) => row.map((c: Cell) => c.terrain).join(' ')));
-      console.log('[LOAD_MAP] Layers frames:', result.layers[0]?.frames);
-      console.log('[LOAD_MAP] Layers tilesetKeys:', result.layers[0]?.tilesetKeys);
-
       return {
         ...state,
         mapId: map.id,
@@ -669,15 +662,6 @@ export function mapEditorReducer(
       const newUndoStack = [...state.undoStack, action.command].slice(
         -MAX_UNDO_STACK
       );
-
-      // Debug: log state after painting
-      console.log('[PUSH_COMMAND]', action.command.description);
-      console.log('[PUSH_COMMAND] tilesets count:', state.tilesets.length);
-      console.log('[PUSH_COMMAND] materials count:', state.materials.size);
-      console.log('[PUSH_COMMAND] rebuiltCells:', (executed as unknown as { rebuiltCells?: number }).rebuiltCells);
-      console.log('[PUSH_COMMAND] Grid terrain:', executed.grid.map((row: Cell[]) => row.map((c: Cell) => c.terrain).join(' ')));
-      console.log('[PUSH_COMMAND] Layers frames:', executed.layers[0]?.frames);
-      console.log('[PUSH_COMMAND] Layers tilesetKeys:', executed.layers[0]?.tilesetKeys);
 
       return {
         ...executed,

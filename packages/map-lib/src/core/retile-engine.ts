@@ -9,7 +9,7 @@ import type {
   RetileResult,
   RoutingTable,
 } from '../types/routing-types';
-import type { EditorLayer, MapEditorState } from '../types/editor-types';
+import type { EditorLayerUnion, TileLayer, MapEditorState } from '../types/editor-types';
 import type { MaterialInfo, TilesetInfo } from '../types/material-types';
 import { TilesetRegistry } from './tileset-registry';
 import { buildGraphs } from './graph-builder';
@@ -278,7 +278,7 @@ export class RetileEngine {
 
       // Write to every tile layer (object layers are skipped)
       for (let layerIndex = 0; layerIndex < newLayers.length; layerIndex++) {
-        if (this.isObjectLayer(newLayers[layerIndex])) {
+        if (this.isNonTileLayer(newLayers[layerIndex])) {
           continue;
         }
         this.writeToLayers(newLayers, x, y, frameId, renderKey, layerIndex);
@@ -415,7 +415,7 @@ export class RetileEngine {
       let firstTileLayerDone = false;
 
       for (let i = 0; i < newLayers.length; i++) {
-        if (this.isObjectLayer(newLayers[i])) continue;
+        if (this.isNonTileLayer(newLayers[i])) continue;
 
         const layerPatches = this.rebuildCells(state.grid, newLayers, dirtySet, [], i);
         if (!firstTileLayerDone) {
@@ -496,7 +496,7 @@ export class RetileEngine {
    */
   private rebuildCells(
     grid: Cell[][],
-    layers: EditorLayer[],
+    layers: EditorLayerUnion[],
     dirtySet: Set<number>,
     paintedPatches: ReadonlyArray<{
       x: number;
@@ -1125,7 +1125,7 @@ export class RetileEngine {
     let firstTileLayerDone = false;
 
     for (let i = 0; i < newLayers.length; i++) {
-      if (this.isObjectLayer(newLayers[i])) continue;
+      if (this.isNonTileLayer(newLayers[i])) continue;
       const layerPatches = this.rebuildCells(state.grid, newLayers, dirtySet, [], i);
       if (!firstTileLayerDone) {
         patches = layerPatches;
@@ -1151,13 +1151,11 @@ export class RetileEngine {
   // -------------------------------------------------------------------------
 
   /**
-   * Check whether a layer is an object layer (no frames/tilesetKeys).
-   *
-   * Uses a defensive cast because EditorLayer does not expose a
-   * discriminated `type` field at the type level.
+   * Check whether a layer is a non-tile layer (object or fence).
+   * Only tile layers have terrain/tilesetKeys that the RetileEngine manages.
    */
-  private isObjectLayer(layer: EditorLayer): boolean {
-    return (layer as unknown as { type: string }).type === 'object';
+  private isNonTileLayer(layer: EditorLayerUnion): boolean {
+    return layer.type !== 'tile';
   }
 
   /**
@@ -1170,12 +1168,19 @@ export class RetileEngine {
   /**
    * Clone layers, creating new frames and tilesetKeys arrays.
    */
-  private cloneLayers(layers: EditorLayer[]): EditorLayer[] {
-    return layers.map(layer => {
-      // Object layers have no frames/tilesetKeys — shallow-clone only
-      if (this.isObjectLayer(layer)) {
+  private cloneLayers(layers: EditorLayerUnion[]): EditorLayerUnion[] {
+    return layers.map((layer): EditorLayerUnion => {
+      if (layer.type === 'fence') {
+        return {
+          ...layer,
+          cells: layer.cells.map(row => row.map(c => c ? { ...c } : null)),
+          frames: layer.frames.map(row => [...row]),
+        };
+      }
+      if (layer.type === 'object') {
         return { ...layer };
       }
+      // Tile layer — deep-clone frames and tilesetKeys
       return {
         ...layer,
         frames: layer.frames.map(row => [...row]),
@@ -1203,7 +1208,7 @@ export class RetileEngine {
    * @param activeLayerIndex - Index of the user-selected layer (default 0).
    */
   private writeToLayers(
-    layers: EditorLayer[],
+    layers: EditorLayerUnion[],
     x: number,
     y: number,
     frameId: number,
@@ -1213,20 +1218,21 @@ export class RetileEngine {
     if (layers.length === 0) return;
 
     // Target the requested layer, falling back to the first tile layer
-    // if the index is out of bounds or points to an object layer.
-    let layer: EditorLayer | undefined = layers[activeLayerIndex];
+    // if the index is out of bounds or points to a non-tile layer.
+    let layer: EditorLayerUnion | undefined = layers[activeLayerIndex];
 
-    if (!layer || this.isObjectLayer(layer)) {
-      layer = layers.find(l => !this.isObjectLayer(l));
+    if (!layer || this.isNonTileLayer(layer)) {
+      layer = layers.find(l => !this.isNonTileLayer(l));
     }
 
-    if (!layer) return;
+    if (!layer || layer.type !== 'tile') return;
 
-    if (layer.frames[y]) {
-      layer.frames[y][x] = frameId;
+    const tileLayer = layer as TileLayer;
+    if (tileLayer.frames[y]) {
+      tileLayer.frames[y][x] = frameId;
     }
-    if (layer.tilesetKeys && layer.tilesetKeys[y]) {
-      layer.tilesetKeys[y][x] = tilesetKey;
+    if (tileLayer.tilesetKeys && tileLayer.tilesetKeys[y]) {
+      tileLayer.tilesetKeys[y][x] = tilesetKey;
     }
   }
 }

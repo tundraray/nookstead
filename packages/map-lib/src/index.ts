@@ -51,7 +51,6 @@ export { ConnectivityPass } from './generation/passes/connectivity-pass';
 export { WaterBorderPass } from './generation/passes/water-border-pass';
 export { AutotilePass } from './generation/passes/autotile-pass';
 
-
 // Map types, zone types, and template types
 export type {
   MapType, MapDimensionConstraints,
@@ -82,6 +81,8 @@ export type {
   TileLayer,
   PlacedObject,
   ObjectLayer,
+  FenceLayer,
+  EditorLayerUnion,
   EditorLayer,
   CellDelta,
   EditorCommand,

@@ -1,7 +1,7 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
-import { bresenhamLine } from './brush-tool';
+import { bresenhamLine } from '@nookstead/map-lib';
 
 /**
  * Creates fence eraser tool handlers.

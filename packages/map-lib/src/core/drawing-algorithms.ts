@@ -1,5 +1,5 @@
 import type { Cell } from '@nookstead/shared';
-import type { CellDelta, EditorLayer, BrushShape } from '../types/editor-types';
+import type { CellDelta, EditorLayerUnion, BrushShape } from '../types/editor-types';
 
 /**
  * Bresenham's line algorithm.
@@ -54,7 +54,7 @@ export function floodFill(
   width: number,
   height: number,
   layerIndex: number,
-  layers: ReadonlyArray<EditorLayer>,
+  layers: ReadonlyArray<EditorLayerUnion>,
 ): CellDelta[] {
   // Bounds check
   if (startX < 0 || startX >= width || startY < 0 || startY >= height) {
@@ -88,10 +88,8 @@ export function floodFill(
 
     if (grid[y][x].terrain !== targetTerrain) continue;
 
-    const oldFrame =
-      layerIndex >= 0 && layerIndex < layers.length
-        ? layers[layerIndex].frames[y][x]
-        : 0;
+    const activeLayer = layerIndex >= 0 && layerIndex < layers.length ? layers[layerIndex] : null;
+    const oldFrame = activeLayer && 'frames' in activeLayer ? activeLayer.frames[y][x] : 0;
 
     deltas.push({
       layerIndex,
@@ -163,7 +161,7 @@ export interface RectangleFillOptions {
   width: number;
   height: number;
   layerIndex: number;
-  layers: ReadonlyArray<EditorLayer>;
+  layers: ReadonlyArray<EditorLayerUnion>;
 }
 
 /**
@@ -194,10 +192,8 @@ export function rectangleFill(options: RectangleFillOptions): CellDelta[] {
       const oldTerrain = grid[y][x].terrain;
       if (oldTerrain === newTerrain) continue;
 
-      const oldFrame =
-        layerIndex >= 0 && layerIndex < layers.length
-          ? layers[layerIndex].frames[y][x]
-          : 0;
+      const stampLayer = layerIndex >= 0 && layerIndex < layers.length ? layers[layerIndex] : null;
+      const oldFrame = stampLayer && 'frames' in stampLayer ? stampLayer.frames[y][x] : 0;
 
       deltas.push({
         layerIndex,
