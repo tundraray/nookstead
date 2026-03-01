@@ -116,6 +116,6 @@ The planned architecture has three layers:
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) runs on pushes to `main` and all PRs:
-`pnpm nx affected -t lint test build typecheck e2e`
+`pnpm nx affected -t lint test build typecheck`
 
 Default base branch in Nx config is `main`.
