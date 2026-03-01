@@ -46,6 +46,11 @@ export default async function RootLayout({
       <body>
         <RuntimeConfigProvider
           colyseusUrl={process.env['COLYSEUS_URL']}
+          dayCycleMs={
+            process.env['DAY_CYCLE_MS']
+              ? Number(process.env['DAY_CYCLE_MS'])
+              : undefined
+          }
         />
         <AuthProvider>{children}</AuthProvider>
       </body>
