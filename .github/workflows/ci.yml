@@ -53,6 +53,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -68,6 +69,61 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm exec semantic-release
+      - id: release
+        run: pnpm exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get new version tag
+        if: steps.release.outcome == 'success'
+        id: version
+        run: |
+          TAG=$(git describe --tags --exact-match 2>/dev/null || echo "")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Docker login
+        if: steps.version.outputs.tag != ''
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push server image
+        if: steps.version.outputs.tag != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.server
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/nookstead/server:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/nookstead/server:latest
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+      - name: Build & push game image
+        if: steps.version.outputs.tag != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.game
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/nookstead/game:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/nookstead/game:latest
+          cache-from: type=gha,scope=game
+          cache-to: type=gha,mode=max,scope=game
+
+      - name: Build & push genmap image
+        if: steps.version.outputs.tag != ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.genmap
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/nookstead/genmap:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository_owner }}/nookstead/genmap:latest
+          cache-from: type=gha,scope=genmap
+          cache-to: type=gha,mode=max,scope=genmap
