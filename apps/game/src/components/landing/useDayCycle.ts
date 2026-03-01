@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-
-const CYCLE_MS =
-  Number(process.env.NEXT_PUBLIC_DAY_CYCLE_MS) || 3_600_000; // default 1 hour
+import { getRuntimeConfig } from '@/config/runtime';
 
 // Sky gradient keyframes: [phase, topH,S,L, midH,S,L, botH,S,L]
 // Phase 0.0 = midnight, wraps at 1.0
@@ -136,9 +134,9 @@ export function useDayCycle(): DayCycleState {
   const [state, setState] = useState<DayCycleState>(INITIAL_STATE);
 
   useEffect(() => {
-    // Immediately sync to real time on mount
+    const cycleMs = getRuntimeConfig().dayCycleMs;
     const tick = () => {
-      const phase = (Date.now() % CYCLE_MS) / CYCLE_MS;
+      const phase = (Date.now() % cycleMs) / cycleMs;
       setState(computeState(phase));
     };
     tick();
