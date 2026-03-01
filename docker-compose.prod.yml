@@ -37,6 +37,7 @@ services:
     environment:
       NODE_ENV: production
       AUTH_SECRET: ${AUTH_SECRET}
+      AUTH_URL: ${AUTH_URL:?Set AUTH_URL in .env}
       DATABASE_URL: ${DATABASE_URL}
       COLYSEUS_URL: ${COLYSEUS_URL:?Set COLYSEUS_URL in .env}
       AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
