@@ -28,6 +28,16 @@ const gameServer = new Server({
     // reflect the real client, not the proxy.
     app.set('trust proxy', 1);
 
+    // Sanitize X-Forwarded-Proto: multiple proxy layers can duplicate it
+    // ("https, https") which breaks URL parsing in Colyseus matchmaker.
+    app.use((req, _res, next) => {
+      const proto = req.headers['x-forwarded-proto'];
+      if (typeof proto === 'string' && proto.includes(',')) {
+        req.headers['x-forwarded-proto'] = proto.split(',')[0].trim();
+      }
+      next();
+    });
+
     // CORS middleware
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', config.corsOrigin);
