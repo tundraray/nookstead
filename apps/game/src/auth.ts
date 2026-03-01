@@ -5,6 +5,7 @@ import Discord from 'next-auth/providers/discord';
 import { getDb, findOrCreateUser, users, eq } from '@nookstead/db';
 
 const nextAuth: NextAuthResult = NextAuth({
+  trustHost: true,
   providers: [Google, Discord],
   session: {
     strategy: 'jwt',
