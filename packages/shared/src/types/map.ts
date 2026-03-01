@@ -118,8 +118,8 @@ export interface MapDataPayload {
   spawnX?: number;
   /** Server-computed spawn pixel Y (present for new players). */
   spawnY?: number;
-  /** Fence layers for the map. Empty array if no fences. */
-  fenceLayers: SerializedFenceLayer[];
+  /** Fence layers for the map. Omitted or empty array if no fences. */
+  fenceLayers?: SerializedFenceLayer[];
 }
 
 // ============================================================

@@ -37,7 +37,7 @@ export function createEraserTool(
         ? state.layers[layerIndex]
         : null;
     const oldFrame =
-      activeLayer && activeLayer.type !== 'object'
+      activeLayer && activeLayer.type === 'tile'
         ? activeLayer.frames[y][x]
         : 0;
 

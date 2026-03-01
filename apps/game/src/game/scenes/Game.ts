@@ -171,7 +171,7 @@ export class Game extends Scene {
     this.serverSpawnX = data.mapData.spawnX;
     this.serverSpawnY = data.mapData.spawnY;
 
-    this.rawFenceLayers = data.mapData.fenceLayers;
+    this.rawFenceLayers = data.mapData.fenceLayers ?? [];
   }
 
   create() {
