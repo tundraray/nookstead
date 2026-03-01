@@ -132,10 +132,12 @@ export interface MapDataPayload {
   grid: SerializedGrid;
   layers: SerializedLayer[];
   walkable: boolean[][];
-  /** Server-computed spawn pixel X (present for new players). */
+  /** Server-computed spawn pixel X. */
   spawnX?: number;
-  /** Server-computed spawn pixel Y (present for new players). */
+  /** Server-computed spawn pixel Y. */
   spawnY?: number;
+  /** Server-computed spawn facing direction. */
+  spawnDirection?: 'up' | 'down' | 'left' | 'right';
 }
 
 // ============================================================

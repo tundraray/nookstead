@@ -314,10 +314,16 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         worldY = DEFAULT_SPAWN.worldY;
       }
 
-      // Include spawn position in map payload for new players
-      mapPayload.spawnX = worldX;
-      mapPayload.spawnY = worldY;
     }
+
+    // Always include spawn position in map payload (both new and returning players)
+    mapPayload.spawnX = worldX;
+    mapPayload.spawnY = worldY;
+    mapPayload.spawnDirection = direction as
+      | 'up'
+      | 'down'
+      | 'left'
+      | 'right';
 
     // 4. Create server player
     const serverPlayer = createServerPlayer({

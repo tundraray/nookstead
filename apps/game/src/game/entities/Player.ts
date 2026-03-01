@@ -55,12 +55,13 @@ export class Player extends Phaser.GameObjects.Sprite {
     x: number,
     y: number,
     mapData: GeneratedMap,
+    initialDirection: Direction = 'down',
   ) {
     const skin = getActiveSkin();
     super(scene, x, y, skin.sheetKey);
 
     this.sheetKey = skin.sheetKey;
-    this.facingDirection = 'down';
+    this.facingDirection = initialDirection;
     this.mapData = mapData;
     this.speed = PLAYER_SPEED;
     this.mapWidth = MAP_WIDTH;

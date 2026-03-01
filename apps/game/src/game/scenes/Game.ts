@@ -21,6 +21,7 @@ export class Game extends Scene {
   private room: Room | null = null;
   private serverSpawnX: number | undefined;
   private serverSpawnY: number | undefined;
+  private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
 
   constructor() {
     super('Game');
@@ -35,6 +36,7 @@ export class Game extends Scene {
     this.room = data.room ?? null;
     this.serverSpawnX = data.mapData.spawnX;
     this.serverSpawnY = data.mapData.spawnY;
+    this.serverSpawnDirection = data.mapData.spawnDirection;
   }
 
   create() {
@@ -80,6 +82,34 @@ export class Game extends Scene {
     if (this.serverSpawnX != null && this.serverSpawnY != null) {
       spawnX = this.serverSpawnX;
       spawnY = this.serverSpawnY;
+
+      // Validate walkability: if saved position is now occupied/unwalkable, relocate
+      const tileX = Math.floor(spawnX / TILE_SIZE);
+      const tileY = Math.floor(spawnY / TILE_SIZE) - 1; // -1: spawnY is feet (bottom edge)
+      const walkable = this.mapData.walkable;
+      if (
+        walkable &&
+        (tileX < 0 || tileX >= MAP_WIDTH ||
+         tileY < 0 || tileY >= MAP_HEIGHT ||
+         !walkable[tileY]?.[tileX])
+      ) {
+        // Saved position is unwalkable — find nearest walkable tile
+        const nearby = this.findNearbyWalkable(tileX, tileY, walkable);
+        if (nearby) {
+          spawnX = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
+          spawnY = (nearby.tileY + 1) * TILE_SIZE;
+        } else {
+          // Last resort: use findSpawnTile
+          const spawn = findSpawnTile(
+            this.mapData.walkable,
+            this.mapData.grid,
+            MAP_WIDTH,
+            MAP_HEIGHT,
+          );
+          spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
+          spawnY = (spawn.tileY + 1) * TILE_SIZE;
+        }
+      }
     } else {
       const spawn = findSpawnTile(
         this.mapData.walkable,
@@ -90,7 +120,7 @@ export class Game extends Scene {
       spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
       spawnY = (spawn.tileY + 1) * TILE_SIZE;
     }
-    this.player = new Player(this, spawnX, spawnY, this.mapData);
+    this.player = new Player(this, spawnX, spawnY, this.mapData, this.serverSpawnDirection);
 
     // Enable Arcade Physics on the player for collision detection
     this.physics.add.existing(this.player);
@@ -190,6 +220,35 @@ export class Game extends Scene {
   override update(_time: number, delta: number): void {
     // Drive interpolation on all remote player sprites
     this.playerManager.update(delta);
+  }
+
+  /**
+   * Spiral search outward from (cx, cy) for the nearest walkable tile.
+   * Returns null if no walkable tile found within search radius.
+   */
+  private findNearbyWalkable(
+    cx: number,
+    cy: number,
+    walkable: boolean[][],
+  ): { tileX: number; tileY: number } | null {
+    const maxRadius = 10;
+    for (let r = 1; r <= maxRadius; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // perimeter only
+          const tx = cx + dx;
+          const ty = cy + dy;
+          if (
+            tx >= 0 && tx < MAP_WIDTH &&
+            ty >= 0 && ty < MAP_HEIGHT &&
+            walkable[ty]?.[tx]
+          ) {
+            return { tileX: tx, tileY: ty };
+          }
+        }
+      }
+    }
+    return null;
   }
 
   shutdown(): void {
