@@ -4,18 +4,8 @@ import type { SerializedFenceLayer } from './fence-layer';
 // Core map types (moved from apps/game/src/game/mapgen/types.ts)
 // ============================================================
 
-/** Terrain classification for each cell in the grid. All 26 terrain types. */
-export type TerrainCellType =
-  | 'deep_water' | 'water' | 'grass'
-  | 'dirt_light_grass' | 'orange_grass' | 'pale_sage' | 'forest_edge'
-  | 'lush_green' | 'grass_orange' | 'grass_alpha' | 'grass_fenced'
-  | 'water_grass' | 'grass_water' | 'deep_water_water'
-  | 'light_sand_grass' | 'light_sand_water'
-  | 'orange_sand_light_sand' | 'sand_alpha'
-  | 'clay_ground' | 'alpha_props_fence'
-  | 'ice_blue' | 'light_stone' | 'warm_stone' | 'gray_cobble'
-  | 'slate' | 'dark_brick' | 'steel_floor'
-  | 'asphalt_white_line' | 'asphalt_yellow_line';
+import type { TerrainCellType } from './terrain-cell-type.generated';
+export type { TerrainCellType } from './terrain-cell-type.generated';
 
 /**
  * Action triggered when a player steps on a cell.
@@ -49,8 +39,9 @@ export type Grid = Cell[][];
 /** Rendering layer with autotile frame data. */
 export interface LayerData {
   name: string;
-  terrainKey: string; // Phaser spritesheet key
+  terrainKey: string; // Phaser spritesheet key (fallback)
   frames: number[][]; // [y][x] frame index (0 = empty, 1-47 = autotile)
+  tilesetKeys?: string[][]; // [y][x] per-cell tileset key for transition rendering
 }
 
 /** Complete output of the generation pipeline. */
@@ -62,23 +53,6 @@ export interface GeneratedMap {
   layers: LayerData[];
   /** Walkability grid: true = walkable. Derived from terrain properties. */
   walkable: boolean[][];
-}
-
-/** Interface for composable generation passes. */
-export interface GenerationPass {
-  readonly name: string;
-  execute(
-    grid: Grid,
-    width: number,
-    height: number,
-    rng: () => number
-  ): void;
-}
-
-/** Interface for passes that produce rendering layers. */
-export interface LayerPass {
-  readonly name: string;
-  buildLayers(grid: Grid, width: number, height: number): LayerData[];
 }
 
 // ============================================================
@@ -97,10 +71,56 @@ export interface SerializedCell {
 
 export type SerializedGrid = SerializedCell[][];
 
-export interface SerializedLayer {
+/** Tile layer: autotile frame data for terrain rendering. */
+export interface SerializedTileLayer {
+  type: 'tile';
   name: string;
   terrainKey: string;
   frames: number[][];
+  tilesetKeys?: string[][];
+}
+
+/** A placed game object reference within an object layer. */
+export interface SerializedPlacedObject {
+  id: string;
+  objectId: string;
+  objectName: string;
+  gridX: number;
+  gridY: number;
+  rotation: number;
+  flipX: boolean;
+  flipY: boolean;
+}
+
+/** Object layer: placed game objects on the map. */
+export interface SerializedObjectLayer {
+  type: 'object';
+  name: string;
+  objects: SerializedPlacedObject[];
+}
+
+/** Discriminated union for all layer types in network transfer. */
+export type SerializedLayer = SerializedTileLayer | SerializedObjectLayer;
+
+/**
+ * Type guard: returns true if the layer is a tile layer.
+ * Legacy layers without a `type` field are treated as tile layers
+ * for backward compatibility.
+ */
+export function isTileLayer(
+  layer: SerializedLayer
+): layer is SerializedTileLayer {
+  return !('type' in layer) || layer.type === 'tile';
+}
+
+/**
+ * Type guard: returns true if the layer is an object layer.
+ * Legacy layers without a `type` field return false.
+ */
+export function isObjectLayer(
+  layer: SerializedLayer
+): layer is SerializedObjectLayer {
+  return 'type' in layer && layer.type === 'object';
 }
 
 /**
@@ -120,6 +140,56 @@ export interface MapDataPayload {
   spawnY?: number;
   /** Fence layers for the map. Omitted or empty array if no fences. */
   fenceLayers?: SerializedFenceLayer[];
+}
+
+// ============================================================
+// Game object definition types
+// ============================================================
+
+/** A single render layer within a game object definition. */
+export interface GameObjectLayerDef {
+  frameId: string;
+  spriteId: string;
+  xOffset: number;
+  yOffset: number;
+  layerOrder: number;
+}
+
+/** A collision zone on a game object. */
+export interface CollisionZoneDef {
+  id: string;
+  label: string;
+  type: 'collision' | 'walkable';
+  shape: 'rectangle';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Complete game object definition for client-side rendering. */
+export interface GameObjectDefinition {
+  id: string;
+  name: string;
+  layers: GameObjectLayerDef[];
+  collisionZones: CollisionZoneDef[];
+}
+
+/** Sprite metadata for client-side asset loading. */
+export interface SpriteMeta {
+  id: string;
+  name: string;
+  s3Url: string;
+}
+
+/** Atlas frame metadata for client-side rendering. */
+export interface AtlasFrameMeta {
+  id: string;
+  spriteId: string;
+  frameX: number;
+  frameY: number;
+  frameW: number;
+  frameH: number;
 }
 
 // ============================================================

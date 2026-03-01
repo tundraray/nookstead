@@ -43,6 +43,26 @@ unknowns:
   - "Performance impact of replacing in-memory constant lookups with DB queries during map generation"
 ```
 
+## Implementation Status
+
+**Status:** IMPLEMENTED
+**Implementation Date:** 2026-02-20 (DB services and schema), 2026-02-21 (full migration via Design-012)
+
+### Completed Components
+- Database schema: `materials`, `tilesets`, `tileset_tags` tables created and operational
+- Database services: `material.ts`, `tileset.ts`, `tileset-tag.ts` fully implemented with CRUD operations
+- Seed migration: 26 tilesets, 21 materials seeded from original hardcoded data
+- API endpoints: All CRUD endpoints for materials, tilesets, tags, matrix, and usage operational
+- Terrain palette: Migrated from hardcoded TERRAINS to API-loaded data
+- Tileset image loading: Migrated from static file paths to S3 presigned URLs
+
+### Post-Migration (Design-012)
+- All hardcoded terrain definitions removed from `map-lib`
+- `TerrainCellType` auto-generated from DB via codegen script
+- Game client uses `/api/tilesets` and `/api/materials` endpoints
+- Server uses DB editor maps for new player provisioning
+- 21 deprecated files deleted
+
 ## Background and Context
 
 ### Prerequisite ADRs
@@ -72,7 +92,7 @@ unknowns:
 - [x] Existing database tables (`sprites`, `atlas_frames`, `game_objects`, `editor_maps`, `users`, etc.) -- no modifications
 - [x] Existing services (`sprite.ts`, `atlas-frame.ts`, `game-object.ts`, etc.) -- no modifications
 - [x] Autotile engine (`packages/map-lib/src/core/autotile.ts`) -- reused unchanged
-- [x] Game client app (`apps/game/`) -- no modifications
+- [x] Game client app (`apps/game/`) -- no modifications in Design-011 scope (subsequent Design-012 added API endpoints and migrated Preloader/movement)
 - [x] Authentication -- none required
 - [x] Variable tile sizes (fixed 16x16 only)
 - [x] Animated tilesets
@@ -292,10 +312,10 @@ Direct Impact:
   - apps/genmap/src/components/map-editor/terrain-palette.tsx (replace hardcoded imports with API data)
   - apps/genmap/src/components/map-editor/use-tileset-images.ts (replace static paths with presigned URLs)
   - apps/genmap/src/components/navigation.tsx (add Tilesets and Materials nav items)
-  - packages/map-lib/src/core/terrain.ts (remove TERRAINS, TERRAIN_NAMES, TILESETS after migration)
-  - packages/map-lib/src/core/terrain-properties.ts (remove SURFACE_PROPERTIES after migration)
+  - packages/map-lib/src/core/terrain.ts (REMOVED — Design-012 migration complete)
+  - packages/map-lib/src/core/terrain-properties.ts (REMOVED — Design-012 migration complete)
 Indirect Impact:
-  - packages/shared/src/types/map.ts (TerrainCellType union may need widening to string)
+  - packages/shared/src/types/map.ts (TerrainCellType now auto-generated via codegen from DB materials)
   - apps/genmap/src/components/map-editor/canvas-renderer.ts (tilesetImages map populated differently, but API unchanged)
   - Database (new migration with 3 tables -- additive only)
 No Ripple Effect:
@@ -1635,3 +1655,4 @@ Not required for MVP. Performance guidelines verified via manual observation.
 | Date | Version | Changes | Author |
 |------|---------|---------|--------|
 | 2026-02-20 | 1.0 | Initial version | Claude (Technical Designer) |
+| 2026-02-21 | 1.1 | Mark as implemented; update impact map for Design-012 migration completion | Claude |

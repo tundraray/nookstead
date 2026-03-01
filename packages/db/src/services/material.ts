@@ -1,4 +1,4 @@
-import { eq, asc, count, or } from 'drizzle-orm';
+import { eq, asc, count, or, inArray } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import { materials } from '../schema/materials';
 import { tilesets } from '../schema/tilesets';
@@ -9,6 +9,7 @@ export interface CreateMaterialData {
   color: string;
   walkable?: boolean;
   speedModifier?: number;
+  renderPriority?: number;
   swimRequired?: boolean;
   damaging?: boolean;
 }
@@ -19,6 +20,7 @@ export interface UpdateMaterialData {
   color?: string;
   walkable?: boolean;
   speedModifier?: number;
+  renderPriority?: number;
   swimRequired?: boolean;
   damaging?: boolean;
 }
@@ -101,4 +103,20 @@ export async function getTilesetsReferencingMaterial(
         eq(tilesets.toMaterialId, materialId)
       )
     );
+}
+
+/**
+ * Bulk lookup of materials by an array of keys.
+ * Returns all materials whose `key` is in the provided array.
+ * Returns empty array for empty keys input without querying.
+ */
+export async function listMaterialsByKeys(
+  db: DrizzleClient,
+  keys: string[]
+) {
+  if (keys.length === 0) return [];
+  return db
+    .select()
+    .from(materials)
+    .where(inArray(materials.key, keys));
 }

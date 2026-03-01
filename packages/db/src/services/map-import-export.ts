@@ -43,17 +43,13 @@ export async function importPlayerMap(
     throw new Error(`No map found for user: ${userId}`);
   }
 
-  const grid = playerMap.grid as unknown[][];
-  const height = grid.length;
-  const width = height > 0 ? (grid[0] as unknown[]).length : 0;
-
   const [created] = await db
     .insert(editorMaps)
     .values({
       name: `Imported: ${userId}`,
       mapType: 'player_homestead',
-      width,
-      height,
+      width: playerMap.width,
+      height: playerMap.height,
       seed: playerMap.seed,
       grid: playerMap.grid,
       layers: playerMap.layers,
@@ -88,6 +84,8 @@ export async function exportToPlayerMap(
     .values({
       userId,
       seed: editorMap.seed ?? 0,
+      width: editorMap.width,
+      height: editorMap.height,
       grid: editorMap.grid,
       layers: editorMap.layers,
       walkable: editorMap.walkable,
@@ -97,6 +95,8 @@ export async function exportToPlayerMap(
       target: maps.userId,
       set: {
         seed: editorMap.seed ?? 0,
+        width: editorMap.width,
+        height: editorMap.height,
         grid: editorMap.grid,
         layers: editorMap.layers,
         walkable: editorMap.walkable,
@@ -126,18 +126,14 @@ export async function editPlayerMapDirect(
     throw new Error(`No map found for user: ${userId}`);
   }
 
-  const grid = playerMap.grid as unknown[][];
-  const height = grid.length;
-  const width = height > 0 ? (grid[0] as unknown[]).length : 0;
-
   return {
     userId: playerMap.userId,
     grid: playerMap.grid,
     layers: playerMap.layers,
     walkable: playerMap.walkable,
     seed: playerMap.seed,
-    width,
-    height,
+    width: playerMap.width,
+    height: playerMap.height,
   };
 }
 

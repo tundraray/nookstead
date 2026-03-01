@@ -233,10 +233,10 @@ describe('Player', () => {
       expect(phaserMocks.setOrigin).toHaveBeenCalledWith(0.5, 1.0);
     });
 
-    it('should set depth to 2 (above hover highlight)', () => {
+    it('should not set a static depth (depth is y-sorted in preUpdate)', () => {
       new Player(scene, 100, 200, mapData);
-      expect(phaserMocks.setDepth).toHaveBeenCalledTimes(1);
-      expect(phaserMocks.setDepth).toHaveBeenCalledWith(2);
+      // Player no longer sets depth in constructor — it uses this.setDepth(this.y) in preUpdate
+      expect(phaserMocks.setDepth).not.toHaveBeenCalled();
     });
 
     it('should add itself to the scene display list', () => {

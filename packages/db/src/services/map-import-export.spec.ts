@@ -50,6 +50,8 @@ function createMockDb() {
 const playerMapRecord = {
   userId: 'user-abc',
   seed: 42,
+  width: 4,
+  height: 3,
   grid: [
     [{ terrain: 'grass' }, { terrain: 'dirt' }, { terrain: 'grass' }, { terrain: 'water' }],
     [{ terrain: 'dirt' }, { terrain: 'grass' }, { terrain: 'grass' }, { terrain: 'dirt' }],
@@ -112,9 +114,9 @@ describe('MapImportExportService', () => {
       );
     });
 
-    it('should derive 0x0 dimensions for empty grid', async () => {
+    it('should use stored 0x0 dimensions for empty grid', async () => {
       const { db, mocks } = createMockDb();
-      const emptyGridMap = { ...playerMapRecord, grid: [] };
+      const emptyGridMap = { ...playerMapRecord, grid: [], width: 0, height: 0 };
       mocks.selectWhere.mockResolvedValue([emptyGridMap]);
       mocks.insertReturning.mockResolvedValue([
         { ...editorMapRecord, width: 0, height: 0 },

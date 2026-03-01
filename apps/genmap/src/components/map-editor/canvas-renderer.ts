@@ -1,4 +1,5 @@
-import type { MapEditorState, FenceLayer } from '@/hooks/map-editor-types';
+import { FRAMES_PER_TERRAIN, EMPTY_FRAME, stampCells } from '@nookstead/map-lib';
+import type { MapEditorState, PlacedObject, BrushShape, FenceLayer } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -31,13 +32,28 @@ export interface FenceTilesetMap {
   [fenceTypeKey: string]: HTMLCanvasElement | HTMLImageElement;
 }
 
-/** Render data for a single game object sprite frame. */
-export interface ObjectRenderEntry {
+/** Brush preview configuration for multi-cell cursor. */
+export interface BrushPreview {
+  brushSize: number;
+  brushShape: BrushShape;
+}
+
+/** Render data for a single sprite frame layer within a game object. */
+export interface ObjectRenderLayer {
   image: HTMLImageElement;
   frameX: number;
   frameY: number;
   frameW: number;
   frameH: number;
+  /** Pixel offset within the object's local space. */
+  xOffset: number;
+  /** Pixel offset within the object's local space. */
+  yOffset: number;
+}
+
+/** Render data for a game object (may contain multiple layers). */
+export interface ObjectRenderEntry {
+  layers: ObjectRenderLayer[];
 }
 
 /**
@@ -54,6 +70,7 @@ export function renderMapCanvas(
   cursorTile: { x: number; y: number } | null,
   previewRect: PreviewRect | null,
   objectRenderData?: Map<string, ObjectRenderEntry>,
+  brushPreview?: BrushPreview,
   fenceTilesets?: FenceTilesetMap
 ): void {
   const { tileSize } = config;
@@ -96,26 +113,36 @@ export function renderMapCanvas(
     if (!layer.visible) continue;
     ctx.globalAlpha = layer.opacity;
 
-    if (layer.type === 'tile') {
-      // TileLayer rendering
-      const img = tilesetImages.get(layer.terrainKey);
-      if (!img) continue;
+    // Determine layer type: layers without a `type` field are treated as tile layers
+    // for backward compatibility with maps saved before the discriminated union was added.
+    const layerType = (layer as { type?: string }).type ?? 'tile';
+
+    if (layerType === 'tile') {
+      // TileLayer rendering — per-cell tileset lookup via material baseTilesetKey
+      const TILESET_COLS = FRAMES_PER_TERRAIN / 4; // 12
+      const TILE_PX = 16;
 
       for (let y = startY; y < endY; y++) {
         for (let x = startX; x < endX; x++) {
           const frame = layer.frames[y][x];
-          if (frame === 0) continue; // EMPTY_FRAME, skip
+          if (frame === EMPTY_FRAME) continue;
 
-          // Calculate source position in tileset (12 cols, 16x16 frames)
-          const srcX = (frame % 12) * 16;
-          const srcY = Math.floor(frame / 12) * 16;
+          // Look up the tileset for this specific cell: per-cell key → baseTilesetKey → layer fallback
+          const cellTerrain = state.grid[y]?.[x]?.terrain;
+          const matInfo = cellTerrain ? state.materials.get(cellTerrain) : undefined;
+          const tilesetKey = layer.tilesetKeys?.[y]?.[x] || matInfo?.baseTilesetKey || layer.terrainKey;
+          const img = tilesetImages.get(tilesetKey);
+          if (!img) continue;
+
+          const srcX = (frame % TILESET_COLS) * TILE_PX;
+          const srcY = Math.floor(frame / TILESET_COLS) * TILE_PX;
 
           ctx.drawImage(
             img,
             srcX,
             srcY,
-            16,
-            16,
+            TILE_PX,
+            TILE_PX,
             x * tileSize,
             y * tileSize,
             tileSize,
@@ -129,19 +156,22 @@ export function renderMapCanvas(
 
       for (const obj of layer.objects) {
         const entry = objectRenderData.get(obj.objectId);
-        if (!entry || !entry.image.complete) continue;
+        if (!entry || entry.layers.length === 0) continue;
 
-        ctx.drawImage(
-          entry.image,
-          entry.frameX,
-          entry.frameY,
-          entry.frameW,
-          entry.frameH,
-          obj.gridX * tileSize,
-          obj.gridY * tileSize,
-          entry.frameW,
-          entry.frameH
-        );
+        for (const rl of entry.layers) {
+          if (!rl.image.complete) continue;
+          ctx.drawImage(
+            rl.image,
+            rl.frameX,
+            rl.frameY,
+            rl.frameW,
+            rl.frameH,
+            obj.gridX * tileSize + rl.xOffset,
+            obj.gridY * tileSize + rl.yOffset,
+            rl.frameW,
+            rl.frameH
+          );
+        }
       }
     } else if (layer.type === 'fence' && fenceTilesets) {
       // Fence layer rendering (Design Doc Section 4.4):
@@ -232,7 +262,7 @@ export function renderMapCanvas(
     );
   }
 
-  // Cursor tile highlight
+  // Cursor tile highlight (multi-cell for brush/eraser with brushPreview)
   if (
     cursorTile &&
     cursorTile.x >= 0 &&
@@ -240,21 +270,69 @@ export function renderMapCanvas(
     cursorTile.y >= 0 &&
     cursorTile.y < state.height
   ) {
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-    ctx.fillRect(
-      cursorTile.x * tileSize,
-      cursorTile.y * tileSize,
-      tileSize,
-      tileSize
-    );
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 1 / zoom;
-    ctx.strokeRect(
-      cursorTile.x * tileSize,
-      cursorTile.y * tileSize,
-      tileSize,
-      tileSize
-    );
+    if (brushPreview && brushPreview.brushSize > 1) {
+      const cells = stampCells(
+        cursorTile.x,
+        cursorTile.y,
+        brushPreview.brushSize,
+        brushPreview.brushShape,
+        state.width,
+        state.height,
+      );
+      const cellSet = new Set(cells.map((c) => `${c.x},${c.y}`));
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      for (const cell of cells) {
+        ctx.fillRect(cell.x * tileSize, cell.y * tileSize, tileSize, tileSize);
+      }
+
+      // Draw boundary edges only (edges not shared with adjacent stamp cells)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1 / zoom;
+      ctx.beginPath();
+      for (const cell of cells) {
+        const px = cell.x * tileSize;
+        const py = cell.y * tileSize;
+        // Top edge
+        if (!cellSet.has(`${cell.x},${cell.y - 1}`)) {
+          ctx.moveTo(px, py);
+          ctx.lineTo(px + tileSize, py);
+        }
+        // Bottom edge
+        if (!cellSet.has(`${cell.x},${cell.y + 1}`)) {
+          ctx.moveTo(px, py + tileSize);
+          ctx.lineTo(px + tileSize, py + tileSize);
+        }
+        // Left edge
+        if (!cellSet.has(`${cell.x - 1},${cell.y}`)) {
+          ctx.moveTo(px, py);
+          ctx.lineTo(px, py + tileSize);
+        }
+        // Right edge
+        if (!cellSet.has(`${cell.x + 1},${cell.y}`)) {
+          ctx.moveTo(px + tileSize, py);
+          ctx.lineTo(px + tileSize, py + tileSize);
+        }
+      }
+      ctx.stroke();
+    } else {
+      // Single-cell highlight (default for fill, rectangle, size=1, etc.)
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+      ctx.fillRect(
+        cursorTile.x * tileSize,
+        cursorTile.y * tileSize,
+        tileSize,
+        tileSize
+      );
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 1 / zoom;
+      ctx.strokeRect(
+        cursorTile.x * tileSize,
+        cursorTile.y * tileSize,
+        tileSize,
+        tileSize
+      );
+    }
   }
 
   ctx.restore();
@@ -277,7 +355,7 @@ export function drawGhostPreview(
   camera: Camera
 ): void {
   const entry = objectRenderData.get(ghostObjectId);
-  if (!entry || !entry.image.complete) return;
+  if (!entry || entry.layers.length === 0) return;
 
   const screenX = (ghostGridX * tileSize - camera.x) * camera.zoom;
   const screenY = (ghostGridY * tileSize - camera.y) * camera.zoom;
@@ -286,17 +364,20 @@ export function drawGhostPreview(
   ctx.imageSmoothingEnabled = false;
   ctx.globalAlpha = 0.5;
   try {
-    ctx.drawImage(
-      entry.image,
-      entry.frameX,
-      entry.frameY,
-      entry.frameW,
-      entry.frameH,
-      screenX,
-      screenY,
-      entry.frameW * camera.zoom,
-      entry.frameH * camera.zoom
-    );
+    for (const rl of entry.layers) {
+      if (!rl.image.complete) continue;
+      ctx.drawImage(
+        rl.image,
+        rl.frameX,
+        rl.frameY,
+        rl.frameW,
+        rl.frameH,
+        screenX + rl.xOffset * camera.zoom,
+        screenY + rl.yOffset * camera.zoom,
+        rl.frameW * camera.zoom,
+        rl.frameH * camera.zoom
+      );
+    }
   } finally {
     ctx.globalAlpha = 1.0;
     ctx.restore();

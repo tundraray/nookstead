@@ -1,9 +1,5 @@
 export const COLYSEUS_PORT = 2567;
-export const TICK_RATE = 10;
-export const TICK_INTERVAL_MS = 1000 / TICK_RATE;
 export const PATCH_RATE_MS = 100;
-export const ROOM_NAME = 'game_room';
-export const MAX_PLAYERS_PER_ROOM = 50;
 
 export type SkinKey =
   | 'scout_1'
@@ -21,8 +17,6 @@ export const AVAILABLE_SKINS: SkinKey[] = [
   'scout_5',
   'scout_6',
 ];
-
-export const POSITION_SYNC_INTERVAL_MS = TICK_INTERVAL_MS;
 
 // Tile size (shared between client and server)
 export const TILE_SIZE = 16;
@@ -82,19 +76,3 @@ export const INTERPOLATION_SPEED = 0.2;
  * a timeout error with retry button.
  */
 export const LOADING_TIMEOUT_MS = 10000;
-
-// --- Map generation constants (shared for deterministic client/server parity) ---
-
-// Noise parameters
-export const NOISE_OCTAVES = 5;
-export const NOISE_LACUNARITY = 2.0;
-export const NOISE_PERSISTENCE = 0.5;
-export const NOISE_SCALE = 0.025;
-export const ELEVATION_EXPONENT = 1.3;
-
-// Terrain thresholds
-export const DEEP_WATER_THRESHOLD = 0.12;
-export const WATER_THRESHOLD = 0.18;
-
-// Water border
-export const MIN_WATER_BORDER = 5;

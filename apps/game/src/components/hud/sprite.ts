@@ -39,28 +39,6 @@ export function tileRectCentered(
 }
 
 /**
- * Returns inline styles that slice a rectangle from hud.png
- * using a fixed numeric scale factor.
- */
-export function spriteStyle(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  scale = 3,
-): React.CSSProperties {
-  return {
-    backgroundImage: `url('${SHEET_PATH}')`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: `${-x * scale}px ${-y * scale}px`,
-    backgroundSize: `${SHEET_W * scale}px ${SHEET_H * scale}px`,
-    width: `${w * scale}px`,
-    height: `${h * scale}px`,
-    imageRendering: 'pixelated',
-  };
-}
-
-/**
  * CSS calc() variant -- reflows automatically when --ui-scale changes.
  * No JavaScript resize listener needed.
  */

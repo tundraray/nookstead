@@ -1,9 +1,8 @@
 import type { Dispatch } from 'react';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
-import type { CellDelta } from '@/hooks/map-editor-commands';
-import { PaintCommand } from '@/hooks/map-editor-commands';
-import { bresenhamLine } from './brush-tool';
+import type { MapEditorState, MapEditorAction, CellPatchEntry, BrushShape } from '@nookstead/map-lib';
+import { bresenhamLine, stampCells, RoutingPaintCommand } from '@nookstead/map-lib';
 import type { ToolHandlers } from '../map-editor-canvas';
+import { getRetileEngine } from '../../../hooks/use-map-editor';
 
 /** Default terrain that the eraser sets cells to. */
 const DEFAULT_TERRAIN = 'deep_water';
@@ -12,14 +11,17 @@ const DEFAULT_TERRAIN = 'deep_water';
  * Creates eraser tool handlers.
  * Same interaction model as the brush (click and click-drag with Bresenham line)
  * but sets terrain to the default terrain ('deep_water') instead of the active terrain.
+ * Uses stampCells for multi-cell erasing based on brushSize/brushShape.
  */
 export function createEraserTool(
   state: MapEditorState,
-  dispatch: Dispatch<MapEditorAction>
+  dispatch: Dispatch<MapEditorAction>,
+  brushSize: number,
+  brushShape: BrushShape,
 ): ToolHandlers {
   let isDrawing = false;
   let lastTile: { x: number; y: number } | null = null;
-  const erasedCells = new Map<string, CellDelta>();
+  const erasedCells = new Map<string, CellPatchEntry>();
 
   function tryErase(x: number, y: number): void {
     // Bounds check
@@ -28,28 +30,22 @@ export function createEraserTool(
     const key = `${x},${y}`;
     if (erasedCells.has(key)) return;
 
-    const oldTerrain = state.grid[y][x].terrain;
-    if (oldTerrain === DEFAULT_TERRAIN) return;
-
-    const layerIndex = state.activeLayerIndex;
-    const activeLayer =
-      layerIndex >= 0 && layerIndex < state.layers.length
-        ? state.layers[layerIndex]
-        : null;
-    const oldFrame =
-      activeLayer && activeLayer.type === 'tile'
-        ? activeLayer.frames[y][x]
-        : 0;
+    const oldFg = state.grid[y][x].terrain;
+    if (oldFg === DEFAULT_TERRAIN) return;
 
     erasedCells.set(key, {
-      layerIndex,
       x,
       y,
-      oldTerrain,
-      newTerrain: DEFAULT_TERRAIN,
-      oldFrame,
-      newFrame: 0,
+      oldFg,
+      newFg: DEFAULT_TERRAIN,
     });
+  }
+
+  function eraseStamp(cx: number, cy: number): void {
+    const cells = stampCells(cx, cy, brushSize, brushShape, state.width, state.height);
+    for (const cell of cells) {
+      tryErase(cell.x, cell.y);
+    }
   }
 
   return {
@@ -57,7 +53,7 @@ export function createEraserTool(
       isDrawing = true;
       erasedCells.clear();
       lastTile = tile;
-      tryErase(tile.x, tile.y);
+      eraseStamp(tile.x, tile.y);
     },
 
     onMouseMove(tile: { x: number; y: number }) {
@@ -71,7 +67,7 @@ export function createEraserTool(
         tile.y
       );
       for (const pt of points) {
-        tryErase(pt.x, pt.y);
+        eraseStamp(pt.x, pt.y);
       }
       lastTile = tile;
     },
@@ -83,9 +79,13 @@ export function createEraserTool(
 
       if (erasedCells.size === 0) return;
 
-      const command = new PaintCommand(
+      const engine = getRetileEngine();
+      if (!engine) return;
+
+      const command = new RoutingPaintCommand(
         Array.from(erasedCells.values()),
-        'Erase'
+        engine,
+        state.activeLayerIndex,
       );
       dispatch({ type: 'PUSH_COMMAND', command });
       erasedCells.clear();

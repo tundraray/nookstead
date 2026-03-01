@@ -1,66 +1,48 @@
 'use client';
 
-import { useMemo } from 'react';
+import Image from 'next/image';
+import { HeroDayCycle } from '@/components/landing/HeroDayCycle';
 
 interface LoadingScreenProps {
   visible: boolean;
 }
 
 export function LoadingScreen({ visible }: LoadingScreenProps) {
-  const stars = useMemo(
-    () =>
-      Array.from({ length: 30 }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 100}%`,
-        top: `${Math.random() * 100}%`,
-        animationDelay: `${Math.random() * 4}s`,
-        animationDuration: `${2 + Math.random() * 3}s`,
-      })),
-    [],
-  );
-
   if (!visible) return null;
 
   return (
-    <div className="loading-screen">
-      {/* Twinkling stars background */}
-      <div className="loading-screen__stars" aria-hidden="true">
-        {stars.map((star) => (
-          <span
-            key={star.id}
-            className="loading-screen__star"
-            style={{
-              left: star.left,
-              top: star.top,
-              animationDelay: star.animationDelay,
-              animationDuration: star.animationDuration,
-            }}
-          />
-        ))}
-      </div>
+    <div className="loading-screen" role="status" aria-live="polite" aria-label="Loading game">
+      {/* Animated day/night sky (reused from landing page) */}
+      <HeroDayCycle />
 
+      {/* Content overlay */}
       <div className="loading-screen__content">
-        {/* Floating logo with shadow */}
         <div className="loading-screen__logo-wrapper">
-          <h1 className="loading-screen__logo">NOOKSTEAD</h1>
-          <div className="loading-screen__logo-shadow" aria-hidden="true">
-            NOOKSTEAD
-          </div>
+          <Image
+            src="/logo.png"
+            alt="Nookstead"
+            width={400}
+            height={98}
+            priority
+            className="loading-screen__logo-img"
+          />
         </div>
 
-        {/* Pixel divider */}
+        <p className="loading-screen__tagline">
+          Build your homestead in a living world
+        </p>
+
         <div className="loading-screen__divider" aria-hidden="true">
           <span />
           <span />
           <span />
         </div>
 
-        {/* Progress bar */}
-        <div className="loading-screen__bar-outer">
+        <div className="loading-screen__bar-outer" role="progressbar" aria-label="Loading progress">
           <div className="loading-screen__bar-inner" />
         </div>
 
-        <p className="loading-screen__text">Loading...</p>
+        <p className="loading-screen__text" aria-hidden="true">Loading...</p>
       </div>
     </div>
   );

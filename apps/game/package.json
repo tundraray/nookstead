@@ -5,6 +5,7 @@
   "dependencies": {
     "@colyseus/sdk": "^0.17.33",
     "@nookstead/db": "workspace:*",
+    "@nookstead/s3": "workspace:*",
     "@nookstead/map-lib": "workspace:*",
     "@nookstead/map-renderer": "workspace:*",
     "@nookstead/shared": "workspace:*",

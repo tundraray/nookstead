@@ -86,20 +86,6 @@ export function registerCustomSkin(skin: SkinDefinition): void {
 }
 
 /**
- * Clear the registered custom skin.
- */
-export function clearCustomSkin(): void {
-  customSkin = null;
-}
-
-/**
- * Returns the active custom skin, or null if none registered.
- */
-export function getCustomSkin(): SkinDefinition | null {
-  return customSkin;
-}
-
-/**
  * Returns a copy of all registered preset character skins.
  */
 export function getSkins(): SkinDefinition[] {
@@ -111,13 +97,6 @@ export function getSkins(): SkinDefinition[] {
  */
 export function getActiveSkin(): SkinDefinition {
   return customSkin ?? SKIN_REGISTRY[0];
-}
-
-/**
- * Returns the default character skin (first preset entry).
- */
-export function getDefaultSkin(): SkinDefinition {
-  return SKIN_REGISTRY[0];
 }
 
 /**

@@ -1,8 +1,8 @@
 import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD, FENCE_LAYER_DEPTH } from '../constants';
+import { MapRenderer } from '@nookstead/map-renderer';
 import {
-  EMPTY_FRAME,
   generateFenceTileset,
   getGateFrameIndex,
   GATE_BITMASK_NS,
@@ -16,10 +16,12 @@ import type {
   SerializedFenceLayer,
   FenceCellData,
 } from '@nookstead/shared';
+import { isTileLayer, isObjectLayer, findSpawnTile } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
-import { findSpawnTile } from '../systems/spawn';
+import { ObjectRenderer } from '../objects/ObjectRenderer';
+import type { GameObjectCache } from '../services/game-object-cache';
 
 /**
  * Atlas frame coordinates resolved from the fence-types API.
@@ -97,8 +99,10 @@ const FENCE_API_BASE_URL: string =
   '';
 
 export class Game extends Scene {
+  private rawMapData: MapDataPayload | null = null;
   private mapData: GeneratedMap | null = null;
-  private rt!: Phaser.GameObjects.RenderTexture;
+  private mapRenderer?: MapRenderer;
+  private objectRenderer?: ObjectRenderer;
   private hover!: Phaser.GameObjects.Graphics;
   private playerManager!: PlayerManager;
   private player!: Player;
@@ -162,11 +166,7 @@ export class Game extends Scene {
    * Receives mapData and room from LoadingScene.
    */
   init(data: { mapData: MapDataPayload; room?: Room }): void {
-    // Cast MapDataPayload to GeneratedMap at the network boundary.
-    // The structures are identical at runtime; the server generates
-    // map data using the same pipeline. The only type-level difference
-    // is SerializedCell.terrain (string) vs Cell.terrain (TerrainCellType).
-    this.mapData = data.mapData as unknown as GeneratedMap;
+    this.rawMapData = data.mapData;
     this.room = data.room ?? null;
     this.serverSpawnX = data.mapData.spawnX;
     this.serverSpawnY = data.mapData.spawnY;
@@ -175,35 +175,41 @@ export class Game extends Scene {
   }
 
   create() {
-    if (!this.mapData) {
+    if (!this.rawMapData) {
       console.error('[Game] No mapData received from LoadingScene!');
       return;
     }
 
-    const mapPixelW = MAP_WIDTH * TILE_SIZE;
-    const mapPixelH = MAP_HEIGHT * TILE_SIZE;
+    // Separate tile layers from object layers using type guards
+    const tileLayers = this.rawMapData.layers.filter(isTileLayer);
+    const objectLayers = this.rawMapData.layers.filter(isObjectLayer);
 
-    const tileScale = TILE_SIZE / FRAME_SIZE;
+    // Build a GeneratedMap-compatible object from tile layers for MapRenderer.
+    // SerializedTileLayer is structurally compatible with LayerData.
+    // The grid cast bridges SerializedCell.terrain (string) vs Cell.terrain (TerrainCellType).
+    const tileMap = {
+      width: this.rawMapData.width,
+      height: this.rawMapData.height,
+      layers: tileLayers,
+      grid: this.rawMapData.grid,
+      walkable: this.rawMapData.walkable,
+    } as unknown as GeneratedMap;
 
-    // Render all layers to a single RenderTexture.
-    this.rt = this.add.renderTexture(0, 0, mapPixelW, mapPixelH);
-    const rt = this.rt;
-    rt.setOrigin(0, 0);
+    // Keep a GeneratedMap reference for subsystems that need walkable/grid data
+    this.mapData = tileMap;
 
-    const stamp = this.add.sprite(0, 0, '').setScale(tileScale).setOrigin(0, 0).setVisible(false);
+    const mapPixelW = this.rawMapData.width * TILE_SIZE;
+    const mapPixelH = this.rawMapData.height * TILE_SIZE;
 
-    for (const layerData of this.mapData.layers) {
-      for (let y = 0; y < MAP_HEIGHT; y++) {
-        for (let x = 0; x < MAP_WIDTH; x++) {
-          const frame = layerData.frames[y][x];
-          if (frame === EMPTY_FRAME) continue;
+    // Render tile layers to a single RenderTexture via MapRenderer.
+    this.mapRenderer = new MapRenderer(this, { tileSize: TILE_SIZE, frameSize: FRAME_SIZE });
+    this.mapRenderer.render(tileMap);
 
-          stamp.setTexture(layerData.terrainKey, frame);
-          rt.draw(stamp, x * TILE_SIZE, y * TILE_SIZE);
-        }
-      }
+    // Render object layers using ObjectRenderer (if cache is available)
+    const cache = this.game.registry.get('gameObjectCache') as GameObjectCache | undefined;
+    if (cache && objectLayers.length > 0) {
+      this.objectRenderer = new ObjectRenderer(this, objectLayers, cache, TILE_SIZE);
     }
-    stamp.destroy();
 
     // Determine spawn position: prefer server-computed, fall back to client-side
     let spawnX: number;
@@ -222,6 +228,17 @@ export class Game extends Scene {
       spawnY = (spawn.tileY + 1) * TILE_SIZE;
     }
     this.player = new Player(this, spawnX, spawnY, this.mapData);
+
+    // Enable Arcade Physics on the player for collision detection
+    this.physics.add.existing(this.player);
+
+    // Register collider between player and object collision bodies (AC-5.2)
+    if (this.objectRenderer) {
+      this.physics.add.collider(
+        this.player,
+        this.objectRenderer.getCollisionGroup(),
+      );
+    }
 
     // Camera: follow player with lerp smoothing, bounded by map
     const cam = this.cameras.main;
@@ -852,6 +869,7 @@ export class Game extends Scene {
 
   shutdown(): void {
     this.playerManager.destroy();
+    this.objectRenderer?.destroy();
     if (this.fenceStamp) {
       this.fenceStamp.destroy();
       this.fenceStamp = null;

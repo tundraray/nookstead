@@ -6,24 +6,33 @@ import { world } from '../world/World';
 import { chunkManager } from '../world/ChunkManager';
 import { sessionTracker } from '../sessions';
 import { createServerPlayer } from '../models/Player';
-import { createMapGenerator } from '@nookstead/map-lib';
 import { getGameDb } from '@nookstead/db/adapters/colyseus';
-import { savePosition, loadPosition, saveMap, loadMap } from '@nookstead/db';
+import {
+  savePosition,
+  loadPosition,
+  saveMap,
+  loadMap,
+  getPublishedTemplates,
+  getGameObject,
+} from '@nookstead/db';
 import {
   PATCH_RATE_MS,
-  CHUNK_SIZE,
   AVAILABLE_SKINS,
   DEFAULT_SPAWN,
   TILE_SIZE,
   ClientMessage,
   ServerMessage,
   findSpawnTile,
+  isObjectLayer,
   type MovePayload,
   type AuthData,
   type ChunkTransitionPayload,
   type MapDataPayload,
   type Grid,
+  type SerializedLayer,
+  type CollisionZoneDef,
 } from '@nookstead/shared';
+import { applyObjectCollisionZones } from '@nookstead/map-lib';
 
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
@@ -134,40 +143,54 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         mapGrid = savedMap.grid as unknown as Grid;
         mapPayload = {
           seed: savedMap.seed,
-          width: CHUNK_SIZE,
-          height: CHUNK_SIZE,
+          width: savedMap.width,
+          height: savedMap.height,
           grid: savedMap.grid as MapDataPayload['grid'],
           layers: savedMap.layers as MapDataPayload['layers'],
           walkable: mapWalkable,
         };
       } else {
-        // New player or load failed: generate and save
-        const seed = Math.floor(Math.random() * 0x7FFFFFFF);
-        console.log(
-          `[ChunkRoom] Generating map for new player: userId=${userId}, seed=${seed}`
+        // New player or load failed: pick random published template
+        const templates = await getPublishedTemplates(
+          db,
+          'player_homestead'
         );
 
-        const generator = createMapGenerator(CHUNK_SIZE, CHUNK_SIZE);
-        const generated = generator.generate(seed);
+        if (templates.length === 0) {
+          client.send(ServerMessage.ERROR, {
+            message: 'No published template maps available',
+          });
+          return;
+        }
 
-        mapWalkable = generated.walkable;
-        mapGrid = generated.grid;
+        const template =
+          templates[Math.floor(Math.random() * templates.length)];
+        const seed = Math.floor(Math.random() * 0x7fffffff);
+
+        console.log(
+          `[ChunkRoom] Assigning published template for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
+        );
+
+        mapWalkable = (template.walkable as boolean[][]) ?? [];
+        mapGrid = template.grid as unknown as Grid;
         mapPayload = {
-          seed: generated.seed,
-          width: generated.width,
-          height: generated.height,
-          grid: generated.grid as MapDataPayload['grid'],
-          layers: generated.layers as MapDataPayload['layers'],
-          walkable: generated.walkable,
+          seed,
+          width: template.baseWidth,
+          height: template.baseHeight,
+          grid: template.grid as MapDataPayload['grid'],
+          layers: template.layers as MapDataPayload['layers'],
+          walkable: mapWalkable,
         };
 
         // Save to DB (fire and forget with error logging)
         saveMap(db, {
           userId,
-          seed: generated.seed,
-          grid: generated.grid,
-          layers: generated.layers,
-          walkable: generated.walkable,
+          seed,
+          width: template.baseWidth,
+          height: template.baseHeight,
+          grid: template.grid,
+          layers: template.layers,
+          walkable: template.walkable,
         }).catch((err: unknown) => {
           console.error(
             `[ChunkRoom] Map save failed (non-fatal): userId=${userId}`,
@@ -182,6 +205,72 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
       client.send(ServerMessage.ERROR, { message: 'Map data unavailable' });
       return;
+    }
+
+    // 3b. Apply object collision zones to walkability grid
+    if (mapWalkable) {
+      try {
+        const layers = mapPayload.layers as SerializedLayer[];
+        const placedObjects: Array<{
+          objectId: string;
+          gridX: number;
+          gridY: number;
+        }> = [];
+        const objectIdSet = new Set<string>();
+
+        for (const layer of layers) {
+          if (isObjectLayer(layer)) {
+            for (const obj of layer.objects) {
+              placedObjects.push({
+                objectId: obj.objectId,
+                gridX: obj.gridX,
+                gridY: obj.gridY,
+              });
+              objectIdSet.add(obj.objectId);
+            }
+          }
+        }
+
+        if (placedObjects.length > 0) {
+          // Fetch game object definitions from DB
+          const objectDefinitions = new Map<
+            string,
+            { collisionZones: CollisionZoneDef[] }
+          >();
+
+          const fetchResults = await Promise.all(
+            [...objectIdSet].map((id) => getGameObject(db, id))
+          );
+
+          for (const gameObj of fetchResults) {
+            if (gameObj) {
+              objectDefinitions.set(gameObj.id, {
+                collisionZones:
+                  (gameObj.collisionZones as CollisionZoneDef[]) ?? [],
+              });
+            }
+          }
+
+          applyObjectCollisionZones(
+            mapWalkable,
+            placedObjects,
+            objectDefinitions,
+            TILE_SIZE
+          );
+
+          // Update walkable in mapPayload
+          mapPayload.walkable = mapWalkable;
+
+          console.log(
+            `[ChunkRoom] Object collision zones applied: userId=${userId}, objects=${placedObjects.length}, definitions=${objectDefinitions.size}`
+          );
+        }
+      } catch (err) {
+        console.warn(
+          `[ChunkRoom] Object collision zone application failed (non-fatal): userId=${userId}`,
+          err
+        );
+      }
     }
 
     // 3. Determine spawn position
@@ -205,8 +294,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           const spawn = findSpawnTile(
             mapWalkable,
             mapGrid,
-            CHUNK_SIZE,
-            CHUNK_SIZE
+            mapPayload.width,
+            mapPayload.height
           );
           worldX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
           worldY = (spawn.tileY + 1) * TILE_SIZE;

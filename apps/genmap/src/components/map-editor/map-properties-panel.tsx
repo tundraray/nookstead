@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { MapEditorState, MapEditorAction } from '@/hooks/map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 
 interface MapPropertiesPanelProps {
   state: MapEditorState;

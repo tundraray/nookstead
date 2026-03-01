@@ -1,0 +1,1 @@
+ALTER TABLE "materials" ADD COLUMN "render_priority" integer DEFAULT 0 NOT NULL;

@@ -3,7 +3,7 @@
 import { useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import type { ZoneData } from '@nookstead/map-lib';
-import { validateAllZones } from '@/lib/zone-validation';
+import { validateAllZones } from '@nookstead/map-lib';
 
 interface ZoneChange {
   added: ZoneData[];

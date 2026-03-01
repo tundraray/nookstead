@@ -104,6 +104,7 @@ const mockLoadPosition = jest.fn<(db: unknown, userId: string) => Promise<LoadPo
 const mockSavePosition = jest.fn<(db: unknown, data: SavePositionData) => Promise<void>>();
 const mockLoadMap = jest.fn<(db: unknown, userId: string) => Promise<unknown>>();
 const mockSaveMap = jest.fn<(db: unknown, data: unknown) => Promise<void>>();
+const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
 
 jest.mock('@nookstead/db', () => ({
@@ -112,29 +113,12 @@ jest.mock('@nookstead/db', () => ({
   loadPosition: mockLoadPosition,
   loadMap: mockLoadMap,
   saveMap: mockSaveMap,
+  getPublishedTemplates: mockGetPublishedTemplates,
 }));
 
 jest.mock('@nookstead/db/adapters/colyseus', () => ({
   __esModule: true,
   getGameDb: mockGetGameDb,
-}));
-
-// Mock mapgen module
-const mockGenerate = jest.fn<(seed: number) => unknown>().mockReturnValue({
-  seed: 42,
-  width: 64,
-  height: 64,
-  grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-  layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-  walkable: [[true]],
-});
-const mockCreateMapGenerator = jest.fn<(w: number, h: number) => unknown>().mockReturnValue({
-  generate: mockGenerate,
-});
-
-jest.mock('@nookstead/map-lib', () => ({
-  __esModule: true,
-  createMapGenerator: mockCreateMapGenerator,
 }));
 
 // Mock SessionTracker singleton
@@ -155,7 +139,7 @@ jest.mock('../sessions', () => ({
 import { ChunkRoom } from './ChunkRoom';
 import { verifyNextAuthToken } from '../auth/verifyToken';
 import type { AuthData } from '@nookstead/shared';
-import { ServerMessage, CHUNK_SIZE } from '@nookstead/shared';
+import { ServerMessage } from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Type aliases for readability                                      */
@@ -188,15 +172,26 @@ describe('ChunkRoom', () => {
     mockChunkManager.canTransition.mockReturnValue(true);
     mockLoadMap.mockResolvedValue(null);
     mockSaveMap.mockResolvedValue(undefined);
-    mockGenerate.mockReturnValue({
-      seed: 42,
-      width: 64,
-      height: 64,
-      grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-      layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-      walkable: [[true]],
-    });
-    mockCreateMapGenerator.mockReturnValue({ generate: mockGenerate });
+    mockGetPublishedTemplates.mockResolvedValue([
+      {
+        id: 'template-1',
+        name: 'Homestead Template',
+        mapType: 'player_homestead',
+        baseWidth: 64,
+        baseHeight: 64,
+        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+        walkable: [[true]],
+        parameters: null,
+        constraints: null,
+        zones: null,
+        description: null,
+        version: 1,
+        isPublished: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
     mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
   });
 
@@ -513,7 +508,7 @@ describe('ChunkRoom', () => {
   /*  INT-4: Map Loading/Generation Integration                       */
   /* ================================================================ */
   describe('Map and Session Integration', () => {
-    it('onJoin new player: generates map, saves to DB, sends MAP_DATA', async () => {
+    it('onJoin new player: picks random template from DB, saves to DB, sends MAP_DATA', async () => {
       // Arrange: loadMap returns null (new player)
       mockLoadMap.mockResolvedValue(null);
 
@@ -531,27 +526,29 @@ describe('ChunkRoom', () => {
       // Verify: loadMap was called with db instance and userId
       expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-new');
 
-      // Verify: map generator was created and generate was called
-      expect(mockCreateMapGenerator).toHaveBeenCalledWith(CHUNK_SIZE, CHUNK_SIZE);
-      expect(mockGenerate).toHaveBeenCalledWith(expect.any(Number));
+      // Verify: getPublishedTemplates was called with player_homestead
+      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
+        {},
+        'player_homestead'
+      );
 
-      // Verify: saveMap was called with generated map data
+      // Verify: saveMap was called with template data
       expect(mockSaveMap).toHaveBeenCalledWith(
         {},
         expect.objectContaining({
           userId: 'user-map-new',
-          seed: 42,
-          grid: expect.anything(),
-          layers: expect.anything(),
-          walkable: expect.anything(),
+          width: 64,
+          height: 64,
+          grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+          layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+          walkable: [[true]],
         })
       );
 
-      // Verify: MAP_DATA was sent to client
+      // Verify: MAP_DATA was sent to client with template dimensions
       expect(mockClient.send).toHaveBeenCalledWith(
         ServerMessage.MAP_DATA,
         expect.objectContaining({
-          seed: 42,
           width: 64,
           height: 64,
           grid: expect.anything(),
@@ -592,8 +589,8 @@ describe('ChunkRoom', () => {
       // Verify: loadMap was called with userId
       expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-returning');
 
-      // Verify: map generator was NOT called (map loaded from DB)
-      expect(mockCreateMapGenerator).not.toHaveBeenCalled();
+      // Verify: getPublishedTemplates was NOT called (map loaded from DB)
+      expect(mockGetPublishedTemplates).not.toHaveBeenCalled();
 
       // Verify: saveMap was NOT called (no new map to save)
       expect(mockSaveMap).not.toHaveBeenCalled();
@@ -605,25 +602,15 @@ describe('ChunkRoom', () => {
       );
     });
 
-    it('onJoin map generation failure: sends ERROR, does not crash', async () => {
-      // Arrange: loadMap returns null, generator throws
+    it('onJoin no published templates available: sends ERROR, does not crash', async () => {
+      // Arrange: loadMap returns null, no published templates in DB
       mockLoadMap.mockResolvedValue(null);
-      mockGenerate.mockImplementation(() => {
-        throw new Error('Generation failed');
-      });
-      mockCreateMapGenerator.mockReturnValue({ generate: mockGenerate });
+      mockGetPublishedTemplates.mockResolvedValue([]);
 
       const authData: AuthData = {
         userId: 'user-map-error',
         email: 'maperr@test.com',
       };
-
-      // Suppress console.error output during this test
-      const consoleErrorSpy = jest
-        .spyOn(console, 'error')
-        .mockImplementation(() => {
-          /* suppress output */
-        });
 
       // New player with no saved position gets targetChunkId = 'player:user-map-error'
       room.onCreate({ chunkId: 'player:user-map-error' });
@@ -633,10 +620,16 @@ describe('ChunkRoom', () => {
         room.onJoin(mockClient as never, {}, authData)
       ).resolves.not.toThrow();
 
+      // Verify: getPublishedTemplates was called
+      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
+        {},
+        'player_homestead'
+      );
+
       // Verify: ERROR message was sent to client
       expect(mockClient.send).toHaveBeenCalledWith(
         ServerMessage.ERROR,
-        expect.objectContaining({ message: expect.any(String) })
+        { message: 'No published template maps available' }
       );
 
       // Verify: MAP_DATA was NOT sent
@@ -645,7 +638,8 @@ describe('ChunkRoom', () => {
       );
       expect(mapDataCall).toBeUndefined();
 
-      consoleErrorSpy.mockRestore();
+      // Verify: saveMap was NOT called (no template to save)
+      expect(mockSaveMap).not.toHaveBeenCalled();
     });
 
     it('onAuth with duplicate session: calls checkAndKick with userId', async () => {

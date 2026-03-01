@@ -55,6 +55,8 @@ describe('MapService', () => {
       const data: SaveMapData = {
         userId: 'user-001',
         seed: 42,
+        width: 2,
+        height: 1,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
@@ -67,6 +69,8 @@ describe('MapService', () => {
         expect.objectContaining({
           userId: 'user-001',
           seed: 42,
+          width: 2,
+          height: 1,
           grid: testGrid,
           layers: testLayers,
           walkable: testWalkable,
@@ -77,6 +81,8 @@ describe('MapService', () => {
           target: maps.userId,
           set: expect.objectContaining({
             seed: 42,
+            width: 2,
+            height: 1,
             grid: testGrid,
             layers: testLayers,
             walkable: testWalkable,
@@ -92,6 +98,8 @@ describe('MapService', () => {
       await saveMap(db, {
         userId: 'user-002',
         seed: 100,
+        width: 2,
+        height: 1,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
@@ -101,6 +109,8 @@ describe('MapService', () => {
       await saveMap(db, {
         userId: 'user-002',
         seed: 200,
+        width: 2,
+        height: 1,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
@@ -115,6 +125,8 @@ describe('MapService', () => {
       expect(secondUpsertCall.set).toEqual(
         expect.objectContaining({
           seed: 200,
+          width: 2,
+          height: 1,
           grid: testGrid,
           layers: testLayers,
           walkable: testWalkable,
@@ -128,6 +140,8 @@ describe('MapService', () => {
       const { db, mocks } = createMockDb();
       const expectedMap = {
         seed: 42,
+        width: 2,
+        height: 1,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
@@ -141,6 +155,8 @@ describe('MapService', () => {
       expect(mocks.selectFrom).toHaveBeenCalledWith(maps);
       expect(loaded).toEqual({
         seed: 42,
+        width: 2,
+        height: 1,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
@@ -172,6 +188,8 @@ describe('MapService', () => {
       const data: SaveMapData = {
         userId: 'user-004',
         seed: 999,
+        width: 1,
+        height: 1,
         grid: complexGrid,
         layers: complexLayers,
         walkable: complexWalkable,
@@ -184,6 +202,8 @@ describe('MapService', () => {
         expect.objectContaining({
           userId: 'user-004',
           seed: 999,
+          width: 1,
+          height: 1,
           grid: complexGrid,
           layers: complexLayers,
           walkable: complexWalkable,
@@ -194,6 +214,8 @@ describe('MapService', () => {
       mocks.selectLimit.mockResolvedValue([
         {
           seed: 999,
+          width: 1,
+          height: 1,
           grid: complexGrid,
           layers: complexLayers,
           walkable: complexWalkable,
@@ -204,6 +226,8 @@ describe('MapService', () => {
 
       expect(result).not.toBeNull();
       expect(result?.seed).toBe(999);
+      expect(result?.width).toBe(1);
+      expect(result?.height).toBe(1);
       expect(result?.grid).toEqual(complexGrid);
       expect(result?.layers).toEqual(complexLayers);
       expect(result?.walkable).toEqual(complexWalkable);

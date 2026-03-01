@@ -23,3 +23,9 @@
 - Task spec had `state.mapName` but actual MapEditorState field is `state.name`
 - Task spec showed `zoneDispatch` but actual canvas uses individual zone props (zones, selectedZoneId, zoneVisibility)
 - Always check actual component interfaces rather than trusting task spec pseudocode exactly
+
+## Phaser Naming Conflicts
+- Phaser `Scene` base class has a public `renderer` property (type `CanvasRenderer | WebGLRenderer`)
+- Do NOT name a private field `renderer` in Scene subclasses -- use `mapRenderer` or similar
+- `noUnusedLocals: true` in tsconfig.base.json also flags unused private class members (TS6133)
+- No `typecheck` Nx target for `game` project either; use `npx tsc --noEmit` from `apps/game/`

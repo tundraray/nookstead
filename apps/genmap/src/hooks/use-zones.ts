@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import type { ZoneData, ZoneVertex } from '@nookstead/map-lib';
-import type { MapEditorState, MapEditorAction } from './map-editor-types';
+import type { MapEditorState, MapEditorAction } from '@nookstead/map-lib';
 
 export interface UseZonesReturn {
   zones: ZoneData[];

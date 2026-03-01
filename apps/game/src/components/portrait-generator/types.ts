@@ -19,11 +19,14 @@ export interface PortraitState {
   animationType: AnimationType;
 }
 
+import { ANIMATION_FPS } from '@/game/constants';
+
+export { ANIMATION_FPS };
+
 export const FRAME_WIDTH = 32;
 export const FRAME_HEIGHT = 32;
 export const SHEET_COLUMNS = 10;
 export const SHEET_ROWS = 3;
-export const ANIMATION_FPS = 8;
 
 /** Spritesheet row index for each animated type. idle is static (frame 0 of talk row). */
 export const ANIM_ROW: Record<AnimationType, number> = {

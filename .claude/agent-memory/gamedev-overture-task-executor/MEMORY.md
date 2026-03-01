@@ -45,6 +45,13 @@
 - Fence autotile engine at `packages/map-lib/src/core/fence-autotile.ts` - pure functions, zero imports
 - Exports added to `packages/map-lib/src/index.ts` (no core/index.ts barrel file)
 
+## Map-lib Declaration Generation
+- Genmap's tsconfig.json uses project references (`references: [{ path: "../../packages/map-lib" }]`)
+- With project references, tsc resolves `@nookstead/map-lib` via `dist/*.d.ts` declarations, NOT source files
+- When new modules are added to map-lib (e.g., tileset-registry, terrain-renderer), declarations must be regenerated via `pnpm nx typecheck map-lib` before genmap can see them
+- If map-lib typecheck fails (e.g., legacy code errors), declarations are NOT generated and genmap gets "has no exported member" errors
+- Fix: resolve map-lib type errors first, then run `pnpm nx typecheck map-lib` to regenerate declarations
+
 ## Canvas Coordinate Conversion
 - `pixelToTile` function in map-editor-canvas.tsx already handles screen->tile conversion
 - Uses `Math.floor(worldCoord / TILE_SIZE)` which produces integer tile coords

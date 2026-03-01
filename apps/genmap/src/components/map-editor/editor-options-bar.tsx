@@ -21,7 +21,7 @@ import type {
   MapEditorState,
   MapEditorAction,
   EditorTool,
-} from '@/hooks/map-editor-types';
+} from '@nookstead/map-lib';
 import type { Camera } from './canvas-renderer';
 import type { ZoneType } from '@nookstead/map-lib';
 
@@ -108,6 +108,8 @@ export function EditorOptionsBar({
 }: EditorOptionsBarProps) {
   const isZoneTool =
     state.activeTool === 'zone-rect' || state.activeTool === 'zone-poly';
+  const isBrushLikeTool =
+    state.activeTool === 'brush' || state.activeTool === 'eraser';
 
   /* ---- zoom handlers ---- */
 
@@ -177,6 +179,12 @@ export function EditorOptionsBar({
         case 'w':
           onToggleWalkability();
           break;
+        case '[':
+          dispatch({ type: 'ADJUST_BRUSH_SIZE', delta: -1 });
+          break;
+        case ']':
+          dispatch({ type: 'ADJUST_BRUSH_SIZE', delta: 1 });
+          break;
       }
     }
 
@@ -196,7 +204,7 @@ export function EditorOptionsBar({
         <div
           className="flex items-center gap-1.5 overflow-hidden"
           style={{
-            maxWidth: isZoneTool || toolControls ? 400 : 120,
+            maxWidth: isZoneTool ? 280 : isBrushLikeTool ? 340 : toolControls ? 400 : 120,
             opacity: 1,
             transition: 'max-width 150ms ease, opacity 150ms ease',
           }}
@@ -221,6 +229,60 @@ export function EditorOptionsBar({
                 </option>
               ))}
             </select>
+          )}
+
+          {/* Brush size slider + shape toggle (brush / eraser only) */}
+          {isBrushLikeTool && (
+            <>
+              <input
+                type="range"
+                min={1}
+                max={15}
+                value={state.brushSize}
+                onChange={(e) =>
+                  dispatch({ type: 'SET_BRUSH_SIZE', size: Number(e.target.value) })
+                }
+                className="h-3 w-20 accent-primary"
+                aria-label="Brush size"
+              />
+              <span className="text-[11px] tabular-nums w-5 text-center">
+                {state.brushSize}
+              </span>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-6 w-6', state.brushShape === 'circle' && 'bg-accent')}
+                    onClick={() => dispatch({ type: 'SET_BRUSH_SHAPE', shape: 'circle' })}
+                    aria-label="Circle brush"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14">
+                      <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Circle Brush</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn('h-6 w-6', state.brushShape === 'square' && 'bg-accent')}
+                    onClick={() => dispatch({ type: 'SET_BRUSH_SHAPE', shape: 'square' })}
+                    aria-label="Square brush"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14">
+                      <rect x="2" y="2" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                    </svg>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Square Brush</TooltipContent>
+              </Tooltip>
+            </>
           )}
         </div>
 

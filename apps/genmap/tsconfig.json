@@ -54,6 +54,9 @@
       "path": "../../packages/map-lib"
     },
     {
+      "path": "../../packages/s3"
+    },
+    {
       "path": "../../packages/db"
     }
   ]

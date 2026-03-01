@@ -9,6 +9,8 @@ import { maps } from '../schema/maps';
 export interface SaveMapData {
   userId: string;
   seed: number;
+  width: number;
+  height: number;
   grid: unknown;
   layers: unknown;
   walkable: unknown;
@@ -20,6 +22,8 @@ export interface SaveMapData {
  */
 export interface LoadMapResult {
   seed: number;
+  width: number;
+  height: number;
   grid: unknown;
   layers: unknown;
   walkable: unknown;
@@ -37,13 +41,15 @@ export async function saveMap(
   db: DrizzleClient,
   data: SaveMapData
 ): Promise<void> {
-  const { userId, seed, grid, layers, walkable } = data;
+  const { userId, seed, width, height, grid, layers, walkable } = data;
 
   await db
     .insert(maps)
     .values({
       userId,
       seed,
+      width,
+      height,
       grid,
       layers,
       walkable,
@@ -53,6 +59,8 @@ export async function saveMap(
       target: maps.userId,
       set: {
         seed,
+        width,
+        height,
         grid,
         layers,
         walkable,
@@ -77,6 +85,8 @@ export async function loadMap(
   const result = await db
     .select({
       seed: maps.seed,
+      width: maps.width,
+      height: maps.height,
       grid: maps.grid,
       layers: maps.layers,
       walkable: maps.walkable,

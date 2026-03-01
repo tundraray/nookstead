@@ -61,8 +61,29 @@
     {
       "idx": 8,
       "version": "7",
+      "when": 1771636163507,
+      "tag": "0008_chubby_magma",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1772325883723,
+      "tag": "0009_amazing_hitman",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1772327392447,
+      "tag": "0010_high_frightful_four",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
       "when": 1771780676191,
-      "tag": "0008_acoustic_black_queen",
+      "tag": "0011_acoustic_black_queen",
       "breakpoints": true
     }
   ]

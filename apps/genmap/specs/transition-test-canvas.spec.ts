@@ -1,7 +1,12 @@
-import { computeBitmask } from '../src/components/transition-test-canvas';
-import { getFrame } from '@nookstead/map-lib';
+import { computeNeighborMask, getFrame } from '@nookstead/map-lib';
+import type { TilesetInfo, Cell } from '@nookstead/map-lib';
 
 type CellValue = 'A' | 'B';
+
+const TEST_TILESETS: ReadonlyArray<TilesetInfo> = [
+  { key: 'A', name: 'A' },
+  { key: 'B', name: 'B' },
+];
 
 function createGrid(size: number, fill: CellValue = 'B'): CellValue[][] {
   return Array.from({ length: size }, () =>
@@ -9,12 +14,37 @@ function createGrid(size: number, fill: CellValue = 'B'): CellValue[][] {
   );
 }
 
-describe('computeBitmask', () => {
+/**
+ * Convert a CellValue grid to a Cell-compatible grid for computeNeighborMask.
+ * Uses a type assertion because 'A'/'B' are not production TerrainCellType values.
+ */
+function toCellGrid(grid: CellValue[][]): Cell[][] {
+  return grid.map((row) =>
+    row.map((val) => ({ terrain: val, elevation: 0, meta: {} }))
+  ) as unknown as Cell[][];
+}
+
+/**
+ * Wrapper that replicates the old computeBitmask(grid, row, col) interface
+ * using the new computeNeighborMask from map-lib.
+ * Note: x = col, y = row (argument order swap from old API).
+ */
+function computeMask(grid: CellValue[][], row: number, col: number): number {
+  const cellGrid = toCellGrid(grid);
+  const height = grid.length;
+  const width = grid[0].length;
+  return computeNeighborMask(
+    cellGrid, col, row, width, height, 'A', TEST_TILESETS,
+    { outOfBoundsMatches: false },
+  );
+}
+
+describe('computeNeighborMask (via transition-test-canvas adapter)', () => {
   it('returns 0 for an isolated A cell surrounded by B', () => {
     const grid = createGrid(10);
     grid[5][5] = 'A';
 
-    const mask = computeBitmask(grid, 5, 5);
+    const mask = computeMask(grid, 5, 5);
     expect(mask).toBe(0);
 
     // getFrame(0) should return the isolated frame (47)
@@ -29,7 +59,7 @@ describe('computeBitmask', () => {
       }
     }
 
-    const mask = computeBitmask(grid, 5, 5);
+    const mask = computeMask(grid, 5, 5);
     expect(mask).toBe(255);
 
     // getFrame(255) should return the solid/fully-enclosed frame (1)
@@ -46,7 +76,7 @@ describe('computeBitmask', () => {
 
     // Top-center of the block (row=4, col=5) has neighbors: E, SE, S, SW, W
     // N=0, NE=0, E=4, SE=8, S=16, SW=32, W=64, NW=0
-    const mask = computeBitmask(grid, 4, 5);
+    const mask = computeMask(grid, 4, 5);
     // E + SE + S + SW + W = 4 + 8 + 16 + 32 + 64 = 124
     expect(mask).toBe(124);
   });
@@ -61,7 +91,7 @@ describe('computeBitmask', () => {
 
     // Top-left corner (row=4, col=4) has neighbors: E, SE, S
     // E=4, SE=8, S=16
-    const mask = computeBitmask(grid, 4, 4);
+    const mask = computeMask(grid, 4, 4);
     expect(mask).toBe(4 + 8 + 16); // 28
   });
 
@@ -72,16 +102,16 @@ describe('computeBitmask', () => {
     grid[1][0] = 'A';
     grid[1][1] = 'A';
 
-    // (0,0): out-of-bounds neighbors treated as absent
+    // (0,0): out-of-bounds neighbors treated as absent (outOfBoundsMatches: false)
     // E=4, SE=8, S=16
-    const mask = computeBitmask(grid, 0, 0);
+    const mask = computeMask(grid, 0, 0);
     expect(mask).toBe(4 + 8 + 16); // 28
   });
 
   it('returns 0 for a B cell (not A)', () => {
     const grid = createGrid(10);
-    // All B, asking about a B cell
-    const mask = computeBitmask(grid, 5, 5);
+    // All B, asking about a B cell with terrainKey 'A'
+    const mask = computeMask(grid, 5, 5);
     // All neighbors are B, not A, so mask is 0
     expect(mask).toBe(0);
   });
@@ -93,7 +123,7 @@ describe('computeBitmask', () => {
     grid[5][5] = 'A';
 
     // Middle cell (4,5): N=1, S=16
-    const mask = computeBitmask(grid, 4, 5);
+    const mask = computeMask(grid, 4, 5);
     expect(mask).toBe(1 + 16); // 17
     // Frame for vertical corridor
     expect(getFrame(mask)).toBe(33);
@@ -106,7 +136,7 @@ describe('computeBitmask', () => {
     grid[5][5] = 'A';
 
     // Middle cell (5,4): E=4, W=64
-    const mask = computeBitmask(grid, 5, 4);
+    const mask = computeMask(grid, 5, 4);
     expect(mask).toBe(4 + 64); // 68
     // Frame for horizontal corridor
     expect(getFrame(mask)).toBe(34);

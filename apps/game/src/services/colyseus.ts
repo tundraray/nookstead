@@ -18,20 +18,11 @@
 
 import { Client, Room } from '@colyseus/sdk';
 import {
-  COLYSEUS_PORT,
   CHUNK_ROOM_NAME,
   ServerMessage,
 } from '@nookstead/shared';
 import type { ChunkRoomState, ChunkTransitionPayload } from '@nookstead/shared';
-
-/**
- * Default Colyseus server URL, constructed from the NEXT_PUBLIC_COLYSEUS_URL
- * environment variable with a fallback to localhost using the shared
- * COLYSEUS_PORT constant.
- */
-const COLYSEUS_URL =
-  process.env['NEXT_PUBLIC_COLYSEUS_URL'] ??
-  `http://localhost:${COLYSEUS_PORT}`;
+import { getRuntimeConfig } from '@/config/runtime';
 
 /** Singleton Colyseus client instance. */
 let client: Client | null = null;
@@ -68,14 +59,15 @@ async function fetchSessionToken(): Promise<string | null> {
 /**
  * Get or create the singleton Colyseus client.
  *
- * The client connects to the URL specified by the `NEXT_PUBLIC_COLYSEUS_URL`
- * environment variable, falling back to `http://localhost:2567`.
+ * The client connects to the URL provided by `COLYSEUS_URL` env var
+ * (injected via SSR through RuntimeConfigProvider), falling back to
+ * `ws://localhost:2567`.
  *
  * @returns The Colyseus Client instance.
  */
 export function getClient(): Client {
   if (!client) {
-    client = new Client(COLYSEUS_URL);
+    client = new Client(getRuntimeConfig().colyseusUrl);
   }
   return client;
 }

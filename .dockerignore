@@ -1,0 +1,34 @@
+node_modules
+dist
+.next
+.git
+.gitignore
+
+# Test files
+**/*.spec.ts
+**/*.spec.tsx
+**/*.test.ts
+**/*.test.tsx
+apps/game-e2e
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Dev artifacts
+.screenshots
+coverage
+.nx/cache
+.nx/workspace-data
+tmp
+
+# Env files (secrets)
+.env
+.env.local
+.env.*.local
+
+# Docker
+docker-compose*.yml
+Dockerfile*

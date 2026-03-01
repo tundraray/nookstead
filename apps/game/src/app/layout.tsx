@@ -1,8 +1,13 @@
 import './global.css';
 import { AuthProvider } from '@/components/auth/AuthProvider';
+import { RuntimeConfigProvider } from '@/config/RuntimeConfigProvider';
+import { connection } from 'next/server';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env['SITE_URL'] || 'https://nookstead.land'
+  ),
   title: 'Nookstead — Pixel Art MMO',
   description:
     'Build your homestead in a living world populated by AI-driven NPCs. A 2D pixel art MMO farming RPG.',
@@ -18,11 +23,12 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await connection();
   return (
     <html lang="en">
       <head>
@@ -38,6 +44,9 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <RuntimeConfigProvider
+          colyseusUrl={process.env['COLYSEUS_URL']}
+        />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

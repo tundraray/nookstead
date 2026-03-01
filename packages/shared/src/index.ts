@@ -1,6 +1,5 @@
 export type {
   PlayerState,
-  GameRoomState,
   AuthData,
   ChunkRoomState,
   Location,
@@ -15,13 +14,8 @@ export type {
 } from './types/messages';
 export {
   COLYSEUS_PORT,
-  TICK_RATE,
-  TICK_INTERVAL_MS,
   PATCH_RATE_MS,
-  ROOM_NAME,
-  MAX_PLAYERS_PER_ROOM,
   AVAILABLE_SKINS,
-  POSITION_SYNC_INTERVAL_MS,
   CHUNK_SIZE,
   CHUNK_ROOM_NAME,
   MAX_SPEED,
@@ -33,14 +27,6 @@ export {
   INTERPOLATION_SPEED,
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
-  NOISE_OCTAVES,
-  NOISE_LACUNARITY,
-  NOISE_PERSISTENCE,
-  NOISE_SCALE,
-  ELEVATION_EXPONENT,
-  DEEP_WATER_THRESHOLD,
-  WATER_THRESHOLD,
-  MIN_WATER_BORDER,
 } from './constants';
 export type { SkinKey } from './constants';
 // Spawn system
@@ -54,14 +40,21 @@ export type {
   Grid,
   LayerData,
   GeneratedMap,
-  GenerationPass,
-  LayerPass,
   SerializedCell,
   SerializedGrid,
+  SerializedTileLayer,
+  SerializedPlacedObject,
+  SerializedObjectLayer,
   SerializedLayer,
   MapDataPayload,
+  GameObjectLayerDef,
+  CollisionZoneDef,
+  GameObjectDefinition,
+  SpriteMeta,
+  AtlasFrameMeta,
   SessionKickedPayload,
 } from './types/map';
+export { isTileLayer, isObjectLayer } from './types/map';
 // Fence types (from types/fence-layer.ts)
 export type {
   FenceCellData,

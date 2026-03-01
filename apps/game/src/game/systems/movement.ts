@@ -8,7 +8,7 @@
  * No Phaser dependency -- framework-agnostic logic.
  */
 
-import { getSurfaceProperties } from '@nookstead/map-lib';
+import { getMaterialProperties } from '../services/material-cache';
 import type { Grid } from '@nookstead/shared';
 
 /** Input parameters for a single movement calculation. */
@@ -110,7 +110,7 @@ export function getTerrainSpeedModifier(
   const tileX = pixelToTile(x, tileSize);
   const tileY = pixelToTile(y, tileSize);
   const terrain = grid[tileY][tileX].terrain;
-  return getSurfaceProperties(terrain).speedModifier;
+  return getMaterialProperties(terrain).speedModifier;
 }
 
 /**

@@ -11,6 +11,12 @@ const config: Phaser.Types.Core.GameConfig = {
   pixelArt: true,
   roundPixels: true,
   antialias: false,
+  physics: {
+    default: 'arcade',
+    arcade: {
+      debug: false,
+    },
+  },
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
