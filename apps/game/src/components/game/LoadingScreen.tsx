@@ -11,7 +11,7 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
   if (!visible) return null;
 
   return (
-    <div className="loading-screen">
+    <div className="loading-screen" role="status" aria-live="polite" aria-label="Loading game">
       {/* Animated day/night sky (reused from landing page) */}
       <HeroDayCycle />
 
@@ -38,11 +38,11 @@ export function LoadingScreen({ visible }: LoadingScreenProps) {
           <span />
         </div>
 
-        <div className="loading-screen__bar-outer">
+        <div className="loading-screen__bar-outer" role="progressbar" aria-label="Loading progress">
           <div className="loading-screen__bar-inner" />
         </div>
 
-        <p className="loading-screen__text">Loading...</p>
+        <p className="loading-screen__text" aria-hidden="true">Loading...</p>
       </div>
     </div>
   );
