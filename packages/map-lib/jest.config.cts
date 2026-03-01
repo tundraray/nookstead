@@ -12,5 +12,6 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js'],
   coverageDirectory: '../../coverage/packages/map-lib',
+  testPathIgnorePatterns: ['\\.performance\\.spec\\.ts$'],
   testEnvironment: 'node',
 };
