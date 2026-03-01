@@ -14,7 +14,8 @@ services:
   server:
     build:
       context: .
-      dockerfile: docker/Dockerfile.server
+      dockerfile: docker/Dockerfile
+      target: server
     ports:
       - '2567:2567'
     env_file: .env
@@ -27,7 +28,8 @@ services:
   game:
     build:
       context: .
-      dockerfile: docker/Dockerfile.game
+      dockerfile: docker/Dockerfile
+      target: game
     ports:
       - '3000:3000'
     env_file: .env
@@ -35,7 +37,8 @@ services:
   genmap:
     build:
       context: .
-      dockerfile: docker/Dockerfile.genmap
+      dockerfile: docker/Dockerfile
+      target: genmap
     ports:
       - '3001:3001'
     env_file: .env

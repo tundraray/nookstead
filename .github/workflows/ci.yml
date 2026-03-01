@@ -102,39 +102,40 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.server
+          file: docker/Dockerfile
+          target: server
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/nookstead-server:v${{ steps.next-version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/nookstead-server:latest
-          cache-from: type=gha,scope=server
-          cache-to: type=gha,mode=max,scope=server
+          cache-from: type=gha,scope=docker-build
+          cache-to: type=gha,mode=max,scope=docker-build
 
       - name: Build & push game image
         if: steps.next-version.outputs.version != ''
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.game
+          file: docker/Dockerfile
+          target: game
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/nookstead-game:v${{ steps.next-version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/nookstead-game:latest
-          cache-from: type=gha,scope=game
-          cache-to: type=gha,mode=max,scope=game
+          cache-from: type=gha,scope=docker-build
 
       - name: Build & push genmap image
         if: steps.next-version.outputs.version != ''
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile.genmap
+          file: docker/Dockerfile
+          target: genmap
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/nookstead-genmap:v${{ steps.next-version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/nookstead-genmap:latest
-          cache-from: type=gha,scope=genmap
-          cache-to: type=gha,mode=max,scope=genmap
+          cache-from: type=gha,scope=docker-build
 
       # 3. Create tag & GitHub release only after Docker images are pushed
       - name: Create release
