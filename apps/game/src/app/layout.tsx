@@ -5,6 +5,9 @@ import { connection } from 'next/server';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env['SITE_URL'] || 'https://nookstead.land'
+  ),
   title: 'Nookstead — Pixel Art MMO',
   description:
     'Build your homestead in a living world populated by AI-driven NPCs. A 2D pixel art MMO farming RPG.',
