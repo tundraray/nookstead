@@ -32,6 +32,8 @@ export class PlayerManager {
   private detachCallbacks: (() => void)[] = [];
   /** Local Player entity for reconciliation wiring (FR-16). */
   private localPlayer: Player | null = null;
+  /** Set to true before client-initiated disconnect to suppress reconnect flow. */
+  private intentionalLeave = false;
 
   constructor(scene: Scene) {
     this.scene = scene;
@@ -255,7 +257,9 @@ export class PlayerManager {
 
     this.room.onLeave((code) => {
       console.log(`[PlayerManager] Left room, code: ${code}`);
-      EventBus.emit('multiplayer:disconnected', code);
+      if (!this.intentionalLeave) {
+        EventBus.emit('multiplayer:disconnected', code);
+      }
     });
 
     this.room.onError((code, message) => {
@@ -307,6 +311,8 @@ export class PlayerManager {
   }
 
   destroy(): void {
+    this.intentionalLeave = true;
+
     for (const detach of this.detachCallbacks) {
       detach();
     }

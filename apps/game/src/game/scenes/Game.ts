@@ -22,6 +22,7 @@ export class Game extends Scene {
   private serverSpawnX: number | undefined;
   private serverSpawnY: number | undefined;
   private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
+  private disconnectHandler?: () => void;
 
   constructor() {
     super('Game');
@@ -210,6 +211,13 @@ export class Game extends Scene {
     this.playerManager.setLocalPlayer(this.player);
     this.playerManager.connect(this.room ?? undefined);
 
+    // Return to LoadingScene (which has retry logic) on unexpected server disconnect
+    this.disconnectHandler = () => {
+      console.log('[Game] Server disconnected, returning to LoadingScene');
+      this.scene.start('Loading');
+    };
+    EventBus.on('multiplayer:disconnected', this.disconnectHandler);
+
     EventBus.emit('current-scene-ready', this);
   }
 
@@ -252,6 +260,10 @@ export class Game extends Scene {
   }
 
   shutdown(): void {
+    if (this.disconnectHandler) {
+      EventBus.off('multiplayer:disconnected', this.disconnectHandler);
+      this.disconnectHandler = undefined;
+    }
     this.playerManager.destroy();
     this.objectRenderer?.destroy();
   }
