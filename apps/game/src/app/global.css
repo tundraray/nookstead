@@ -12,6 +12,7 @@
 
 :root {
   --tile-size: 32px;
+  --font-chat: 'JetBrains Mono', 'Space Mono', 'Geist Mono', ui-monospace, monospace;
 }
 
 html {
@@ -1186,7 +1187,8 @@ button {
 /* --- Chat Modal Sizing --- */
 
 .chat-modal {
-  width: 380px;
+  font-feature-settings: 'rlig' 1, 'calt' 1;
+  width: min(600px, 90vw);
 }
 
 .chat-modal__body {
@@ -1266,7 +1268,8 @@ button {
 }
 
 .chat-modal__text {
-  font-size: 8px;
+  font-family: var(--font-chat);
+  font-size: 14px;
 }
 
 /* --- Typing Indicator --- */
@@ -1313,8 +1316,8 @@ button {
   flex: 1;
   min-width: 0;
   padding: 6px 8px;
-  font-family: var(--font-pixel, 'Press Start 2P', monospace);
-  font-size: 8px;
+  font-family: var(--font-chat);
+  font-size: 14px;
   color: #3b2819;
   background: #f2e2c4;
   border: 2px solid #6b4226;
@@ -1339,7 +1342,7 @@ button {
   flex-shrink: 0;
   padding: 6px 12px;
   font-family: var(--font-pixel, 'Press Start 2P', monospace);
-  font-size: 8px;
+  font-size: 14px;
   color: #0a0a1a;
   background: #48c7aa;
   border: 2px solid #3aad94;
