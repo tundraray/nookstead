@@ -25,6 +25,7 @@ import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
 import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
+import { findNearestWalkable } from '../systems/displacement';
 
 export class Player extends Phaser.GameObjects.Sprite {
   public readonly sheetKey: string;
@@ -49,6 +50,8 @@ export class Player extends Phaser.GameObjects.Sprite {
   authoritativeY: number;
   /** Whether the player is currently interpolating toward the authoritative position. */
   private isInterpolating = false;
+  /** True while the player is displaced — suppresses repeated spiral searches. */
+  private displaced = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -109,6 +112,36 @@ export class Player extends Phaser.GameObjects.Sprite {
    */
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
+
+    // Displacement check: if on a non-walkable tile, relocate to nearest walkable
+    const tileX = Math.floor(this.x / TILE_SIZE);
+    const tileY = Math.floor(this.y / TILE_SIZE) - 1; // -1: feet anchor (origin 0.5, 1.0)
+    const walkable = this.mapData.walkable;
+    if (
+      walkable &&
+      (tileX < 0 ||
+        tileX >= MAP_WIDTH ||
+        tileY < 0 ||
+        tileY >= MAP_HEIGHT ||
+        !walkable[tileY]?.[tileX])
+    ) {
+      if (!this.displaced) {
+        const nearby = findNearestWalkable(
+          tileX,
+          tileY,
+          walkable,
+          MAP_WIDTH,
+          MAP_HEIGHT,
+        );
+        if (nearby) {
+          this.x = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
+          this.y = (nearby.tileY + 1) * TILE_SIZE;
+        }
+        this.displaced = true;
+      }
+    } else {
+      this.displaced = false;
+    }
 
     // Y-sorted depth: player renders in front of objects with lower y (AC-4.6)
     this.setDepth(this.y);

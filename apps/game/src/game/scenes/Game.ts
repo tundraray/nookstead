@@ -9,6 +9,7 @@ import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
 import type { GameObjectCache } from '../services/game-object-cache';
+import { findNearestWalkable } from '../systems/displacement';
 
 export class Game extends Scene {
   private rawMapData: MapDataPayload | null = null;
@@ -95,7 +96,7 @@ export class Game extends Scene {
          !walkable[tileY]?.[tileX])
       ) {
         // Saved position is unwalkable — find nearest walkable tile
-        const nearby = this.findNearbyWalkable(tileX, tileY, walkable);
+        const nearby = findNearestWalkable(tileX, tileY, walkable, MAP_WIDTH, MAP_HEIGHT);
         if (nearby) {
           spawnX = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
           spawnY = (nearby.tileY + 1) * TILE_SIZE;
@@ -228,35 +229,6 @@ export class Game extends Scene {
   override update(_time: number, delta: number): void {
     // Drive interpolation on all remote player sprites
     this.playerManager.update(delta);
-  }
-
-  /**
-   * Spiral search outward from (cx, cy) for the nearest walkable tile.
-   * Returns null if no walkable tile found within search radius.
-   */
-  private findNearbyWalkable(
-    cx: number,
-    cy: number,
-    walkable: boolean[][],
-  ): { tileX: number; tileY: number } | null {
-    const maxRadius = 10;
-    for (let r = 1; r <= maxRadius; r++) {
-      for (let dy = -r; dy <= r; dy++) {
-        for (let dx = -r; dx <= r; dx++) {
-          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue; // perimeter only
-          const tx = cx + dx;
-          const ty = cy + dy;
-          if (
-            tx >= 0 && tx < MAP_WIDTH &&
-            ty >= 0 && ty < MAP_HEIGHT &&
-            walkable[ty]?.[tx]
-          ) {
-            return { tileX: tx, tileY: ty };
-          }
-        }
-      }
-    }
-    return null;
   }
 
   shutdown(): void {
