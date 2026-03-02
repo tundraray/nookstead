@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { EventBus } from '@/game/EventBus';
+import { isTextInputFocused } from '@/game/input/InputController';
 import { getRoom } from '@/services/colyseus';
 import { ClientMessage } from '@nookstead/shared';
 import { ColyseusTransport } from '@/services/ColyseusTransport';
@@ -36,6 +37,8 @@ export function HUD({ uiScale }: HUDProps) {
   // Keyboard: hotbar slot selection (1-0)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (isTextInputFocused()) return;
+
       const match = e.code.match(/^Digit(\d)$/);
       if (match) {
         const digit = parseInt(match[1], 10);

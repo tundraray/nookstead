@@ -95,6 +95,9 @@ function createMockScene(): any {
     },
     input: {
       keyboard: {
+        enabled: true,
+        disableGlobalCapture: jest.fn(),
+        resetKeys: jest.fn(),
         createCursorKeys: jest.fn(() => ({
           up: { ...mockKey },
           down: { ...mockKey },
