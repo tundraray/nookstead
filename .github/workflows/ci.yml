@@ -43,7 +43,7 @@ jobs:
       - run: pnpm nx affected -t build --skip-nx-cache
       # Nx Cloud recommends fixes for failures to help you get CI green faster. Learn more: https://nx.dev/ci/features/self-healing-ci
       - run: pnpm nx fix-ci
-        if: ${{ always() && github.event.pull_request.draft != true }}
+        if: ${{ success() && github.event.pull_request.draft != true }}
 
   release:
     needs: main
