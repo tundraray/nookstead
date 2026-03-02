@@ -52,7 +52,7 @@ export async function createBot(
  * Errors propagate to caller (fail-fast principle).
  *
  * @param db - Drizzle database instance
- * @param mapId - Map ID (maps.userId foreign key)
+ * @param mapId - Map UUID (maps.id foreign key)
  * @returns Array of NpcBot records (may be empty)
  */
 export async function loadBots(

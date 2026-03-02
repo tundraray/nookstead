@@ -20,7 +20,7 @@ export const npcBots = pgTable('npc_bots', {
   id: uuid('id').defaultRandom().primaryKey(),
   mapId: uuid('map_id')
     .notNull()
-    .references(() => maps.userId, { onDelete: 'cascade' }),
+    .references(() => maps.id, { onDelete: 'cascade' }),
   name: varchar('name', { length: 64 }).notNull(),
   skin: varchar('skin', { length: 32 }).notNull(),
   worldX: real('world_x').notNull().default(0),

@@ -96,20 +96,29 @@ export class World {
     let newWorldX = player.worldX + clampedDx;
     let newWorldY = player.worldY + clampedDy;
 
-    // Bounds clamping
-    newWorldX = Math.max(
-      WORLD_BOUNDS.minX,
-      Math.min(WORLD_BOUNDS.maxX, newWorldX)
-    );
-    newWorldY = Math.max(
-      WORLD_BOUNDS.minY,
-      Math.min(WORLD_BOUNDS.maxY, newWorldY)
-    );
+    // Bounds clamping — only for positional (world:) chunks.
+    // Map-based chunks (map:{id}, city:capital) are bounded client-side
+    // by the map's own dimensions; WORLD_BOUNDS doesn't apply.
+    const isPositionalChunk = player.chunkId.startsWith('world:');
+    if (isPositionalChunk) {
+      newWorldX = Math.max(
+        WORLD_BOUNDS.minX,
+        Math.min(WORLD_BOUNDS.maxX, newWorldX)
+      );
+      newWorldY = Math.max(
+        WORLD_BOUNDS.minY,
+        Math.min(WORLD_BOUNDS.maxY, newWorldY)
+      );
+    }
 
-    // Compute new chunk
+    // Compute new chunk — only world:{x}:{y} chunks are positional.
+    // map:{mapId} (homesteads, cities) and city:capital are non-positional;
+    // no spatial chunk transitions occur inside them.
     const oldChunkId = player.chunkId;
-    const newChunkId = computeChunkId(newWorldX, newWorldY);
-    const chunkChanged = newChunkId !== oldChunkId;
+    const newChunkId = isPositionalChunk
+      ? computeChunkId(newWorldX, newWorldY)
+      : oldChunkId;
+    const chunkChanged = isPositionalChunk && newChunkId !== oldChunkId;
 
     // Derive direction from delta (keep current if no movement)
     const newDirection = deriveDirection(clampedDx, clampedDy);

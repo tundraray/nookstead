@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 const PAGE_SIZE = 20;
 
-export type MapTypeFilter = 'player_homestead' | 'town_district' | 'template';
+export type MapTypeFilter = 'homestead' | 'city' | 'open_world' | 'template';
 
 export interface EditorMapListItem {
   id: string;

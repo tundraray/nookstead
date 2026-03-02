@@ -1,5 +1,5 @@
 /** Map type classification. */
-export type MapType = 'player_homestead' | 'town_district' | 'template';
+export type MapType = 'homestead' | 'city' | 'open_world' | 'template';
 
 /** Dimension constraints per map type. */
 export interface MapDimensionConstraints {
@@ -10,8 +10,9 @@ export interface MapDimensionConstraints {
 }
 
 export const MAP_TYPE_CONSTRAINTS: Record<MapType, MapDimensionConstraints> = {
-  player_homestead: { minWidth: 32, maxWidth: 64, minHeight: 32, maxHeight: 64 },
-  town_district: { minWidth: 64, maxWidth: 128, minHeight: 64, maxHeight: 128 },
+  homestead: { minWidth: 32, maxWidth: 64, minHeight: 32, maxHeight: 64 },
+  city: { minWidth: 64, maxWidth: 128, minHeight: 64, maxHeight: 128 },
+  open_world: { minWidth: 64, maxWidth: 256, minHeight: 64, maxHeight: 256 },
   template: { minWidth: 16, maxWidth: 256, minHeight: 16, maxHeight: 256 },
 };
 

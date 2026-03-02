@@ -4,6 +4,12 @@ export interface PlayerState {
   userId: string;
   worldX: number;
   worldY: number;
+  /**
+   * chunkId format:
+   * - 'map:{uuid}' for single-chunk maps (homesteads, cities)
+   * - 'world:{x}:{y}' for open-world spatial chunks
+   * - 'city:capital' as a well-known alias (resolved to map:{uuid} by ChunkRoom)
+   */
   chunkId: string;
   direction: string;
   skin: string;
@@ -19,6 +25,11 @@ export interface ChunkRoomState {
   players: Map<string, PlayerState>;
 }
 
+/**
+ * A location that a player can be in.
+ * - MAP locations use chunkId format 'map:{uuid}' or alias 'city:capital'
+ * - WORLD locations use chunkId format 'world:{x}:{y}'
+ */
 export interface Location {
   id: string;
   type: LocationType;

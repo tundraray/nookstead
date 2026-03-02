@@ -220,6 +220,76 @@ describe('World', () => {
     });
   });
 
+  describe('Non-positional chunk behavior (map: prefix)', () => {
+    it('should NOT trigger chunk change for map:{uuid} chunks', () => {
+      const player = createServerPlayer({
+        id: 'player-map-1',
+        userId: 'user-map-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:some-uuid-here',
+        direction: 'down',
+        skin: 'default',
+        name: 'MapChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      // Move within a map: chunk — should never trigger chunk change
+      const result = world.movePlayer('player-map-1', 3, 0);
+
+      expect(result.chunkChanged).toBe(false);
+      expect(result.oldChunkId).toBeUndefined();
+      expect(result.newChunkId).toBeUndefined();
+      // Player should keep original map: chunkId
+      expect(world.getPlayer('player-map-1')?.chunkId).toBe(
+        'map:some-uuid-here'
+      );
+    });
+
+    it('should NOT trigger chunk change for city:capital alias', () => {
+      const player = createServerPlayer({
+        id: 'player-city-1',
+        userId: 'user-city-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'city:capital',
+        direction: 'down',
+        skin: 'default',
+        name: 'CityChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.movePlayer('player-city-1', 5, 0);
+
+      expect(result.chunkChanged).toBe(false);
+      expect(world.getPlayer('player-city-1')?.chunkId).toBe('city:capital');
+    });
+
+    it('should trigger chunk change for world:{x}:{y} chunks when crossing boundary', () => {
+      const startX = CHUNK_SIZE - 1;
+      const player = createServerPlayer({
+        id: 'player-world-1',
+        userId: 'user-world-1',
+        worldX: startX,
+        worldY: 0,
+        chunkId: computeChunkId(startX, 0),
+        direction: 'down',
+        skin: 'default',
+        name: 'WorldChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.movePlayer('player-world-1', 2, 0);
+
+      expect(result.chunkChanged).toBe(true);
+      expect(result.oldChunkId).toBe(computeChunkId(startX, 0));
+      expect(result.newChunkId).toBe(computeChunkId(startX + 2, 0));
+    });
+  });
+
   describe('Error handling', () => {
     it('should return no-op result for unknown player', () => {
       const result = world.movePlayer('unknown-player', 5, 5);

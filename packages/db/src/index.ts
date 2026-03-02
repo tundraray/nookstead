@@ -14,8 +14,15 @@ export {
   type LoadPositionResult,
 } from './services/player';
 export {
+  createMap,
   saveMap,
   loadMap,
+  findMapByUser,
+  findMapByType,
+  listMapsByUser,
+  listMapsByUserAndType,
+  type MapType,
+  type CreateMapData,
   type SaveMapData,
   type LoadMapResult,
 } from './services/map';
@@ -85,6 +92,7 @@ export {
   exportToPlayerMap,
   editPlayerMapDirect,
   savePlayerMapDirect,
+  type SavePlayerMapDirectData,
 } from './services/map-import-export';
 export * from './services/material';
 export * from './services/tileset';

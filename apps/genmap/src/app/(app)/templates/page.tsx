@@ -166,8 +166,9 @@ export default function TemplatesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="player_homestead">Player Homestead</SelectItem>
-            <SelectItem value="town_district">Town District</SelectItem>
+            <SelectItem value="homestead">Homestead</SelectItem>
+            <SelectItem value="city">City</SelectItem>
+            <SelectItem value="open_world">Open World</SelectItem>
           </SelectContent>
         </Select>
 

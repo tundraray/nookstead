@@ -247,7 +247,7 @@ export default function MapEditorPage() {
         body: JSON.stringify({
           name: templateName || state.name,
           description: templateDesc || undefined,
-          mapType: state.mapType || 'player_homestead',
+          mapType: state.mapType || 'homestead',
           baseWidth: state.width,
           baseHeight: state.height,
           grid: state.grid,

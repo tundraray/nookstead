@@ -1,23 +1,28 @@
-import { integer, jsonb, pgTable, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  jsonb,
+  pgTable,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { users } from './users';
 
-/**
- * Map persistence table.
- * Stores procedurally generated map data per user.
- * One map record per user (userId is primary key).
- */
 export const maps = pgTable('maps', {
-  userId: uuid('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' })
-    .unique()
-    .primaryKey(),
-  seed: integer('seed').notNull(),
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: varchar('name', { length: 255 }),
+  mapType: varchar('map_type', { length: 50 }).notNull(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  seed: integer('seed'),
   width: integer('width').notNull().default(64),
   height: integer('height').notNull().default(64),
   grid: jsonb('grid').notNull(),
   layers: jsonb('layers').notNull(),
   walkable: jsonb('walkable').notNull(),
+  metadata: jsonb('metadata'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

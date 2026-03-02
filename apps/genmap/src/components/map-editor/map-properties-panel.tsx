@@ -20,7 +20,7 @@ interface MapPropertiesPanelProps {
   dispatch: Dispatch<MapEditorAction>;
 }
 
-/** Format mapType for display (e.g., 'player_homestead' -> 'Player Homestead'). */
+/** Format mapType for display (e.g., 'homestead' -> 'Homestead'). */
 function formatMapType(mapType: string | null): string {
   if (!mapType) return 'None';
   return mapType

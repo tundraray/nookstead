@@ -26,7 +26,11 @@ export const CHUNK_SIZE = 64;
 export const CHUNK_ROOM_NAME = 'chunk_room';
 
 // Movement configuration
-export const MAX_SPEED = 5;
+// MAX_SPEED: anti-cheat clamp on per-frame displacement magnitude (px).
+// Client sends computed delta (speed * speedMod * dt), at 100 px/s and
+// 50 ms frame that's 5 px; terrain modifiers or frame spikes push higher.
+// Set generous limit to avoid false-positive clamping that causes drift.
+export const MAX_SPEED = 15;
 
 // Default spawn location (center of 64×64 map at 16px tiles, last-resort fallback)
 export const DEFAULT_SPAWN = {
@@ -48,10 +52,15 @@ export const CHUNK_TRANSITION_COOLDOWN_MS = 500;
 
 // Location types
 export enum LocationType {
-  CITY = 'CITY',
-  PLAYER = 'PLAYER',
-  OPEN_WORLD = 'OPEN_WORLD',
+  MAP = 'MAP', // Single-chunk maps: homesteads, cities (chunkId format: map:{mapId})
+  WORLD = 'WORLD', // Spatial open-world chunks (chunkId format: world:{x}:{y})
 }
+
+/**
+ * Discriminator for map subtypes stored in the maps table.
+ * Matches the map_type column values in the database.
+ */
+export type MapType = 'homestead' | 'city' | 'open_world';
 
 // Movement prediction configuration (FR-16)
 

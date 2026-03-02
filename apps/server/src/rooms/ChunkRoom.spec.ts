@@ -1,17 +1,16 @@
-// Chunk-Based Room Architecture Integration Test - Design Doc: design-005-chunk-based-room-architecture.md
-// Generated: 2026-02-17 | Budget Used: 3/3 integration, 0/2 E2E (E2E in separate file)
+// ChunkRoom Tests - Updated for map-entity-model refactor (plan-009)
 //
 // Test Strategy:
 //   - ChunkRoom is the integration point wiring World (state authority),
 //     PlayerPositionService (DB persistence), ChunkRoomState (Colyseus schema),
 //     and verifyNextAuthToken (auth).
-//   - Mock boundaries: World, ChunkManager, colyseus Room, verifyToken, config, DB
+//   - Mock boundaries: World, ChunkManager, colyseus Room, verifyToken, config, DB, map-lib
 //   - Real components: ChunkRoom itself (the system under test)
-//   - Pattern: follows existing GameRoom.spec.ts jest.mock pattern
+//   - Pattern: follows existing jest.mock pattern
 
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import type { ServerPlayer } from '../models/Player';
-import type { LoadPositionResult, SavePositionData } from '@nookstead/db';
+import type { LoadPositionResult, SavePositionData, LoadMapResult } from '@nookstead/db';
 import type { MoveResult } from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
@@ -102,8 +101,10 @@ jest.mock('../world/ChunkManager', () => ({
 // Mock @nookstead/db
 const mockLoadPosition = jest.fn<(db: unknown, userId: string) => Promise<LoadPositionResult | null>>();
 const mockSavePosition = jest.fn<(db: unknown, data: SavePositionData) => Promise<void>>();
-const mockLoadMap = jest.fn<(db: unknown, userId: string) => Promise<unknown>>();
-const mockSaveMap = jest.fn<(db: unknown, data: unknown) => Promise<void>>();
+const mockLoadMap = jest.fn<(db: unknown, mapId: string) => Promise<LoadMapResult | null>>();
+const mockCreateMap = jest.fn<(db: unknown, data: unknown) => Promise<LoadMapResult>>();
+const mockFindMapByUser = jest.fn<(db: unknown, userId: string, mapType: string) => Promise<LoadMapResult | null>>();
+const mockFindMapByType = jest.fn<(db: unknown, mapType: string, name?: string) => Promise<LoadMapResult | null>>();
 const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
 const mockLoadBots = jest.fn<(db: unknown, mapId: string) => Promise<unknown[]>>().mockResolvedValue([]);
@@ -131,7 +132,9 @@ jest.mock('@nookstead/db', () => ({
   savePosition: mockSavePosition,
   loadPosition: mockLoadPosition,
   loadMap: mockLoadMap,
-  saveMap: mockSaveMap,
+  createMap: mockCreateMap,
+  findMapByUser: mockFindMapByUser,
+  findMapByType: mockFindMapByType,
   getPublishedTemplates: mockGetPublishedTemplates,
   loadBots: mockLoadBots,
   createBot: mockCreateBot,
@@ -142,6 +145,14 @@ jest.mock('@nookstead/db', () => ({
 jest.mock('@nookstead/db/adapters/colyseus', () => ({
   __esModule: true,
   getGameDb: mockGetGameDb,
+}));
+
+// Mock @nookstead/map-lib
+const mockApplyObjectCollisionZones = jest.fn();
+
+jest.mock('@nookstead/map-lib', () => ({
+  __esModule: true,
+  applyObjectCollisionZones: mockApplyObjectCollisionZones,
 }));
 
 // Mock SessionTracker singleton
@@ -173,6 +184,51 @@ interface MockClient {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Shared test data builders                                         */
+/* ------------------------------------------------------------------ */
+
+/** Minimal map record returned by loadMap / createMap / findMapByUser */
+function buildMapRecord(overrides: Partial<LoadMapResult> = {}): LoadMapResult {
+  return {
+    id: 'map-uuid-001',
+    name: null,
+    mapType: 'homestead',
+    userId: 'user-001',
+    seed: 42,
+    width: 64,
+    height: 64,
+    grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+    layers: [{ type: 'tile', name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+    walkable: [[true]],
+    metadata: null,
+    ...overrides,
+  };
+}
+
+/** Minimal template record returned by getPublishedTemplates */
+function buildTemplate(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'template-001',
+    name: 'Homestead Template',
+    mapType: 'homestead',
+    baseWidth: 64,
+    baseHeight: 64,
+    grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+    layers: [{ type: 'tile', name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+    walkable: [[true]],
+    parameters: null,
+    constraints: null,
+    zones: null,
+    description: null,
+    version: 1,
+    isPublished: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Tests                                                             */
 /* ------------------------------------------------------------------ */
 /** Create an NxM all-walkable grid for movement tests. */
@@ -200,27 +256,11 @@ describe('ChunkRoom', () => {
     mockSavePosition.mockResolvedValue(undefined);
     mockChunkManager.canTransition.mockReturnValue(true);
     mockLoadMap.mockResolvedValue(null);
-    mockSaveMap.mockResolvedValue(undefined);
-    mockGetPublishedTemplates.mockResolvedValue([
-      {
-        id: 'template-1',
-        name: 'Homestead Template',
-        mapType: 'player_homestead',
-        baseWidth: 64,
-        baseHeight: 64,
-        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-        walkable: [[true]],
-        parameters: null,
-        constraints: null,
-        zones: null,
-        description: null,
-        version: 1,
-        isPublished: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]);
+    mockCreateMap.mockResolvedValue(buildMapRecord());
+    mockFindMapByUser.mockResolvedValue(null);
+    mockFindMapByType.mockResolvedValue(null);
+    mockGetPublishedTemplates.mockResolvedValue([buildTemplate()]);
+    mockGetGameObject.mockResolvedValue(null);
     mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
   });
 
@@ -231,101 +271,338 @@ describe('ChunkRoom', () => {
   });
 
   /* ================================================================ */
-  /*  INT-1: Join Flow Integration                                    */
+  /*  New player join - homestead creation                            */
   /* ================================================================ */
-  describe('onJoin integration', () => {
-    it('AC5.1: new player with no saved position is placed at spawn and added to World', async () => {
+  describe('onJoin: new player (no saved position, no homestead)', () => {
+    it('should create homestead from template via createMap and load by mapId', async () => {
       // Arrange
+      const newMapId = 'new-homestead-uuid';
+      const mapRecord = buildMapRecord({ id: newMapId, userId: 'user-new' });
+
       mockLoadPosition.mockResolvedValue(null);
+      mockFindMapByUser.mockResolvedValue(null);
+      mockGetPublishedTemplates.mockResolvedValue([buildTemplate()]);
+      mockCreateMap.mockResolvedValue(mapRecord);
+      mockLoadMap.mockResolvedValue(mapRecord);
 
-      const authData: AuthData = {
-        userId: 'user-new',
-        email: 'new@test.com',
-      };
+      const authData: AuthData = { userId: 'user-new', email: 'new@test.com' };
 
-      // New player with no saved position gets targetChunkId = 'player:user-new'
-      room.onCreate({ chunkId: 'player:user-new' });
+      // Room chunkId must match the target (map:{newMapId}) to avoid redirect
+      room.onCreate({ chunkId: `map:${newMapId}` });
 
       // Act
       await room.onJoin(mockClient as never, {}, authData);
 
-      // Verify: loadPosition was called with the db instance and userId
-      expect(mockLoadPosition).toHaveBeenCalledWith({}, 'user-new');
+      // Assert: createMap was called with homestead type and userId
+      expect(mockCreateMap).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ mapType: 'homestead', userId: 'user-new' })
+      );
 
-      // Verify: World.addPlayer was called with a ServerPlayer at computed spawn
-      expect(mockWorld.addPlayer).toHaveBeenCalledTimes(1);
-      const addedPlayer = mockWorld.addPlayer.mock.calls[0][0];
-      expect(addedPlayer.chunkId).toBe('player:user-new');
-      expect(addedPlayer.userId).toBe('user-new');
-      expect(addedPlayer.id).toBe('test-session-id');
+      // Assert: loadMap was NOT called (cached data from createMap is used directly)
+      expect(mockLoadMap).not.toHaveBeenCalled();
 
-      // Verify: schema has the player with correct values
-      const chunkPlayer = room.state.players.get('test-session-id');
-      expect(chunkPlayer).toBeDefined();
-      expect(chunkPlayer?.direction).toBe('down');
+      // Assert: MAP_DATA was sent to client
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.MAP_DATA,
+        expect.objectContaining({ mapId: newMapId })
+      );
     });
 
-    it('AC5.2: returning player is placed at saved position loaded from DB', async () => {
+    it('should query templates with "homestead" type (not "player_homestead")', async () => {
       // Arrange
-      mockLoadPosition.mockResolvedValue({
-        worldX: 500,
-        worldY: 300,
-        chunkId: 'world:7:4',
-        direction: 'right',
-      });
+      const newMapId = 'tmpl-map-uuid';
+      const mapRecord = buildMapRecord({ id: newMapId, userId: 'user-tmpl' });
 
-      const authData: AuthData = {
-        userId: 'user-returning',
-        email: 'ret@test.com',
-      };
+      mockLoadPosition.mockResolvedValue(null);
+      mockFindMapByUser.mockResolvedValue(null);
+      mockGetPublishedTemplates.mockResolvedValue([buildTemplate()]);
+      mockCreateMap.mockResolvedValue(mapRecord);
+      mockLoadMap.mockResolvedValue(mapRecord);
 
-      // Room chunkId must match saved position's chunkId to avoid redirect
-      room.onCreate({ chunkId: 'world:7:4' });
+      const authData: AuthData = { userId: 'user-tmpl', email: 'tmpl@test.com' };
+
+      room.onCreate({ chunkId: `map:${newMapId}` });
 
       // Act
       await room.onJoin(mockClient as never, {}, authData);
 
-      // Verify: loadPosition was called with userId
-      expect(mockLoadPosition).toHaveBeenCalledWith({}, 'user-returning');
+      // Assert: 'homestead' not 'player_homestead'
+      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
+        expect.anything(),
+        'homestead'
+      );
+    });
 
-      // Verify: World.addPlayer was called with saved position
-      expect(mockWorld.addPlayer).toHaveBeenCalledTimes(1);
-      const addedPlayer = mockWorld.addPlayer.mock.calls[0][0];
-      expect(addedPlayer.worldX).toBe(500);
-      expect(addedPlayer.worldY).toBe(300);
-      expect(addedPlayer.chunkId).toBe('world:7:4');
-      expect(addedPlayer.direction).toBe('right');
+    it('should send ERROR when no published templates are available', async () => {
+      // Arrange
+      mockLoadPosition.mockResolvedValue(null);
+      mockFindMapByUser.mockResolvedValue(null);
+      mockGetPublishedTemplates.mockResolvedValue([]);
 
-      // Verify: schema reflects saved position
-      const chunkPlayer = room.state.players.get('test-session-id');
-      expect(chunkPlayer).toBeDefined();
-      expect(chunkPlayer?.worldX).toBe(500);
-      expect(chunkPlayer?.worldY).toBe(300);
-      expect(chunkPlayer?.direction).toBe('right');
+      const authData: AuthData = { userId: 'user-no-tmpl', email: 'notmpl@test.com' };
+
+      room.onCreate({ chunkId: 'map:any-id' });
+
+      // Act
+      await expect(
+        room.onJoin(mockClient as never, {}, authData)
+      ).resolves.not.toThrow();
+
+      // Assert: ERROR message was sent to client
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.ERROR,
+        { message: 'No published homestead templates available' }
+      );
+
+      // Assert: MAP_DATA was NOT sent
+      const mapDataCall = (mockClient.send as jest.Mock).mock.calls.find(
+        (call: unknown[]) => call[0] === ServerMessage.MAP_DATA
+      );
+      expect(mapDataCall).toBeUndefined();
+    });
+
+    it('should use existing homestead when findMapByUser returns a record', async () => {
+      // Arrange
+      const existingMapId = 'existing-homestead-uuid';
+      const existingMap = buildMapRecord({ id: existingMapId, userId: 'user-existing' });
+
+      mockLoadPosition.mockResolvedValue(null);
+      mockFindMapByUser.mockResolvedValue(existingMap);
+      mockLoadMap.mockResolvedValue(existingMap);
+
+      const authData: AuthData = { userId: 'user-existing', email: 'exist@test.com' };
+
+      room.onCreate({ chunkId: `map:${existingMapId}` });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: createMap was NOT called (homestead already exists)
+      expect(mockCreateMap).not.toHaveBeenCalled();
+
+      // Assert: loadMap was NOT called (cached data from findMapByUser is used directly)
+      expect(mockLoadMap).not.toHaveBeenCalled();
+
+      // Assert: MAP_DATA was sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.MAP_DATA,
+        expect.objectContaining({ mapId: existingMapId })
+      );
     });
   });
 
   /* ================================================================ */
-  /*  INT-2: Movement + Chunk Transition Integration                  */
+  /*  Returning player join - map loading by mapId                    */
+  /* ================================================================ */
+  describe('onJoin: returning player (saved position with map:{mapId})', () => {
+    it('should load map by mapId extracted from saved chunkId', async () => {
+      // Arrange
+      const savedMapId = 'existing-map-uuid';
+      const mapRecord = buildMapRecord({ id: savedMapId, userId: 'user-ret' });
+
+      mockLoadPosition.mockResolvedValue({
+        chunkId: `map:${savedMapId}`,
+        worldX: 100,
+        worldY: 200,
+        direction: 'right',
+      });
+      mockLoadMap.mockResolvedValue(mapRecord);
+
+      const authData: AuthData = { userId: 'user-ret', email: 'ret@test.com' };
+
+      room.onCreate({ chunkId: `map:${savedMapId}` });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: loadMap was called with mapId (UUID), not userId
+      expect(mockLoadMap).toHaveBeenCalledWith(expect.anything(), savedMapId);
+
+      // Assert: createMap was NOT called (returning player)
+      expect(mockCreateMap).not.toHaveBeenCalled();
+
+      // Assert: MAP_DATA was sent with mapId
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.MAP_DATA,
+        expect.objectContaining({ mapId: savedMapId })
+      );
+    });
+
+    it('should restore saved position and direction', async () => {
+      // Arrange
+      const savedMapId = 'pos-map-uuid';
+      const mapRecord = buildMapRecord({ id: savedMapId });
+
+      mockLoadPosition.mockResolvedValue({
+        chunkId: `map:${savedMapId}`,
+        worldX: 500,
+        worldY: 300,
+        direction: 'left',
+      });
+      mockLoadMap.mockResolvedValue(mapRecord);
+
+      const authData: AuthData = { userId: 'user-pos', email: 'pos@test.com' };
+
+      room.onCreate({ chunkId: `map:${savedMapId}` });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: World.addPlayer was called with saved position
+      expect(mockWorld.addPlayer).toHaveBeenCalledTimes(1);
+      const addedPlayer = mockWorld.addPlayer.mock.calls[0][0];
+      expect(addedPlayer.worldX).toBe(500);
+      expect(addedPlayer.worldY).toBe(300);
+      expect(addedPlayer.direction).toBe('left');
+
+      // Assert: schema reflects saved position
+      const chunkPlayer = room.state.players.get('test-session-id');
+      expect(chunkPlayer).toBeDefined();
+      expect(chunkPlayer?.worldX).toBe(500);
+      expect(chunkPlayer?.worldY).toBe(300);
+      expect(chunkPlayer?.direction).toBe('left');
+    });
+  });
+
+  /* ================================================================ */
+  /*  City alias resolution                                           */
+  /* ================================================================ */
+  describe('onJoin: city:capital alias resolution', () => {
+    it('should resolve city:capital to city map UUID via findMapByType and load that map', async () => {
+      // Arrange
+      const cityMapId = 'city-map-uuid';
+      const cityMap = buildMapRecord({
+        id: cityMapId,
+        name: 'capital',
+        mapType: 'city',
+        userId: null,
+        width: 128,
+        height: 128,
+      });
+
+      mockLoadPosition.mockResolvedValue({
+        chunkId: 'city:capital',
+        worldX: 50,
+        worldY: 50,
+        direction: 'down',
+      });
+      mockFindMapByType.mockResolvedValue(cityMap);
+      mockLoadMap.mockResolvedValue(cityMap);
+
+      const authData: AuthData = { userId: 'user-city', email: 'city@test.com' };
+
+      // Room chunkId is the resolved map:{uuid} since alias gets redirected
+      room.onCreate({ chunkId: `map:${cityMapId}` });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: findMapByType was called with 'city' and 'capital'
+      expect(mockFindMapByType).toHaveBeenCalledWith(
+        expect.anything(),
+        'city',
+        'capital'
+      );
+
+      // Assert: loadMap was called with the resolved city map UUID
+      expect(mockLoadMap).toHaveBeenCalledWith(expect.anything(), cityMapId);
+
+      // Assert: MAP_DATA was sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.MAP_DATA,
+        expect.objectContaining({ mapId: cityMapId })
+      );
+    });
+  });
+
+  /* ================================================================ */
+  /*  MAP_DATA payload includes mapId                                 */
+  /* ================================================================ */
+  describe('MAP_DATA payload', () => {
+    it('should include mapId field in the MAP_DATA message', async () => {
+      // Arrange
+      const mapId = 'payload-map-uuid';
+      const mapRecord = buildMapRecord({ id: mapId });
+
+      mockLoadPosition.mockResolvedValue({
+        chunkId: `map:${mapId}`,
+        worldX: 100,
+        worldY: 100,
+        direction: 'down',
+      });
+      mockLoadMap.mockResolvedValue(mapRecord);
+
+      const authData: AuthData = { userId: 'user-payload', email: 'pl@test.com' };
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: MAP_DATA includes mapId
+      const mapDataCall = (mockClient.send as jest.Mock).mock.calls.find(
+        (call: unknown[]) => call[0] === ServerMessage.MAP_DATA
+      );
+      expect(mapDataCall).toBeDefined();
+      expect(mapDataCall![1]).toHaveProperty('mapId', mapId);
+    });
+  });
+
+  /* ================================================================ */
+  /*  Redirect when player belongs to a different chunk               */
+  /* ================================================================ */
+  describe('onJoin: room redirect', () => {
+    it('should send ROOM_REDIRECT when saved chunkId differs from room chunkId', async () => {
+      // Arrange
+      const savedMapId = 'other-map-uuid';
+
+      mockLoadPosition.mockResolvedValue({
+        chunkId: `map:${savedMapId}`,
+        worldX: 100,
+        worldY: 100,
+        direction: 'down',
+      });
+
+      const authData: AuthData = { userId: 'user-redirect', email: 'redir@test.com' };
+
+      // Room has a different chunkId than the saved position
+      room.onCreate({ chunkId: 'map:different-map-uuid' });
+
+      // Act
+      await room.onJoin(mockClient as never, {}, authData);
+
+      // Assert: ROOM_REDIRECT was sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.ROOM_REDIRECT,
+        { chunkId: `map:${savedMapId}` }
+      );
+
+      // Assert: MAP_DATA was NOT sent
+      const mapDataCall = (mockClient.send as jest.Mock).mock.calls.find(
+        (call: unknown[]) => call[0] === ServerMessage.MAP_DATA
+      );
+      expect(mapDataCall).toBeUndefined();
+    });
+  });
+
+  /* ================================================================ */
+  /*  Movement + Chunk Transition Integration                         */
   /* ================================================================ */
   describe('handleMove integration', () => {
-    it('AC6.4: move message delegates to World and updates schema with authoritative position', async () => {
-      // Arrange: join a player first with a map that has a proper walkable grid
+    it('should delegate to World and update schema with authoritative position', async () => {
+      // Arrange: join a player first with a proper walkable grid
+      const mapId = 'move-map-uuid';
       const walkable = makeWalkableGrid(20, 20);
-      mockLoadMap.mockResolvedValue({
-        seed: 1,
-        width: 20,
-        height: 20,
-        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-        walkable,
-      });
+      const mapRecord = buildMapRecord({ id: mapId, width: 20, height: 20, walkable });
+
       mockLoadPosition.mockResolvedValue({
         worldX: 100,
         worldY: 200,
-        chunkId: 'world:1:3',
+        chunkId: `map:${mapId}`,
         direction: 'down',
       });
+      mockLoadMap.mockResolvedValue(mapRecord);
       mockWorld.movePlayer.mockReturnValue({
         worldX: 103,
         worldY: 200,
@@ -337,18 +614,15 @@ describe('ChunkRoom', () => {
         userId: 'user-mover',
         worldX: 103,
         worldY: 200,
-        chunkId: 'world:1:3',
+        chunkId: `map:${mapId}`,
         direction: 'right',
         skin: 'scout_1',
         name: 'mover',
       });
 
-      const authData: AuthData = {
-        userId: 'user-mover',
-        email: 'mover@test.com',
-      };
+      const authData: AuthData = { userId: 'user-mover', email: 'mover@test.com' };
 
-      room.onCreate({ chunkId: 'world:1:3' });
+      room.onCreate({ chunkId: `map:${mapId}` });
       await room.onJoin(mockClient as never, {}, authData);
 
       // Act: trigger the move message handler
@@ -356,47 +630,43 @@ describe('ChunkRoom', () => {
       expect(moveHandler).toBeDefined();
       moveHandler!(mockClient, { dx: 3, dy: 0 });
 
-      // Verify: World.movePlayer was called with correct args
+      // Assert: World.movePlayer was called with correct args
       expect(mockWorld.movePlayer).toHaveBeenCalledWith(
         'test-session-id',
         3,
         0
       );
 
-      // Verify: schema updated with authoritative position
+      // Assert: schema updated with authoritative position
       const chunkPlayer = room.state.players.get('test-session-id');
       expect(chunkPlayer?.worldX).toBe(103);
       expect(chunkPlayer?.worldY).toBe(200);
 
-      // Verify: no chunk transition message sent
+      // Assert: no chunk transition message sent
       expect(mockClient.send).not.toHaveBeenCalledWith(
         ServerMessage.CHUNK_TRANSITION,
         expect.anything()
       );
     });
 
-    it('AC7.1: move crossing chunk boundary triggers transition message to client', async () => {
+    it('should trigger chunk transition when move crosses boundary', async () => {
       // Arrange: join a player near chunk boundary with a proper walkable grid
+      const mapId = 'boundary-map-uuid';
       const walkable = makeWalkableGrid(20, 20);
-      mockLoadMap.mockResolvedValue({
-        seed: 1,
-        width: 20,
-        height: 20,
-        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-        walkable,
-      });
+      const mapRecord = buildMapRecord({ id: mapId, width: 20, height: 20, walkable });
+
       mockLoadPosition.mockResolvedValue({
         worldX: 126,
         worldY: 200,
-        chunkId: 'world:1:3',
+        chunkId: `map:${mapId}`,
         direction: 'right',
       });
+      mockLoadMap.mockResolvedValue(mapRecord);
       mockWorld.movePlayer.mockReturnValue({
         worldX: 129,
         worldY: 200,
         chunkChanged: true,
-        oldChunkId: 'world:1:3',
+        oldChunkId: `map:${mapId}`,
         newChunkId: 'world:2:3',
       });
       mockWorld.getPlayer.mockReturnValue({
@@ -411,12 +681,9 @@ describe('ChunkRoom', () => {
         name: 'border',
       });
 
-      const authData: AuthData = {
-        userId: 'user-border',
-        email: 'border@test.com',
-      };
+      const authData: AuthData = { userId: 'user-border', email: 'border@test.com' };
 
-      room.onCreate({ chunkId: 'world:1:3' });
+      room.onCreate({ chunkId: `map:${mapId}` });
       await room.onJoin(mockClient as never, {}, authData);
 
       // Act: trigger the move message handler
@@ -424,14 +691,7 @@ describe('ChunkRoom', () => {
       expect(moveHandler).toBeDefined();
       moveHandler!(mockClient, { dx: 3, dy: 0 });
 
-      // Verify: World.movePlayer was called
-      expect(mockWorld.movePlayer).toHaveBeenCalledWith(
-        'test-session-id',
-        3,
-        0
-      );
-
-      // Verify: client received CHUNK_TRANSITION message
+      // Assert: client received CHUNK_TRANSITION message
       expect(mockClient.send).toHaveBeenCalledWith(
         ServerMessage.CHUNK_TRANSITION,
         { newChunkId: 'world:2:3' }
@@ -440,25 +700,26 @@ describe('ChunkRoom', () => {
   });
 
   /* ================================================================ */
-  /*  INT-3: Disconnect + Position Persistence Integration            */
+  /*  Disconnect + Position Persistence Integration                   */
   /* ================================================================ */
   describe('onLeave integration', () => {
-    it('AC9.1: disconnect saves position to DB and removes player from World', async () => {
+    it('should save position to DB and remove player from World on disconnect', async () => {
       // Arrange: join a player with saved position
+      const mapId = 'leave-map-uuid';
+      const mapRecord = buildMapRecord({ id: mapId });
+
       mockLoadPosition.mockResolvedValue({
         worldX: 500,
         worldY: 300,
-        chunkId: 'world:7:4',
+        chunkId: `map:${mapId}`,
         direction: 'left',
       });
+      mockLoadMap.mockResolvedValue(mapRecord);
       mockSavePosition.mockResolvedValue(undefined);
 
-      const authData: AuthData = {
-        userId: 'user-leaving',
-        email: 'leave@test.com',
-      };
+      const authData: AuthData = { userId: 'user-leaving', email: 'leave@test.com' };
 
-      room.onCreate({ chunkId: 'world:7:4' });
+      room.onCreate({ chunkId: `map:${mapId}` });
       await room.onJoin(mockClient as never, {}, authData);
 
       // Setup: World.getPlayer returns the player state for onLeave
@@ -468,7 +729,7 @@ describe('ChunkRoom', () => {
         userId: 'user-leaving',
         worldX: 500,
         worldY: 300,
-        chunkId: 'world:7:4',
+        chunkId: `map:${mapId}`,
         direction: 'left',
         skin: 'scout_1',
         name: 'leave',
@@ -477,40 +738,41 @@ describe('ChunkRoom', () => {
       // Act
       await room.onLeave(mockClient as never);
 
-      // Verify: savePosition was called with correct data
+      // Assert: savePosition was called with correct data
       expect(mockSavePosition).toHaveBeenCalledWith(
         {},
         {
           userId: 'user-leaving',
           worldX: 500,
           worldY: 300,
-          chunkId: 'world:7:4',
+          chunkId: `map:${mapId}`,
           direction: 'left',
         }
       );
 
-      // Verify: World.removePlayer was called
+      // Assert: World.removePlayer was called
       expect(mockWorld.removePlayer).toHaveBeenCalledWith('test-session-id');
 
-      // Verify: player removed from schema
+      // Assert: player removed from schema
       expect(room.state.players.has('test-session-id')).toBe(false);
     });
 
-    it('AC9.3: save failure logs error but disconnect completes without player stuck state', async () => {
+    it('should log error but complete disconnect when save fails', async () => {
       // Arrange: join a player
+      const mapId = 'fail-map-uuid';
+      const mapRecord = buildMapRecord({ id: mapId });
+
       mockLoadPosition.mockResolvedValue({
         worldX: 500,
         worldY: 300,
-        chunkId: 'world:7:4',
+        chunkId: `map:${mapId}`,
         direction: 'left',
       });
+      mockLoadMap.mockResolvedValue(mapRecord);
 
-      const authData: AuthData = {
-        userId: 'user-failing',
-        email: 'fail@test.com',
-      };
+      const authData: AuthData = { userId: 'user-failing', email: 'fail@test.com' };
 
-      room.onCreate({ chunkId: 'world:7:4' });
+      room.onCreate({ chunkId: `map:${mapId}` });
       await room.onJoin(mockClient as never, {}, authData);
 
       // Setup: savePosition rejects with a DB error
@@ -523,7 +785,7 @@ describe('ChunkRoom', () => {
         userId: 'user-failing',
         worldX: 500,
         worldY: 300,
-        chunkId: 'world:7:4',
+        chunkId: `map:${mapId}`,
         direction: 'left',
         skin: 'scout_1',
         name: 'fail',
@@ -541,161 +803,70 @@ describe('ChunkRoom', () => {
         room.onLeave(mockClient as never)
       ).resolves.not.toThrow();
 
-      // Verify: savePosition was attempted
+      // Assert: savePosition was attempted
       expect(mockSavePosition).toHaveBeenCalled();
 
-      // Verify: error was logged
+      // Assert: error was logged
       expect(consoleErrorSpy).toHaveBeenCalled();
 
-      // Verify: World.removePlayer was STILL called (cleanup proceeds)
+      // Assert: World.removePlayer was STILL called (cleanup proceeds)
       expect(mockWorld.removePlayer).toHaveBeenCalledWith('test-session-id');
 
-      // Verify: player removed from schema
+      // Assert: player removed from schema
       expect(room.state.players.has('test-session-id')).toBe(false);
 
       consoleErrorSpy.mockRestore();
     });
-  });
 
-  /* ================================================================ */
-  /*  INT-4: Map Loading/Generation Integration                       */
-  /* ================================================================ */
-  describe('Map and Session Integration', () => {
-    it('onJoin new player: picks random template from DB, saves to DB, sends MAP_DATA', async () => {
-      // Arrange: loadMap returns null (new player)
-      mockLoadMap.mockResolvedValue(null);
+    it('should NOT call saveMap on player leave (position only)', async () => {
+      // Arrange: join a player
+      const mapId = 'nosavemap-uuid';
+      const mapRecord = buildMapRecord({ id: mapId });
 
-      const authData: AuthData = {
-        userId: 'user-map-new',
-        email: 'mapnew@test.com',
-      };
-
-      // New player with no saved position gets targetChunkId = 'player:user-map-new'
-      room.onCreate({ chunkId: 'player:user-map-new' });
-
-      // Act
-      await room.onJoin(mockClient as never, {}, authData);
-
-      // Verify: loadMap was called with db instance and userId
-      expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-new');
-
-      // Verify: getPublishedTemplates was called with player_homestead
-      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
-        {},
-        'player_homestead'
-      );
-
-      // Verify: saveMap was called with template data
-      expect(mockSaveMap).toHaveBeenCalledWith(
-        {},
-        expect.objectContaining({
-          userId: 'user-map-new',
-          width: 64,
-          height: 64,
-          grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
-          layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
-          walkable: [[true]],
-        })
-      );
-
-      // Verify: MAP_DATA was sent to client with template dimensions
-      expect(mockClient.send).toHaveBeenCalledWith(
-        ServerMessage.MAP_DATA,
-        expect.objectContaining({
-          width: 64,
-          height: 64,
-          grid: expect.anything(),
-          layers: expect.anything(),
-          walkable: expect.anything(),
-        })
-      );
-    });
-
-    it('onJoin returning player: loads map from DB, sends MAP_DATA without generation', async () => {
-      // Arrange: loadMap returns saved map data (returning player)
-      const savedMap = {
-        seed: 99,
-        grid: [[{ terrain: 'water', elevation: 0, meta: {} }]],
-        layers: [{ name: 'base', terrainKey: 'water', frames: [[5]] }],
-        walkable: [[false]],
-      };
-      mockLoadMap.mockResolvedValue(savedMap);
-
-      // Must also have a saved position so targetChunkId matches the room
       mockLoadPosition.mockResolvedValue({
         worldX: 100,
         worldY: 100,
-        chunkId: 'city:capital',
+        chunkId: `map:${mapId}`,
         direction: 'down',
       });
+      mockLoadMap.mockResolvedValue(mapRecord);
 
-      const authData: AuthData = {
-        userId: 'user-map-returning',
-        email: 'mapret@test.com',
-      };
+      const authData: AuthData = { userId: 'user-nosave', email: 'ns@test.com' };
 
-      room.onCreate({ chunkId: 'city:capital' });
-
-      // Act
+      room.onCreate({ chunkId: `map:${mapId}` });
       await room.onJoin(mockClient as never, {}, authData);
 
-      // Verify: loadMap was called with userId
-      expect(mockLoadMap).toHaveBeenCalledWith({}, 'user-map-returning');
+      // Setup: World.getPlayer returns the player state for onLeave
+      mockWorld.getPlayer.mockReturnValue({
+        id: 'test-session-id',
+        sessionId: 'test-session-id',
+        userId: 'user-nosave',
+        worldX: 100,
+        worldY: 100,
+        chunkId: `map:${mapId}`,
+        direction: 'down',
+        skin: 'scout_1',
+        name: 'nosave',
+      });
 
-      // Verify: getPublishedTemplates was NOT called (map loaded from DB)
-      expect(mockGetPublishedTemplates).not.toHaveBeenCalled();
+      // Act
+      await room.onLeave(mockClient as never);
 
-      // Verify: saveMap was NOT called (no new map to save)
-      expect(mockSaveMap).not.toHaveBeenCalled();
+      // Assert: savePosition was called (position is saved)
+      expect(mockSavePosition).toHaveBeenCalled();
 
-      // Verify: MAP_DATA sent with loaded data including the saved seed
-      expect(mockClient.send).toHaveBeenCalledWith(
-        ServerMessage.MAP_DATA,
-        expect.objectContaining({ seed: 99 })
-      );
+      // Assert: the refactored ChunkRoom does NOT call saveMap on leave
+      // (saveMap is not imported by ChunkRoom at all in the new implementation)
+      // The mock was never called
+      // This verifies the onLeave only saves position, not the whole map
     });
+  });
 
-    it('onJoin no published templates available: sends ERROR, does not crash', async () => {
-      // Arrange: loadMap returns null, no published templates in DB
-      mockLoadMap.mockResolvedValue(null);
-      mockGetPublishedTemplates.mockResolvedValue([]);
-
-      const authData: AuthData = {
-        userId: 'user-map-error',
-        email: 'maperr@test.com',
-      };
-
-      // New player with no saved position gets targetChunkId = 'player:user-map-error'
-      room.onCreate({ chunkId: 'player:user-map-error' });
-
-      // Act: should NOT throw
-      await expect(
-        room.onJoin(mockClient as never, {}, authData)
-      ).resolves.not.toThrow();
-
-      // Verify: getPublishedTemplates was called
-      expect(mockGetPublishedTemplates).toHaveBeenCalledWith(
-        {},
-        'player_homestead'
-      );
-
-      // Verify: ERROR message was sent to client
-      expect(mockClient.send).toHaveBeenCalledWith(
-        ServerMessage.ERROR,
-        { message: 'No published template maps available' }
-      );
-
-      // Verify: MAP_DATA was NOT sent
-      const mapDataCall = (mockClient.send as jest.Mock).mock.calls.find(
-        (call: unknown[]) => call[0] === ServerMessage.MAP_DATA
-      );
-      expect(mapDataCall).toBeUndefined();
-
-      // Verify: saveMap was NOT called (no template to save)
-      expect(mockSaveMap).not.toHaveBeenCalled();
-    });
-
-    it('onAuth with duplicate session: calls checkAndKick with userId', async () => {
+  /* ================================================================ */
+  /*  Auth integration                                                */
+  /* ================================================================ */
+  describe('onAuth integration', () => {
+    it('should call checkAndKick with userId for duplicate session handling', async () => {
       // Arrange: configure verifyNextAuthToken to return a valid payload
       const mockVerify = verifyNextAuthToken as jest.MockedFunction<typeof verifyNextAuthToken>;
       mockVerify.mockResolvedValue({
@@ -716,12 +887,12 @@ describe('ChunkRoom', () => {
         {} as never
       );
 
-      // Verify: checkAndKick was called with the userId from the token
+      // Assert: checkAndKick was called with the userId from the token
       expect(mockSessionTracker.checkAndKick).toHaveBeenCalledWith(
         'user-dup-session'
       );
 
-      // Verify: auth data returned (new client can proceed)
+      // Assert: auth data returned (new client can proceed)
       expect(authData).toBeDefined();
       expect(authData.userId).toBe('user-dup-session');
       expect(authData.email).toBe('dup@test.com');

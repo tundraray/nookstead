@@ -23,8 +23,9 @@ import {
 } from '@nookstead/map-lib';
 
 const MAP_TYPE_OPTIONS: { value: MapType; label: string }[] = [
-  { value: 'player_homestead', label: 'Player Homestead' },
-  { value: 'town_district', label: 'Town District' },
+  { value: 'homestead', label: 'Homestead' },
+  { value: 'city', label: 'City' },
+  { value: 'open_world', label: 'Open World' },
   { value: 'template', label: 'Template' },
 ];
 
@@ -80,7 +81,7 @@ function buildWalkableGrid(width: number, height: number): boolean[][] {
 export default function NewMapPage() {
   const router = useRouter();
   const [name, setName] = useState('');
-  const [mapType, setMapType] = useState<MapType>('player_homestead');
+  const [mapType, setMapType] = useState<MapType>('homestead');
   const [width, setWidth] = useState(32);
   const [height, setHeight] = useState(32);
   const [isSubmitting, setIsSubmitting] = useState(false);

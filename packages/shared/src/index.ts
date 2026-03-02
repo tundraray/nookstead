@@ -28,7 +28,7 @@ export {
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
 } from './constants';
-export type { SkinKey } from './constants';
+export type { SkinKey, MapType } from './constants';
 // Spawn system
 export type { SpawnTile } from './systems/spawn';
 export { findSpawnTile, isValidSpawn } from './systems/spawn';
