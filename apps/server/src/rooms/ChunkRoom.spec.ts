@@ -9,7 +9,7 @@
 //   - Real components: ChunkRoom itself (the system under test)
 //   - Pattern: follows existing GameRoom.spec.ts jest.mock pattern
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import type { ServerPlayer } from '../models/Player';
 import type { LoadPositionResult, SavePositionData } from '@nookstead/db';
 import type { MoveResult } from '@nookstead/shared';
@@ -107,7 +107,22 @@ const mockSaveMap = jest.fn<(db: unknown, data: unknown) => Promise<void>>();
 const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
 const mockLoadBots = jest.fn<(db: unknown, mapId: string) => Promise<unknown[]>>().mockResolvedValue([]);
-const mockCreateBot = jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockCreateBot = jest.fn<(db: unknown, data: unknown) => Promise<unknown>>().mockImplementation(
+  async (_db, data) => {
+    const d = data as Record<string, unknown>;
+    return {
+      id: `bot-${Math.random().toString(36).slice(2, 8)}`,
+      mapId: d['mapId'],
+      name: d['name'],
+      skin: d['skin'],
+      worldX: d['worldX'],
+      worldY: d['worldY'],
+      direction: d['direction'] ?? 'down',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+);
 const mockSaveBotPositions = jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
 const mockGetGameObject = jest.fn<(db: unknown, id: string) => Promise<unknown>>().mockResolvedValue(null);
 
@@ -160,11 +175,17 @@ interface MockClient {
 /* ------------------------------------------------------------------ */
 /*  Tests                                                             */
 /* ------------------------------------------------------------------ */
+/** Create an NxM all-walkable grid for movement tests. */
+function makeWalkableGrid(rows: number, cols: number): boolean[][] {
+  return Array.from({ length: rows }, () => Array(cols).fill(true) as boolean[]);
+}
+
 describe('ChunkRoom', () => {
   let room: ChunkRoom;
   let mockClient: MockClient;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     messageHandlers.clear();
     jest.clearAllMocks();
 
@@ -201,6 +222,12 @@ describe('ChunkRoom', () => {
       },
     ]);
     mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    // Dispose room to clear the position autosave interval
+    room.onDispose();
+    jest.useRealTimers();
   });
 
   /* ================================================================ */
@@ -283,7 +310,16 @@ describe('ChunkRoom', () => {
   /* ================================================================ */
   describe('handleMove integration', () => {
     it('AC6.4: move message delegates to World and updates schema with authoritative position', async () => {
-      // Arrange: join a player first
+      // Arrange: join a player first with a map that has a proper walkable grid
+      const walkable = makeWalkableGrid(20, 20);
+      mockLoadMap.mockResolvedValue({
+        seed: 1,
+        width: 20,
+        height: 20,
+        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+        walkable,
+      });
       mockLoadPosition.mockResolvedValue({
         worldX: 100,
         worldY: 200,
@@ -340,7 +376,16 @@ describe('ChunkRoom', () => {
     });
 
     it('AC7.1: move crossing chunk boundary triggers transition message to client', async () => {
-      // Arrange: join a player near chunk boundary
+      // Arrange: join a player near chunk boundary with a proper walkable grid
+      const walkable = makeWalkableGrid(20, 20);
+      mockLoadMap.mockResolvedValue({
+        seed: 1,
+        width: 20,
+        height: 20,
+        grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+        layers: [{ name: 'base', terrainKey: 'terrain', frames: [[0]] }],
+        walkable,
+      });
       mockLoadPosition.mockResolvedValue({
         worldX: 126,
         worldY: 200,

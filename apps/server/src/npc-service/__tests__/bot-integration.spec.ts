@@ -6,7 +6,7 @@
 // Real components: ChunkRoom + BotManager (the systems under test)
 // Pattern: follows existing ChunkRoom.spec.ts jest.mock structure
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import type { ServerPlayer } from '../../models/Player';
 import type { MoveResult } from '@nookstead/shared';
 
@@ -289,6 +289,7 @@ describe('Bot spawn on first homestead join', () => {
   let mockClient: MockClient;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     messageHandlers.clear();
     jest.clearAllMocks();
 
@@ -307,6 +308,11 @@ describe('Bot spawn on first homestead join', () => {
 
     // First visit: no existing bots
     mockLoadBots.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    room.onDispose();
+    jest.useRealTimers();
   });
 
   it('AC-1.1: first join to homestead creates bots, persists to DB, and populates state.bots', async () => {
@@ -437,6 +443,7 @@ describe('Bot persistence lifecycle', () => {
   ];
 
   beforeEach(() => {
+    jest.useFakeTimers();
     messageHandlers.clear();
     jest.clearAllMocks();
 
@@ -456,6 +463,11 @@ describe('Bot persistence lifecycle', () => {
     // Returning player: bots already exist
     mockLoadBots.mockResolvedValue(existingBots);
     mockSaveBotPositions.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    room.onDispose();
+    jest.useRealTimers();
   });
 
   it('AC-1.2: returning player sees same bots loaded from DB with preserved identity', async () => {
@@ -563,6 +575,7 @@ describe('Bot collision blocks player movement', () => {
   let mockClient: MockClient;
 
   beforeEach(async () => {
+    jest.useFakeTimers();
     messageHandlers.clear();
     jest.clearAllMocks();
 
@@ -603,6 +616,11 @@ describe('Bot collision blocks player movement', () => {
 
     // Reset movePlayer mock after onJoin (it may have been called during join)
     mockWorld.movePlayer.mockReset();
+  });
+
+  afterEach(() => {
+    room.onDispose();
+    jest.useRealTimers();
   });
 
   it('AC-3.1: handleMove rejects movement onto tile occupied by bot', () => {
