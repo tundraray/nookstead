@@ -102,17 +102,27 @@ function createMockScene(): any {
 }
 
 /**
- * Create a minimal GeneratedMap for Player construction.
- * Single walkable tile is sufficient for reconcile tests.
+ * Create a mock GeneratedMap large enough for reconcile tests.
+ * The walkable grid must cover all pixel positions used in tests
+ * (up to ~200px → tile 12 at TILE_SIZE=16) so the displacement
+ * check in preUpdate() doesn't relocate the player.
  */
 function createMockMapData(): GeneratedMap {
+  const size = 20;
+  const row = () => Array.from({ length: size }, () => true);
+  const gridRow = () =>
+    Array.from({ length: size }, () => ({
+      terrain: 'grass',
+      elevation: 1,
+      meta: {},
+    }));
   return {
-    width: 1,
-    height: 1,
+    width: size,
+    height: size,
     seed: 42,
-    grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+    grid: Array.from({ length: size }, gridRow),
     layers: [],
-    walkable: [[true]],
+    walkable: Array.from({ length: size }, row),
   };
 }
 
