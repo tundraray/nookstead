@@ -25,26 +25,11 @@ export const TILE_SIZE = 16;
 export const CHUNK_SIZE = 64;
 export const CHUNK_ROOM_NAME = 'chunk_room';
 
-// Movement configuration
-// MAX_SPEED: anti-cheat clamp on per-frame displacement magnitude (px).
-// Client sends computed delta (speed * speedMod * dt), at 100 px/s and
-// 50 ms frame that's 5 px; terrain modifiers or frame spikes push higher.
-// Set generous limit to avoid false-positive clamping that causes drift.
-export const MAX_SPEED = 15;
-
 // Default spawn location (center of 64×64 map at 16px tiles, last-resort fallback)
 export const DEFAULT_SPAWN = {
   worldX: 520,
   worldY: 528,
   chunkId: 'city:capital',
-};
-
-// World boundaries
-export const WORLD_BOUNDS = {
-  minX: 0,
-  minY: 0,
-  maxX: 1024,
-  maxY: 1024,
 };
 
 // Chunk transition configuration
