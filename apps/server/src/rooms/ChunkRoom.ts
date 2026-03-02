@@ -648,9 +648,6 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     const move = payload as MovePayload;
     const result = world.movePlayer(client.sessionId, move.dx, move.dy);
 
-    // TODO: server-side walkability & bot collision checks disabled —
-    // walkable grid calculation needs fixing before re-enabling.
-
     // Update schema (triggers Colyseus auto-patch = move-ack)
     const chunkPlayer = this.state.players.get(client.sessionId);
     if (chunkPlayer) {

@@ -158,7 +158,6 @@ describe('Player: Movement Prediction', () => {
       player.preUpdate(0, 16);
 
       // x should have moved toward serverX but not reached it
-      // step = smallDelta * INTERPOLATION_SPEED = 3 * 0.2 = 0.6
       expect(player.x).toBeGreaterThan(100);
       expect(player.x).toBeLessThan(serverX);
     });
@@ -218,16 +217,15 @@ describe('Player: Movement Prediction', () => {
         expect(positions[i]).toBeGreaterThanOrEqual(positions[i - 1]);
       }
 
-      // After 10 frames at INTERPOLATION_SPEED per frame:
-      // remaining = initialDelta * (1 - INTERPOLATION_SPEED)^frameCount
-      //           = 5 * (1 - 0.2)^10
-      //           = 5 * 0.8^10
-      //           ~ 0.537
-      // Expected position ~ targetX - remaining ~ 104.463
+      // After 10 frames with delta-time interpolation:
+      // Per-frame factor = 1 - (1 - INTERPOLATION_SPEED)^(delta/16.67)
+      // With delta=16: factor ≈ 0.1927, retention = 1 - factor ≈ 0.8073
+      // remaining = initialDelta * retention^frameCount
       // The lerp also has a 0.5px snap threshold in preUpdate, so if remaining
       // drops below 0.5, the position snaps to authoritative.
-      const remaining =
-        initialDelta * Math.pow(1 - INTERPOLATION_SPEED, frameCount);
+      const frameDelta = 16;
+      const retention = Math.pow(1 - INTERPOLATION_SPEED, frameDelta / 16.67);
+      const remaining = initialDelta * Math.pow(retention, frameCount);
       const expectedMin = targetX - remaining - 0.01;
 
       expect(player.x).toBeGreaterThan(expectedMin);
