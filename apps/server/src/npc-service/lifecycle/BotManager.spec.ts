@@ -328,8 +328,8 @@ describe('BotManager', () => {
       // Bot at tile (5,5). Tiles (9,5)-(12,5) are walkable but behind the wall.
       // Column 8 is a wall from row 0-10.
       const grid = makeWalkableGrid(16, 16);
-      // Create a vertical wall at x=8
-      for (let y = 0; y < 11; y++) {
+      // Create a vertical wall at x=8 spanning the full height
+      for (let y = 0; y < 16; y++) {
         grid[y][8] = false;
       }
       const wallConfig = makeConfig({ mapWalkable: grid });
