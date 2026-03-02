@@ -8,7 +8,7 @@
 //   - Real components: ChunkRoom itself (the system under test)
 //   - Pattern: follows existing jest.mock pattern
 
-import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import type { ServerPlayer } from '../models/Player';
 import type { LoadPositionResult, SavePositionData, LoadMapResult } from '@nookstead/db';
 import type { MoveResult } from '@nookstead/shared';
@@ -106,8 +106,26 @@ const mockCreateMap = jest.fn<(db: unknown, data: unknown) => Promise<LoadMapRes
 const mockFindMapByUser = jest.fn<(db: unknown, userId: string, mapType: string) => Promise<LoadMapResult | null>>();
 const mockFindMapByType = jest.fn<(db: unknown, mapType: string, name?: string) => Promise<LoadMapResult | null>>();
 const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
-const mockGetGameObject = jest.fn<(db: unknown, id: string) => Promise<unknown>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
+const mockLoadBots = jest.fn<(db: unknown, mapId: string) => Promise<unknown[]>>().mockResolvedValue([]);
+const mockCreateBot = jest.fn<(db: unknown, data: unknown) => Promise<unknown>>().mockImplementation(
+  async (_db, data) => {
+    const d = data as Record<string, unknown>;
+    return {
+      id: `bot-${Math.random().toString(36).slice(2, 8)}`,
+      mapId: d['mapId'],
+      name: d['name'],
+      skin: d['skin'],
+      worldX: d['worldX'],
+      worldY: d['worldY'],
+      direction: d['direction'] ?? 'down',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  }
+);
+const mockSaveBotPositions = jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+const mockGetGameObject = jest.fn<(db: unknown, id: string) => Promise<unknown>>().mockResolvedValue(null);
 
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
@@ -118,6 +136,9 @@ jest.mock('@nookstead/db', () => ({
   findMapByUser: mockFindMapByUser,
   findMapByType: mockFindMapByType,
   getPublishedTemplates: mockGetPublishedTemplates,
+  loadBots: mockLoadBots,
+  createBot: mockCreateBot,
+  saveBotPositions: mockSaveBotPositions,
   getGameObject: mockGetGameObject,
 }));
 
@@ -210,11 +231,17 @@ function buildTemplate(overrides: Record<string, unknown> = {}) {
 /* ------------------------------------------------------------------ */
 /*  Tests                                                             */
 /* ------------------------------------------------------------------ */
+/** Create an NxM all-walkable grid for movement tests. */
+function makeWalkableGrid(rows: number, cols: number): boolean[][] {
+  return Array.from({ length: rows }, () => Array(cols).fill(true) as boolean[]);
+}
+
 describe('ChunkRoom', () => {
   let room: ChunkRoom;
   let mockClient: MockClient;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     messageHandlers.clear();
     jest.clearAllMocks();
 
@@ -235,6 +262,12 @@ describe('ChunkRoom', () => {
     mockGetPublishedTemplates.mockResolvedValue([buildTemplate()]);
     mockGetGameObject.mockResolvedValue(null);
     mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    // Dispose room to clear the position autosave interval
+    room.onDispose();
+    jest.useRealTimers();
   });
 
   /* ================================================================ */
@@ -558,9 +591,10 @@ describe('ChunkRoom', () => {
   /* ================================================================ */
   describe('handleMove integration', () => {
     it('should delegate to World and update schema with authoritative position', async () => {
-      // Arrange: join a player first
+      // Arrange: join a player first with a proper walkable grid
       const mapId = 'move-map-uuid';
-      const mapRecord = buildMapRecord({ id: mapId });
+      const walkable = makeWalkableGrid(20, 20);
+      const mapRecord = buildMapRecord({ id: mapId, width: 20, height: 20, walkable });
 
       mockLoadPosition.mockResolvedValue({
         worldX: 100,
@@ -616,9 +650,10 @@ describe('ChunkRoom', () => {
     });
 
     it('should trigger chunk transition when move crosses boundary', async () => {
-      // Arrange: join a player near chunk boundary
+      // Arrange: join a player near chunk boundary with a proper walkable grid
       const mapId = 'boundary-map-uuid';
-      const mapRecord = buildMapRecord({ id: mapId });
+      const walkable = makeWalkableGrid(20, 20);
+      const mapRecord = buildMapRecord({ id: mapId, width: 20, height: 20, walkable });
 
       mockLoadPosition.mockResolvedValue({
         worldX: 126,

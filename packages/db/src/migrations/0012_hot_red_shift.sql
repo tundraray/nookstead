@@ -63,6 +63,20 @@ UPDATE "map_templates" SET "map_type" = 'homestead' WHERE "map_type" = 'player_h
 UPDATE "editor_maps" SET "map_type" = 'city' WHERE "map_type" = 'town_district';
 UPDATE "map_templates" SET "map_type" = 'city' WHERE "map_type" = 'town_district';
 
+-- Step 6b: Migrate npc_bots FK from maps_old(user_id) to new maps(id)
+-- Drop old FK constraint (references maps_old.user_id after rename)
+ALTER TABLE "npc_bots" DROP CONSTRAINT IF EXISTS "npc_bots_map_id_maps_user_id_fk";
+
+-- Update npc_bots.map_id: resolve old user_id values to new UUID map ids
+UPDATE "npc_bots" nb
+SET "map_id" = m."id"
+FROM "maps" m
+WHERE nb."map_id" = m."user_id";
+
+-- Add new FK constraint referencing maps(id)
+ALTER TABLE "npc_bots" ADD CONSTRAINT "npc_bots_map_id_maps_id_fk"
+  FOREIGN KEY ("map_id") REFERENCES "maps"("id") ON DELETE CASCADE;
+
 -- Step 7: Drop the old maps table
 DROP TABLE "maps_old";
 

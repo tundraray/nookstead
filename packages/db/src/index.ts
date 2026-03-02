@@ -97,3 +97,10 @@ export {
 export * from './services/material';
 export * from './services/tileset';
 export * from './services/tileset-tag';
+export {
+  createBot,
+  loadBots,
+  saveBotPositions,
+  type CreateBotData,
+  type BotPositionUpdate,
+} from './services/npc-bot';
