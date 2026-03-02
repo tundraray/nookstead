@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { EventBus } from '@/game/EventBus';
+import { getRoom } from '@/services/colyseus';
+import { ClientMessage } from '@nookstead/shared';
+import { ColyseusTransport } from '@/services/ColyseusTransport';
 import { Hotbar } from './Hotbar';
 import { GameModal } from './GameModal';
+import { ChatModal } from './ChatModal';
 import { MenuButton } from './MenuButton';
 import type { HUDState } from './types';
 
@@ -21,6 +25,14 @@ export function HUD({ uiScale }: HUDProps) {
   const [selectedSlot, setSelectedSlot] = useState(DEFAULT_HUD_STATE.selectedSlot);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Dialogue chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatBotName, setChatBotName] = useState('');
+  const [chatTransport, setChatTransport] = useState<ColyseusTransport | null>(
+    null
+  );
+  const transportRef = useRef<ColyseusTransport | null>(null);
+
   // Keyboard: hotbar slot selection (1-0)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -34,6 +46,49 @@ export function HUD({ uiScale }: HUDProps) {
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Listen for dialogue:start EventBus event from PlayerManager
+  useEffect(() => {
+    function onDialogueStart(data: { botId: string; botName: string }) {
+      const room = getRoom();
+      const transport = new ColyseusTransport(room);
+      transportRef.current = transport;
+
+      setChatBotName(data.botName);
+      setChatTransport(transport);
+      setChatOpen(true);
+
+      EventBus.emit('dialogue:lock-movement');
+    }
+
+    EventBus.on('dialogue:start', onDialogueStart);
+    return () => {
+      EventBus.off('dialogue:start', onDialogueStart);
+    };
+  }, []);
+
+  // Handle chat modal close: clean up transport and unlock movement
+  const handleChatClose = useCallback((nextOpen: boolean) => {
+    if (!nextOpen) {
+      // Send DIALOGUE_END to server to end the dialogue session
+      const room = getRoom();
+      if (room) {
+        room.send(ClientMessage.DIALOGUE_END, {});
+      }
+
+      // Dispose transport (cancels active stream, removes listeners)
+      if (transportRef.current) {
+        transportRef.current.dispose();
+        transportRef.current = null;
+      }
+
+      setChatOpen(false);
+      setChatTransport(null);
+      setChatBotName('');
+
+      EventBus.emit('dialogue:unlock-movement');
+    }
   }, []);
 
   return (
@@ -59,6 +114,15 @@ export function HUD({ uiScale }: HUDProps) {
       >
         <p>Settings content goes here</p>
       </GameModal>
+      {chatTransport && (
+        <ChatModal
+          key={chatBotName}
+          open={chatOpen}
+          onOpenChange={handleChatClose}
+          botName={chatBotName}
+          transport={chatTransport}
+        />
+      )}
     </div>
   );
 }

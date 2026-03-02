@@ -48,15 +48,28 @@ jest.mock('phaser', () => {
     }
   }
 
+  // Minimal EventEmitter mock for EventBus (pulled in by dialogue-lock)
+  class MockEventEmitter {
+    on() { return this; }
+    off() { return this; }
+    emit() { return this; }
+  }
+
   return {
     __esModule: true,
     default: {
       GameObjects: {
         Sprite: MockSprite,
       },
+      Events: {
+        EventEmitter: MockEventEmitter,
+      },
     },
     GameObjects: {
       Sprite: MockSprite,
+    },
+    Events: {
+      EventEmitter: MockEventEmitter,
     },
   };
 });

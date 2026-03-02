@@ -9,6 +9,8 @@ import {
   ClientMessage,
   ServerMessage,
   type ChunkRoomState,
+  type DialogueStartPayload,
+  type DialogueStreamChunkPayload,
 } from '@nookstead/shared';
 import { EventBus } from '../EventBus';
 import { PlayerSprite } from '../entities/PlayerSprite';
@@ -275,6 +277,31 @@ export class PlayerManager {
         EventBus.emit('npc:interact-result', data);
       }
     );
+
+    // Dialogue events: forward server messages to EventBus for React consumption
+    this.room.onMessage(
+      ServerMessage.DIALOGUE_START,
+      (data: DialogueStartPayload) => {
+        console.log(
+          `[PlayerManager] DIALOGUE_START received: botId=${data.botId}, botName=${data.botName}`
+        );
+        EventBus.emit('dialogue:start', {
+          botId: data.botId,
+          botName: data.botName,
+        });
+      }
+    );
+
+    this.room.onMessage(
+      ServerMessage.DIALOGUE_STREAM_CHUNK,
+      (data: DialogueStreamChunkPayload) => {
+        EventBus.emit('dialogue:stream-chunk', { text: data.text });
+      }
+    );
+
+    this.room.onMessage(ServerMessage.DIALOGUE_END_TURN, () => {
+      EventBus.emit('dialogue:end-turn');
+    });
   }
 
   /**

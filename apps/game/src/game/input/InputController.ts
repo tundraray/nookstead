@@ -33,6 +33,10 @@ export class InputController {
         'InputController requires scene.input.keyboard to be available'
       );
     }
+    // Prevent Phaser from calling preventDefault() on keyboard events
+    // globally, so WASD/arrow keys still work in HTML inputs and textareas.
+    keyboard.disableGlobalCapture();
+
     this.cursors = keyboard.createCursorKeys();
     this.wasd = keyboard.addKeys('W,A,S,D') as Record<
       string,
@@ -48,6 +52,11 @@ export class InputController {
    * @returns Direction vector with integer x and y components.
    */
   getDirection(): { x: number; y: number } {
+    // Only process game input when the Phaser canvas has focus
+    if (document.activeElement?.tagName !== 'CANVAS') {
+      return { x: 0, y: 0 };
+    }
+
     const up = this.wasd.W.isDown || this.cursors.up.isDown;
     const down = this.wasd.S.isDown || this.cursors.down.isDown;
     const left = this.wasd.A.isDown || this.cursors.left.isDown;

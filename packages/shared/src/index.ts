@@ -62,6 +62,12 @@ export type {
   NpcBotData,
   NpcInteractResult,
 } from './types/npc';
+// Dialogue types
+export type {
+  DialogueMessagePayload,
+  DialogueStartPayload,
+  DialogueStreamChunkPayload,
+} from './types/dialogue';
 // NPC / Bot constants
 export {
   BOT_SPEED,

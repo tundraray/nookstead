@@ -25,6 +25,8 @@ export interface ServerBot {
   /** Position at walkStartTime (for stuck detection). */
   lastKnownX: number;
   lastKnownY: number;
+  /** Session ID of player currently in dialogue, or null if free. */
+  interactingPlayerId: string | null;
 }
 
 /**
@@ -91,5 +93,6 @@ export function createServerBot(record: NpcBot): ServerBot {
     walkStartTime: null,
     lastKnownX: record.worldX,
     lastKnownY: record.worldY,
+    interactingPlayerId: null,
   };
 }

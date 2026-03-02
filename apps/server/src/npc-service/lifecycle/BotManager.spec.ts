@@ -672,4 +672,83 @@ describe('BotManager', () => {
       expect(updates).toHaveLength(0);
     });
   });
+
+  // ─── Dialogue interaction ──────────────────────────────────────────────────
+
+  describe('dialogue interaction', () => {
+    it('should set bot state to interacting and record playerId on startInteraction', () => {
+      manager.init(config, [makeBotRecord({ id: 'dlg-bot' })]);
+
+      const result = manager.startInteraction('dlg-bot', 'player-1');
+
+      expect(result).toBe(true);
+      expect(manager.isInteracting('dlg-bot')).toBe(true);
+    });
+
+    it('should return false when startInteraction is called on already-interacting bot', () => {
+      manager.init(config, [makeBotRecord({ id: 'dlg-bot' })]);
+      manager.startInteraction('dlg-bot', 'player-1');
+
+      const result = manager.startInteraction('dlg-bot', 'player-2');
+
+      expect(result).toBe(false);
+      expect(manager.isInteracting('dlg-bot')).toBe(true);
+    });
+
+    it('should return bot to idle and clear interactingPlayerId on endInteraction', () => {
+      manager.init(config, [makeBotRecord({ id: 'dlg-bot' })]);
+      manager.startInteraction('dlg-bot', 'player-1');
+
+      manager.endInteraction('dlg-bot', 'player-1');
+
+      expect(manager.isInteracting('dlg-bot')).toBe(false);
+    });
+
+    it('should be no-op when endInteraction is called with wrong playerId', () => {
+      manager.init(config, [makeBotRecord({ id: 'dlg-bot' })]);
+      manager.startInteraction('dlg-bot', 'player-1');
+
+      manager.endInteraction('dlg-bot', 'player-2');
+
+      expect(manager.isInteracting('dlg-bot')).toBe(true);
+    });
+
+    it('should clean up all bots for a player on endAllInteractionsForPlayer', () => {
+      manager.init(config, [
+        makeBotRecord({ id: 'dlg-bot-1', worldX: 80, worldY: 80 }),
+        makeBotRecord({ id: 'dlg-bot-2', worldX: 160, worldY: 160 }),
+      ]);
+      manager.startInteraction('dlg-bot-1', 'player-1');
+      manager.startInteraction('dlg-bot-2', 'player-1');
+
+      manager.endAllInteractionsForPlayer('player-1');
+
+      expect(manager.isInteracting('dlg-bot-1')).toBe(false);
+      expect(manager.isInteracting('dlg-bot-2')).toBe(false);
+    });
+
+    it('should skip interacting bot during tick (no update generated)', () => {
+      manager.init(config, [makeBotRecord({ id: 'dlg-bot' })]);
+      manager.startInteraction('dlg-bot', 'player-1');
+
+      const updates = manager.tick(100);
+
+      expect(updates).toHaveLength(0);
+      expect(manager.isInteracting('dlg-bot')).toBe(true);
+    });
+
+    it('should return busy error when validateInteraction is called on interacting bot', () => {
+      const botX = 80;
+      const botY = 80;
+      manager.init(config, [
+        makeBotRecord({ id: 'dlg-bot', worldX: botX, worldY: botY }),
+      ]);
+      manager.startInteraction('dlg-bot', 'player-1');
+
+      // Player is within interaction radius
+      const result = manager.validateInteraction('dlg-bot', botX, botY);
+
+      expect(result).toEqual({ success: false, error: 'Bot is busy' });
+    });
+  });
 });

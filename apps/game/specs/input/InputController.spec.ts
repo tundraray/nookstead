@@ -17,6 +17,7 @@ function createMockScene(
   return {
     input: {
       keyboard: {
+        disableGlobalCapture: jest.fn(),
         createCursorKeys: () => ({
           up: makeKey('up'),
           down: makeKey('down'),
@@ -37,6 +38,19 @@ function createMockScene(
 }
 
 describe('InputController', () => {
+  // Simulate focus on the Phaser canvas so getDirection() reads keys.
+  // jsdom requires tabIndex for non-interactive elements to be focusable.
+  let canvas: HTMLCanvasElement;
+  beforeEach(() => {
+    canvas = document.createElement('canvas');
+    canvas.tabIndex = 0;
+    document.body.appendChild(canvas);
+    canvas.focus();
+  });
+  afterEach(() => {
+    canvas.remove();
+  });
+
   // -----------------------------------------------------------
   // getDirection
   // -----------------------------------------------------------

@@ -39,10 +39,14 @@ import {
   type Grid,
   type SerializedLayer,
   type CollisionZoneDef,
+  type DialogueMessagePayload,
+  type DialogueStartPayload,
+  type DialogueStreamChunkPayload,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
+const DIALOGUE_STREAM_DELAY_MS = 100;
 
 // ---------------------------------------------------------------------------
 // ChunkId parsing helpers
@@ -89,6 +93,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private mapGrid: Grid | null = null;
   private botInitInProgress = false;
   private positionSaveTimer: ReturnType<typeof setInterval> | null = null;
+  private dialogueSessions = new Map<
+    string,
+    { botId: string; streamTimers: ReturnType<typeof setTimeout>[] }
+  >();
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -119,6 +127,17 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
     this.onMessage(ClientMessage.HARD_RESET, (client) => {
       this.handleHardReset(client as Client);
+    });
+
+    this.onMessage(
+      ClientMessage.DIALOGUE_MESSAGE,
+      (client, payload: unknown) => {
+        this.handleDialogueMessage(client as Client, payload);
+      }
+    );
+
+    this.onMessage(ClientMessage.DIALOGUE_END, (client) => {
+      this.handleDialogueEnd(client as Client, 'close');
     });
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
@@ -561,6 +580,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   }
 
   override async onLeave(client: Client, _code?: number): Promise<void> {
+    // Clean up dialogue session if active
+    if (this.dialogueSessions.has(client.sessionId)) {
+      this.handleDialogueEnd(client, 'leave');
+    }
+
     const player = world.getPlayer(client.sessionId);
 
     console.log(
@@ -639,6 +663,15 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   }
 
   override onDispose(): void {
+    // Cancel all dialogue timers and clean up sessions
+    for (const [sessionId, session] of this.dialogueSessions) {
+      for (const timer of session.streamTimers) {
+        clearTimeout(timer);
+      }
+      this.botManager.endInteraction(session.botId, sessionId);
+    }
+    this.dialogueSessions.clear();
+
     if (this.positionSaveTimer) {
       clearInterval(this.positionSaveTimer);
       this.positionSaveTimer = null;
@@ -648,7 +681,85 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     console.log(`[ChunkRoom] Room disposed: chunk:${this.chunkId}`);
   }
 
+  private handleDialogueMessage(client: Client, payload: unknown): void {
+    const session = this.dialogueSessions.get(client.sessionId);
+    if (!session) {
+      return;
+    }
+
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      typeof (payload as DialogueMessagePayload).text !== 'string'
+    ) {
+      return;
+    }
+
+    const { text } = payload as DialogueMessagePayload;
+    console.log(
+      `[ChunkRoom] Dialogue message: sessionId=${client.sessionId}, text=${text.slice(0, 50)}`
+    );
+
+    // Cancel any in-flight stream timers
+    for (const timer of session.streamTimers) {
+      clearTimeout(timer);
+    }
+    session.streamTimers = [];
+
+    // Pseudo-streaming echo: send each word back with a delay
+    const words = text.split(/\s+/).filter((w) => w.length > 0);
+    for (let i = 0; i < words.length; i++) {
+      const timer = setTimeout(() => {
+        const chunk: DialogueStreamChunkPayload = {
+          text: words[i] + (i < words.length - 1 ? ' ' : ''),
+        };
+        client.send(ServerMessage.DIALOGUE_STREAM_CHUNK, chunk);
+
+        // After last word, send end-turn
+        if (i === words.length - 1) {
+          client.send(ServerMessage.DIALOGUE_END_TURN, {});
+          session.streamTimers = [];
+        }
+      }, DIALOGUE_STREAM_DELAY_MS * (i + 1));
+
+      session.streamTimers.push(timer);
+    }
+  }
+
+  private handleDialogueEnd(client: Client, reason: string): void {
+    const session = this.dialogueSessions.get(client.sessionId);
+    if (!session) {
+      return;
+    }
+
+    // Cancel all stream timers
+    for (const timer of session.streamTimers) {
+      clearTimeout(timer);
+    }
+
+    // End interaction in BotManager
+    this.botManager.endInteraction(session.botId, client.sessionId);
+
+    // Sync bot state back to idle in Colyseus schema
+    const botSchema = this.state.bots.get(session.botId);
+    if (botSchema) {
+      botSchema.state = 'idle';
+    }
+
+    console.log(
+      `[ChunkRoom] Dialogue ended: sessionId=${client.sessionId}, botId=${session.botId}, reason=${reason}`
+    );
+
+    // Remove session
+    this.dialogueSessions.delete(client.sessionId);
+  }
+
   private handleMove(client: Client, payload: unknown): void {
+    // Reject movement during dialogue
+    if (this.dialogueSessions.has(client.sessionId)) {
+      return;
+    }
+
     if (
       !payload ||
       typeof payload !== 'object' ||
@@ -758,6 +869,39 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     );
 
     if (result.success) {
+      // Start dialogue interaction
+      const started = this.botManager.startInteraction(
+        botId,
+        client.sessionId
+      );
+      if (!started) {
+        client.send(ServerMessage.NPC_INTERACT_RESULT, {
+          success: false,
+          error: 'Bot is busy',
+        });
+        return;
+      }
+
+      // Track dialogue session
+      this.dialogueSessions.set(client.sessionId, {
+        botId,
+        streamTimers: [],
+      });
+
+      // Sync bot state to Colyseus schema
+      const botSchema = this.state.bots.get(botId);
+      if (botSchema) {
+        botSchema.state = 'interacting';
+      }
+
+      // Send dialogue start to client
+      const startPayload: DialogueStartPayload = {
+        botId,
+        botName: result.name,
+      };
+      client.send(ServerMessage.DIALOGUE_START, startPayload);
+
+      // Send interact result with dialogueStarted flag
       client.send(ServerMessage.NPC_INTERACT_RESULT, {
         success: true,
         bot: {
@@ -765,6 +909,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           name: result.name,
           state: result.state,
         },
+        dialogueStarted: true,
       });
     } else {
       client.send(ServerMessage.NPC_INTERACT_RESULT, {
