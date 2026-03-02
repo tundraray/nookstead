@@ -31,6 +31,8 @@ export interface MovementInput {
   mapHeight: number;
   /** Size of each tile in pixels. */
   tileSize: number;
+  /** Pixel offset subtracted from Y before pixel→tile conversion (default 0). */
+  feetOffsetY?: number;
 }
 
 /** Result of a movement calculation. */
@@ -105,10 +107,11 @@ export function getTerrainSpeedModifier(
   x: number,
   y: number,
   grid: Grid,
-  tileSize: number
+  tileSize: number,
+  feetOffsetY = 0
 ): number {
   const tileX = pixelToTile(x, tileSize);
-  const tileY = pixelToTile(y, tileSize);
+  const tileY = pixelToTile(y - feetOffsetY, tileSize);
   const terrain = grid[tileY][tileX].terrain;
   return getMaterialProperties(terrain).speedModifier;
 }
@@ -143,6 +146,7 @@ export function calculateMovement(input: MovementInput): MovementResult {
     mapWidth,
     mapHeight,
     tileSize,
+    feetOffsetY = 0,
   } = input;
 
   // 1. Clamp delta to prevent tunneling
@@ -153,7 +157,8 @@ export function calculateMovement(input: MovementInput): MovementResult {
     position.x,
     position.y,
     grid,
-    tileSize
+    tileSize,
+    feetOffsetY
   );
 
   // 3. Calculate desired displacement
@@ -170,7 +175,7 @@ export function calculateMovement(input: MovementInput): MovementResult {
   if (dx !== 0) {
     const candidateX = position.x + dx;
     const feetTileX = pixelToTile(candidateX, tileSize);
-    const feetTileY = pixelToTile(position.y, tileSize);
+    const feetTileY = pixelToTile(position.y - feetOffsetY, tileSize);
     if (isTileWalkable(feetTileX, feetTileY, walkable, mapWidth, mapHeight)) {
       newX = candidateX;
     } else {
@@ -182,7 +187,7 @@ export function calculateMovement(input: MovementInput): MovementResult {
   if (dy !== 0) {
     const candidateY = position.y + dy;
     const feetTileX = pixelToTile(newX, tileSize);
-    const feetTileY = pixelToTile(candidateY, tileSize);
+    const feetTileY = pixelToTile(candidateY - feetOffsetY, tileSize);
     if (isTileWalkable(feetTileX, feetTileY, walkable, mapWidth, mapHeight)) {
       newY = candidateY;
     } else {

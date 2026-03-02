@@ -141,6 +141,7 @@ export class WalkState implements State {
       mapWidth: this.context.mapWidth,
       mapHeight: this.context.mapHeight,
       tileSize: this.context.tileSize,
+      feetOffsetY: 1,
     });
 
     // Compute movement delta BEFORE updating position
