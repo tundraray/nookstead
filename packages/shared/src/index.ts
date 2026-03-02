@@ -55,3 +55,23 @@ export type {
   SessionKickedPayload,
 } from './types/map';
 export { isTileLayer, isObjectLayer } from './types/map';
+// NPC types
+export type {
+  BotAnimState,
+  BotState,
+  NpcInteractPayload,
+  NpcBotData,
+  NpcInteractResult,
+} from './types/npc';
+// NPC / Bot constants
+export {
+  BOT_SPEED,
+  BOT_WANDER_RADIUS,
+  BOT_WANDER_INTERVAL_TICKS,
+  MAX_BOTS_PER_HOMESTEAD,
+  DEFAULT_BOT_COUNT,
+  BOT_INTERACTION_RADIUS,
+  BOT_STUCK_TIMEOUT_MS,
+  MAX_WANDER_TARGET_ATTEMPTS,
+  BOT_NAMES,
+} from './constants';

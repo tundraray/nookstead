@@ -78,6 +78,14 @@ export class PlayerSprite {
     this.targetY = worldY;
   }
 
+  /**
+   * Return the underlying Phaser game object for interaction setup
+   * (e.g. setInteractive, pointerdown events).
+   */
+  getGameObject(): Phaser.GameObjects.Sprite {
+    return this.sprite;
+  }
+
   /** Current rendered X position of the sprite. */
   getX(): number {
     return this.sprite.x;
