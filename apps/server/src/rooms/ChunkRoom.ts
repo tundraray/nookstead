@@ -39,12 +39,15 @@ import {
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 
+const POSITION_SAVE_INTERVAL_MS = 30_000;
+
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
   private botManager = new BotManager();
 
   private mapWalkable: boolean[][] = [];
   private botInitInProgress = false;
+  private positionSaveTimer: ReturnType<typeof setInterval> | null = null;
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -80,6 +83,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         }
       }
     }, PATCH_RATE_MS);
+
+    // Periodic position autosave (protects against server crashes)
+    this.positionSaveTimer = setInterval(() => {
+      this.saveAllPlayerPositions();
+    }, POSITION_SAVE_INTERVAL_MS);
 
     console.log(
       `[ChunkRoom] Room created: chunk:${this.chunkId}, roomId=${this.roomId}`
@@ -459,7 +467,16 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
   override async onLeave(client: Client, _code?: number): Promise<void> {
     const player = world.getPlayer(client.sessionId);
+
+    console.log(
+      `[ChunkRoom] onLeave fired: sessionId=${client.sessionId}, code=${_code}, playerFound=${!!player}`
+    );
+
     if (player) {
+      console.log(
+        `[ChunkRoom] onLeave saving position: userId=${player.userId}, worldX=${player.worldX}, worldY=${player.worldY}, chunkId=${player.chunkId}, direction=${player.direction}`
+      );
+
       // Unregister session
       sessionTracker.unregister(player.userId);
 
@@ -474,17 +491,21 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           direction: player.direction,
         });
         console.log(
-          `[ChunkRoom] Position saved: userId=${player.userId}, worldX=${player.worldX}, worldY=${player.worldY}`
+          `[ChunkRoom] onLeave position saved OK: userId=${player.userId}`
         );
       } catch (error) {
         console.error(
-          `[ChunkRoom] Position save failed: userId=${player.userId}`,
+          `[ChunkRoom] onLeave position save FAILED: userId=${player.userId}`,
           error
         );
       }
 
       // Remove from World
       world.removePlayer(client.sessionId);
+    } else {
+      console.warn(
+        `[ChunkRoom] onLeave: player NOT found in World for sessionId=${client.sessionId} — position NOT saved`
+      );
     }
 
     // Remove from schema
@@ -523,6 +544,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   }
 
   override onDispose(): void {
+    if (this.positionSaveTimer) {
+      clearInterval(this.positionSaveTimer);
+      this.positionSaveTimer = null;
+    }
     this.botManager.destroy();
     chunkManager.unregisterRoom(this.chunkId);
     console.log(`[ChunkRoom] Room disposed: chunk:${this.chunkId}`);
@@ -577,6 +602,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       if (worldPlayer) {
         chunkPlayer.direction = worldPlayer.direction;
       }
+      console.log(
+        `[ChunkRoom] move: sessionId=${client.sessionId}, x=${result.worldX.toFixed(1)}, y=${result.worldY.toFixed(1)}, dir=${worldPlayer?.direction ?? '?'}`
+      );
     }
 
     // Handle chunk transition
@@ -673,6 +701,43 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
 
     return { mapWalkable: this.mapWalkable, mapWidth, mapHeight };
+  }
+
+  /**
+   * Save positions for all players currently in this room.
+   * Called periodically and can be called on-demand.
+   */
+  private saveAllPlayerPositions(): void {
+    if (this.state.players.size === 0) return;
+
+    const db = getGameDb();
+    const count = this.state.players.size;
+
+    console.log(
+      `[ChunkRoom] Autosave: saving ${count} player position(s), chunk=${this.chunkId}`
+    );
+
+    this.state.players.forEach((_chunkPlayer, sessionId) => {
+      const player = world.getPlayer(sessionId);
+      if (!player) return;
+
+      console.log(
+        `[ChunkRoom] Autosave: userId=${player.userId}, x=${player.worldX.toFixed(1)}, y=${player.worldY.toFixed(1)}, dir=${player.direction}`
+      );
+
+      savePosition(db, {
+        userId: player.userId,
+        worldX: player.worldX,
+        worldY: player.worldY,
+        chunkId: player.chunkId,
+        direction: player.direction,
+      }).catch((err: unknown) => {
+        console.error(
+          `[ChunkRoom] Autosave position FAILED: userId=${player.userId}`,
+          err
+        );
+      });
+    });
   }
 
   /**
