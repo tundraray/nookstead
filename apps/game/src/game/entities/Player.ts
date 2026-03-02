@@ -136,6 +136,10 @@ export class Player extends Phaser.GameObjects.Sprite {
         if (nearby) {
           this.x = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
           this.y = (nearby.tileY + 1) * TILE_SIZE;
+          // Sync authoritative position so reconcile() does not fight displacement
+          this.authoritativeX = this.x;
+          this.authoritativeY = this.y;
+          this.isInterpolating = false;
         }
         this.displaced = true;
       }
@@ -158,9 +162,12 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.y = this.authoritativeY;
         this.isInterpolating = false;
       } else {
-        // Lerp toward authoritative position
-        this.x += dx * INTERPOLATION_SPEED;
-        this.y += dy * INTERPOLATION_SPEED;
+        // Frame-rate-independent exponential decay toward authoritative position.
+        // At 60fps (delta≈16.67): lerpFactor ≈ 0.2 (matches original behavior).
+        // At 30fps (delta≈33.33): lerpFactor ≈ 0.36 (converges at same wall-clock rate).
+        const lerpFactor = 1 - Math.pow(1 - INTERPOLATION_SPEED, delta / 16.67);
+        this.x += dx * lerpFactor;
+        this.y += dy * lerpFactor;
       }
     }
 

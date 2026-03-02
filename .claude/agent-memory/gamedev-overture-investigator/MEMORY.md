@@ -32,5 +32,19 @@
 - buildTransitionMap now uses material keys (not UUIDs) after buildMapEditorData resolves them
 - state.tilesets and state.materials now populated via SET_TILESETS/SET_MATERIALS before LOAD_MAP
 
+## Key Findings (2026-03-02) - Movement Sync Investigation
+- **Multiplayer architecture**: apps/server (Colyseus) + apps/game (Phaser) + packages/shared (types/constants)
+- **Movement flow**: InputController -> WalkState -> calculateMovement() -> setPosition() + room.send(MOVE, {dx,dy}) -> World.movePlayer() -> ChunkPlayer schema -> Colyseus patch -> onChange -> reconcile()
+- **PATCH_RATE_MS=100ms**, CORRECTION_THRESHOLD=8px, INTERPOLATION_SPEED=0.2 (per-frame, NOT delta-time-based)
+- **Displacement-reconciliation fight**: Newly added displacement (b176290) snaps to walkable, reconcile() snaps back to authoritative (possibly non-walkable). No server notification from displacement.
+- **Frame-dependent reconciliation**: Player.preUpdate uses `position += delta * 0.2` (per-frame). PlayerSprite uses `t = elapsed/100` (time-based). Inconsistent approaches.
+- **No input queueing**: Server processes MOVE immediately, no fixedTick pattern. Client sends 60 msgs/sec.
+- **No server walkability**: TODO comment in ChunkRoom.ts. Server trusts client dx/dy blindly.
+- **MAX_SPEED defined but unused**: Never imported by server code.
+- **POSITION_UPDATE message unused**: Defined but never sent or handled.
+- **Arcade Physics conflict**: physics.add.existing(player) + collider registered, but movement uses setPosition().
+- **No animState on ChunkPlayer**: Remote player animation derived client-side from position comparison (unreliable).
+
 ## File Reference
 - [patterns.md](patterns.md) - Detailed patterns and domain mismatch analysis
+- [movement-sync.md](movement-sync.md) - Detailed movement synchronization investigation notes
