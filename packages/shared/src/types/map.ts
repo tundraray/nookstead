@@ -126,6 +126,8 @@ export function isObjectLayer(
  * Contains all data needed to render the player's map.
  */
 export interface MapDataPayload {
+  /** UUID of the source map entity (maps table). */
+  mapId?: string;
   seed: number;
   width: number;
   height: number;

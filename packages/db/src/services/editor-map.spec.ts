@@ -65,7 +65,7 @@ function createMockDb() {
 
 const testData: CreateEditorMapData = {
   name: 'Test Map',
-  mapType: 'town_district',
+  mapType: 'city',
   width: 32,
   height: 32,
   seed: 42,
@@ -136,7 +136,7 @@ describe('EditorMapService', () => {
       const { db, mocks } = createMockDb();
       mocks.selectOrderBy.mockResolvedValue([testRecord]);
 
-      const result = await listEditorMaps(db, { mapType: 'town_district' });
+      const result = await listEditorMaps(db, { mapType: 'city' });
 
       expect(mocks.selectFrom).toHaveBeenCalledWith(editorMaps);
       expect(mocks.selectWhere).toHaveBeenCalled();

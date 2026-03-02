@@ -10,8 +10,10 @@ import { getGameDb } from '@nookstead/db/adapters/colyseus';
 import {
   savePosition,
   loadPosition,
-  saveMap,
   loadMap,
+  createMap,
+  findMapByUser,
+  findMapByType,
   getPublishedTemplates,
   getGameObject,
 } from '@nookstead/db';
@@ -33,6 +35,43 @@ import {
   type CollisionZoneDef,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
+
+// ---------------------------------------------------------------------------
+// ChunkId parsing helpers
+// ---------------------------------------------------------------------------
+
+type ParsedChunkId =
+  | { type: 'map'; mapId: string }
+  | { type: 'world'; x: number; y: number }
+  | { type: 'alias'; alias: string };
+
+function parseChunkId(chunkId: string): ParsedChunkId {
+  if (chunkId.startsWith('map:')) {
+    return { type: 'map', mapId: chunkId.slice(4) };
+  }
+  if (chunkId.startsWith('world:')) {
+    const parts = chunkId.split(':');
+    return { type: 'world', x: Number(parts[1]), y: Number(parts[2]) };
+  }
+  // Well-known aliases: city:capital, etc.
+  return { type: 'alias', alias: chunkId };
+}
+
+async function resolveAlias(
+  db: Parameters<typeof findMapByType>[0],
+  alias: string
+): Promise<string> {
+  if (alias === 'city:capital') {
+    const cityMap = await findMapByType(db, 'city', 'capital');
+    if (!cityMap) {
+      throw new Error(
+        'No city map found for alias city:capital. Seed a city map first.'
+      );
+    }
+    return cityMap.id;
+  }
+  throw new Error(`Unknown chunkId alias: ${alias}`);
+}
 
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
@@ -108,57 +147,37 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
     }
 
-    // 2. Redirect if player belongs in a different chunk
-    const targetChunkId = savedPosition?.chunkId ?? `player:${userId}`;
+    // 2. Determine target chunkId and mapId
+    let targetChunkId: string;
+    let mapId: string | null = null;
 
-    if (targetChunkId !== this.chunkId) {
-      console.log(
-        `[ChunkRoom] Redirecting: userId=${userId}, from=${this.chunkId} to=${targetChunkId}`
-      );
-      client.send(ServerMessage.ROOM_REDIRECT, { chunkId: targetChunkId });
-      return;
-    }
-
-    // 3. Load or generate map
-    let mapPayload: MapDataPayload;
-    let mapWalkable: boolean[][] | null = null;
-    let mapGrid: Grid | null = null;
-
-    try {
-      // Attempt to load saved map (non-fatal if DB table missing or query fails)
-      let savedMap = null;
-      try {
-        savedMap = await loadMap(db, userId);
-      } catch (loadErr) {
-        console.warn(
-          `[ChunkRoom] Map load failed (will generate new): userId=${userId}`,
-          loadErr
-        );
+    if (savedPosition) {
+      // Returning player: use saved chunkId
+      targetChunkId = savedPosition.chunkId;
+      const parsed = parseChunkId(targetChunkId);
+      if (parsed.type === 'map') {
+        mapId = parsed.mapId;
+      } else if (parsed.type === 'alias') {
+        mapId = await resolveAlias(db, targetChunkId);
+        targetChunkId = `map:${mapId}`;
       }
+      // world: type is handled by existing positional logic (no mapId)
+    } else {
+      // No saved position: look up user's homestead or create one
+      const existingHomestead = await findMapByUser(db, userId, 'homestead');
 
-      if (savedMap) {
-        // Returning player: use saved map
-        console.log(`[ChunkRoom] Map loaded from DB: userId=${userId}`);
-        mapWalkable = savedMap.walkable as boolean[][];
-        mapGrid = savedMap.grid as unknown as Grid;
-        mapPayload = {
-          seed: savedMap.seed,
-          width: savedMap.width,
-          height: savedMap.height,
-          grid: savedMap.grid as MapDataPayload['grid'],
-          layers: savedMap.layers as MapDataPayload['layers'],
-          walkable: mapWalkable,
-        };
-      } else {
-        // New player or load failed: pick random published template
-        const templates = await getPublishedTemplates(
-          db,
-          'player_homestead'
+      if (existingHomestead) {
+        mapId = existingHomestead.id;
+        targetChunkId = `map:${mapId}`;
+        console.log(
+          `[ChunkRoom] Existing homestead found: userId=${userId}, mapId=${mapId}`
         );
-
+      } else {
+        // New player: create homestead from template
+        const templates = await getPublishedTemplates(db, 'homestead');
         if (templates.length === 0) {
           client.send(ServerMessage.ERROR, {
-            message: 'No published template maps available',
+            message: 'No published homestead templates available',
           });
           return;
         }
@@ -168,22 +187,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         const seed = Math.floor(Math.random() * 0x7fffffff);
 
         console.log(
-          `[ChunkRoom] Assigning published template for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
+          `[ChunkRoom] Creating homestead for new player: userId=${userId}, templateId=${template.id}, seed=${seed}`
         );
 
-        mapWalkable = (template.walkable as boolean[][]) ?? [];
-        mapGrid = template.grid as unknown as Grid;
-        mapPayload = {
-          seed,
-          width: template.baseWidth,
-          height: template.baseHeight,
-          grid: template.grid as MapDataPayload['grid'],
-          layers: template.layers as MapDataPayload['layers'],
-          walkable: mapWalkable,
-        };
-
-        // Save to DB (fire and forget with error logging)
-        saveMap(db, {
+        const newMap = await createMap(db, {
+          mapType: 'homestead',
           userId,
           seed,
           width: template.baseWidth,
@@ -191,23 +199,84 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           grid: template.grid,
           layers: template.layers,
           walkable: template.walkable,
-        }).catch((err: unknown) => {
-          console.error(
-            `[ChunkRoom] Map save failed (non-fatal): userId=${userId}`,
-            err
-          );
+          metadata: { templateId: template.id },
         });
+
+        mapId = newMap.id;
+        targetChunkId = `map:${mapId}`;
+        console.log(
+          `[ChunkRoom] Homestead created: userId=${userId}, mapId=${mapId}`
+        );
+      }
+    }
+
+    // 3. Redirect if player belongs in a different chunk
+    if (targetChunkId !== this.chunkId) {
+      console.log(
+        `[ChunkRoom] Redirecting: userId=${userId}, from=${this.chunkId} to=${targetChunkId}`
+      );
+      client.send(ServerMessage.ROOM_REDIRECT, { chunkId: targetChunkId });
+      return;
+    }
+
+    // 4. Load map data
+    let mapPayload: MapDataPayload;
+    let mapWalkable: boolean[][] | null = null;
+    let mapGrid: Grid | null = null;
+
+    // If this room is an alias (e.g. city:capital), resolve it now
+    if (!mapId) {
+      const parsed = parseChunkId(this.chunkId);
+      if (parsed.type === 'map') {
+        mapId = parsed.mapId;
+      } else if (parsed.type === 'alias') {
+        mapId = await resolveAlias(db, this.chunkId);
+      }
+    }
+
+    if (!mapId) {
+      console.error(
+        `[ChunkRoom] Cannot determine mapId for chunk: ${this.chunkId}`
+      );
+      client.send(ServerMessage.ERROR, { message: 'Map data unavailable' });
+      return;
+    }
+
+    try {
+      const savedMap = await loadMap(db, mapId);
+
+      if (savedMap) {
+        console.log(
+          `[ChunkRoom] Map loaded from DB: mapId=${mapId}`
+        );
+        mapWalkable = savedMap.walkable as boolean[][];
+        mapGrid = savedMap.grid as unknown as Grid;
+        mapPayload = {
+          mapId: savedMap.id,
+          seed: savedMap.seed ?? 0,
+          width: savedMap.width,
+          height: savedMap.height,
+          grid: savedMap.grid as MapDataPayload['grid'],
+          layers: savedMap.layers as MapDataPayload['layers'],
+          walkable: mapWalkable,
+        };
+      } else {
+        console.error(
+          `[ChunkRoom] Map not found: mapId=${mapId}`
+        );
+        client.send(ServerMessage.ERROR, { message: 'Map data unavailable' });
+        return;
       }
     } catch (err) {
       console.error(
-        `[ChunkRoom] Map generation failed: userId=${userId}`,
+        `[ChunkRoom] Map load failed: mapId=${mapId}`,
         err
       );
       client.send(ServerMessage.ERROR, { message: 'Map data unavailable' });
       return;
     }
 
-    // 3b. Apply object collision zones to walkability grid
+    // 4b. Apply object collision zones to walkability grid
     if (mapWalkable) {
       try {
         const layers = mapPayload.layers as SerializedLayer[];
@@ -262,18 +331,18 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           mapPayload.walkable = mapWalkable;
 
           console.log(
-            `[ChunkRoom] Object collision zones applied: userId=${userId}, objects=${placedObjects.length}, definitions=${objectDefinitions.size}`
+            `[ChunkRoom] Object collision zones applied: mapId=${mapId}, objects=${placedObjects.length}, definitions=${objectDefinitions.size}`
           );
         }
       } catch (err) {
         console.warn(
-          `[ChunkRoom] Object collision zone application failed (non-fatal): userId=${userId}`,
+          `[ChunkRoom] Object collision zone application failed (non-fatal): mapId=${mapId}`,
           err
         );
       }
     }
 
-    // 3. Determine spawn position
+    // 5. Determine spawn position
     let worldX: number;
     let worldY: number;
     let chunkId: string;
@@ -282,11 +351,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     if (savedPosition) {
       worldX = savedPosition.worldX;
       worldY = savedPosition.worldY;
-      chunkId = savedPosition.chunkId;
+      chunkId = targetChunkId;
       direction = savedPosition.direction;
     } else {
-      // New player: use this room's chunkId (after redirect, this IS the correct chunk)
-      chunkId = this.chunkId;
+      // New player: use targetChunkId (after redirect, this IS the correct chunk)
+      chunkId = targetChunkId;
       direction = 'down';
 
       if (mapWalkable && mapGrid) {
@@ -325,7 +394,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       | 'left'
       | 'right';
 
-    // 4. Create server player
+    // 6. Create server player
     const serverPlayer = createServerPlayer({
       id: client.sessionId,
       userId,
@@ -355,9 +424,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Register session for duplicate detection
     sessionTracker.register(userId, client, this);
 
-    // 5. Send map data to client
+    // 7. Send map data to client
     client.send(ServerMessage.MAP_DATA, mapPayload);
-    console.log(`[ChunkRoom] MAP_DATA sent: userId=${userId}`);
+    console.log(`[ChunkRoom] MAP_DATA sent: userId=${userId}, mapId=${mapId}`);
 
     console.log(
       `[ChunkRoom] Player joined: sessionId=${client.sessionId}, userId=${userId}, chunk=${this.chunkId}`
@@ -422,6 +491,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
     const move = payload as MovePayload;
     const result = world.movePlayer(client.sessionId, move.dx, move.dy);
+
+    // DEBUG: verify MOVE messages are being processed
+    const wp = world.getPlayer(client.sessionId);
+    console.log(
+      `[ChunkRoom][DEBUG] MOVE dx=${move.dx.toFixed(2)} dy=${move.dy.toFixed(2)} -> worldX=${result.worldX.toFixed(1)} worldY=${result.worldY.toFixed(1)} chunkId=${wp?.chunkId}`
+    );
 
     // Update schema (triggers Colyseus auto-patch = move-ack)
     const chunkPlayer = this.state.players.get(client.sessionId);

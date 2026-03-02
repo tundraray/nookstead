@@ -106,7 +106,9 @@ export class World {
       Math.min(WORLD_BOUNDS.maxY, newWorldY)
     );
 
-    // Compute new chunk (skip for non-positional chunks like player homesteads)
+    // Compute new chunk — only world:{x}:{y} chunks are positional.
+    // map:{mapId} (homesteads, cities) and city:capital are non-positional;
+    // no spatial chunk transitions occur inside them.
     const oldChunkId = player.chunkId;
     const isPositionalChunk = oldChunkId.startsWith('world:');
     const newChunkId = isPositionalChunk

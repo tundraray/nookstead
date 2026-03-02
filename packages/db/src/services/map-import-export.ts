@@ -1,23 +1,20 @@
 import { eq } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import { maps } from '../schema/maps';
+import type { MapRecord } from '../schema/maps';
 import { users } from '../schema/users';
 import { editorMaps } from '../schema/editor-maps';
 import type { EditorMap } from '../schema/editor-maps';
 
-export async function listPlayerMaps(
-  db: DrizzleClient
-): Promise<
-  Array<{
-    userId: string;
-    seed: number;
-    updatedAt: Date;
-    userName: string | null;
-    userEmail: string;
-  }>
-> {
-  const rows = await db
+/**
+ * List all player maps with owner info.
+ */
+export async function listPlayerMaps(db: DrizzleClient) {
+  return db
     .select({
+      id: maps.id,
+      name: maps.name,
+      mapType: maps.mapType,
       userId: maps.userId,
       seed: maps.seed,
       updatedAt: maps.updatedAt,
@@ -25,141 +22,141 @@ export async function listPlayerMaps(
       userEmail: users.email,
     })
     .from(maps)
-    .innerJoin(users, eq(maps.userId, users.id));
-
-  return rows;
+    .leftJoin(users, eq(maps.userId, users.id));
 }
 
+/**
+ * Import a player map into the editor by mapId.
+ */
 export async function importPlayerMap(
   db: DrizzleClient,
-  userId: string
+  mapId: string
 ): Promise<EditorMap> {
-  const [playerMap] = await db
+  const map = await db
     .select()
     .from(maps)
-    .where(eq(maps.userId, userId));
+    .where(eq(maps.id, mapId))
+    .limit(1);
 
-  if (!playerMap) {
-    throw new Error(`No map found for user: ${userId}`);
+  if (!map[0]) {
+    throw new Error(`Map not found: ${mapId}`);
   }
 
-  const [created] = await db
+  const result = await db
     .insert(editorMaps)
     .values({
-      name: `Imported: ${userId}`,
-      mapType: 'player_homestead',
-      width: playerMap.width,
-      height: playerMap.height,
-      seed: playerMap.seed,
-      grid: playerMap.grid,
-      layers: playerMap.layers,
-      walkable: playerMap.walkable,
-      metadata: {
-        importedFrom: userId,
-        importedAt: new Date().toISOString(),
-        originalSeed: playerMap.seed,
-      },
+      name: map[0].name ?? 'Imported Map',
+      mapType: 'homestead',
+      seed: map[0].seed,
+      width: map[0].width,
+      height: map[0].height,
+      grid: map[0].grid,
+      layers: map[0].layers,
+      walkable: map[0].walkable,
     })
     .returning();
 
-  return created;
+  return result[0];
 }
 
+/**
+ * Export an editor map to an existing player map by mapId.
+ * Pure UPDATE — throws if target map not found.
+ * Use createMap first if the map doesn't exist yet.
+ */
 export async function exportToPlayerMap(
   db: DrizzleClient,
   editorMapId: string,
-  userId: string
+  mapId: string
 ): Promise<void> {
-  const [editorMap] = await db
+  // Verify editor map exists
+  const editorMap = await db
     .select()
     .from(editorMaps)
-    .where(eq(editorMaps.id, editorMapId));
+    .where(eq(editorMaps.id, editorMapId))
+    .limit(1);
 
-  if (!editorMap) {
+  if (!editorMap[0]) {
     throw new Error(`Editor map not found: ${editorMapId}`);
   }
 
+  // Verify target map exists
+  const targetMap = await db
+    .select({ id: maps.id })
+    .from(maps)
+    .where(eq(maps.id, mapId))
+    .limit(1);
+
+  if (!targetMap[0]) {
+    throw new Error(`Target map not found: ${mapId}`);
+  }
+
+  // Pure UPDATE — only overwrite grid data, never map_type or user_id
   await db
-    .insert(maps)
-    .values({
-      userId,
-      seed: editorMap.seed ?? 0,
-      width: editorMap.width,
-      height: editorMap.height,
-      grid: editorMap.grid,
-      layers: editorMap.layers,
-      walkable: editorMap.walkable,
+    .update(maps)
+    .set({
+      seed: editorMap[0].seed,
+      width: editorMap[0].width,
+      height: editorMap[0].height,
+      grid: editorMap[0].grid,
+      layers: editorMap[0].layers,
+      walkable: editorMap[0].walkable,
       updatedAt: new Date(),
     })
-    .onConflictDoUpdate({
-      target: maps.userId,
-      set: {
-        seed: editorMap.seed ?? 0,
-        width: editorMap.width,
-        height: editorMap.height,
-        grid: editorMap.grid,
-        layers: editorMap.layers,
-        walkable: editorMap.walkable,
-        updatedAt: new Date(),
-      },
-    });
+    .where(eq(maps.id, mapId));
 }
 
+/**
+ * Load a player map for direct editing by mapId.
+ */
 export async function editPlayerMapDirect(
   db: DrizzleClient,
-  userId: string
-): Promise<{
-  userId: string;
+  mapId: string
+): Promise<MapRecord | null> {
+  const result = await db
+    .select()
+    .from(maps)
+    .where(eq(maps.id, mapId))
+    .limit(1);
+
+  return result[0] ?? null;
+}
+
+/**
+ * Data required to save a player map directly.
+ */
+export interface SavePlayerMapDirectData {
+  mapId: string;
+  seed?: number;
+  width: number;
+  height: number;
   grid: unknown;
   layers: unknown;
   walkable: unknown;
-  seed: number;
-  width: number;
-  height: number;
-}> {
-  const [playerMap] = await db
-    .select()
-    .from(maps)
-    .where(eq(maps.userId, userId));
-
-  if (!playerMap) {
-    throw new Error(`No map found for user: ${userId}`);
-  }
-
-  return {
-    userId: playerMap.userId,
-    grid: playerMap.grid,
-    layers: playerMap.layers,
-    walkable: playerMap.walkable,
-    seed: playerMap.seed,
-    width: playerMap.width,
-    height: playerMap.height,
-  };
 }
 
+/**
+ * Save player map data directly by mapId. Throws if map not found.
+ */
 export async function savePlayerMapDirect(
   db: DrizzleClient,
-  data: {
-    userId: string;
-    grid: unknown;
-    layers: unknown;
-    walkable: unknown;
-    seed?: number;
-  }
+  data: SavePlayerMapDirectData
 ): Promise<void> {
-  const updateData: Record<string, unknown> = {
-    grid: data.grid,
-    layers: data.layers,
-    walkable: data.walkable,
-    updatedAt: new Date(),
-  };
-
-  if (data.seed !== undefined) {
-    updateData.seed = data.seed;
-  }
-
-  await db
+  const result = await db
     .update(maps)
-    .set(updateData)
-    .where(eq(maps.userId, data.userId));
+    .set({
+      seed: data.seed,
+      width: data.width,
+      height: data.height,
+      grid: data.grid,
+      layers: data.layers,
+      walkable: data.walkable,
+      updatedAt: new Date(),
+    })
+    .where(eq(maps.id, data.mapId))
+    .returning({ id: maps.id });
+
+  if (result.length === 0) {
+    throw new Error(`Map not found: ${data.mapId}`);
+  }
 }

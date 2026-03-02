@@ -78,6 +78,13 @@
       "when": 1772327392447,
       "tag": "0010_high_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1772406529794,
+      "tag": "0011_hot_red_shift",
+      "breakpoints": true
     }
   ]
 }

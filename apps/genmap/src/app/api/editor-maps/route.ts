@@ -5,7 +5,7 @@ import {
   createEditorMap,
 } from '@nookstead/db';
 
-const VALID_MAP_TYPES = ['player_homestead', 'town_district', 'template'];
+const VALID_MAP_TYPES = ['homestead', 'city', 'open_world', 'template'];
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

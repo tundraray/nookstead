@@ -48,10 +48,15 @@ export const CHUNK_TRANSITION_COOLDOWN_MS = 500;
 
 // Location types
 export enum LocationType {
-  CITY = 'CITY',
-  PLAYER = 'PLAYER',
-  OPEN_WORLD = 'OPEN_WORLD',
+  MAP = 'MAP', // Single-chunk maps: homesteads, cities (chunkId format: map:{mapId})
+  WORLD = 'WORLD', // Spatial open-world chunks (chunkId format: world:{x}:{y})
 }
+
+/**
+ * Discriminator for map subtypes stored in the maps table.
+ * Matches the map_type column values in the database.
+ */
+export type MapType = 'homestead' | 'city' | 'open_world';
 
 // Movement prediction configuration (FR-16)
 

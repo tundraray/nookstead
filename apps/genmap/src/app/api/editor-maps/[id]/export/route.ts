@@ -8,17 +8,17 @@ export async function POST(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { userId } = body as { userId?: string };
+    const { mapId } = body as { mapId?: string };
 
-    if (!userId || typeof userId !== 'string') {
+    if (!mapId || typeof mapId !== 'string') {
       return NextResponse.json(
-        { error: 'userId is required' },
+        { error: 'mapId is required' },
         { status: 400 }
       );
     }
 
     const db = getDb();
-    await exportToPlayerMap(db, id, userId);
+    await exportToPlayerMap(db, id, mapId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,40 +1,53 @@
-import { saveMap, loadMap } from './map';
-import type { SaveMapData } from './map';
+import { and, eq } from 'drizzle-orm';
+import {
+  createMap,
+  saveMap,
+  loadMap,
+  findMapByUser,
+  listMapsByUser,
+  listMapsByUserAndType,
+} from './map';
+import type { CreateMapData, SaveMapData, LoadMapResult } from './map';
 import { maps } from '../schema/maps';
-
-/**
- * Unit tests for MapService.
- *
- * These tests use a mocked Drizzle client to verify the service functions'
- * contract without requiring a real database connection. The mock verifies
- * that correct arguments are passed to Drizzle query builder methods and
- * that return values are correctly mapped.
- */
 
 /** Helper: create a mock Drizzle client with chained builder pattern */
 function createMockDb() {
-  const onConflictDoUpdate = jest.fn().mockResolvedValue(undefined);
-  const insertValues = jest.fn().mockReturnValue({ onConflictDoUpdate });
+  // Insert chain: insert(table).values(data).returning(cols)
+  const insertReturning = jest.fn();
+  const insertValues = jest.fn().mockReturnValue({ returning: insertReturning });
   const insert = jest.fn().mockReturnValue({ values: insertValues });
 
+  // Select chain: select(cols).from(table).where().limit()
   const selectLimit = jest.fn();
   const selectWhere = jest.fn().mockReturnValue({ limit: selectLimit });
   const selectFrom = jest.fn().mockReturnValue({ where: selectWhere });
   const select = jest.fn().mockReturnValue({ from: selectFrom });
 
+  // Update chain: update(table).set(data).where().returning()
+  const updateReturning = jest.fn();
+  const updateWhere = jest
+    .fn()
+    .mockReturnValue({ returning: updateReturning });
+  const updateSet = jest.fn().mockReturnValue({ where: updateWhere });
+  const update = jest.fn().mockReturnValue({ set: updateSet });
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = { insert, select } as any;
+  const db = { insert, select, update } as any;
 
   return {
     db,
     mocks: {
       insert,
       insertValues,
-      onConflictDoUpdate,
+      insertReturning,
       select,
       selectFrom,
       selectWhere,
       selectLimit,
+      update,
+      updateSet,
+      updateWhere,
+      updateReturning,
     },
   };
 }
@@ -45,14 +58,33 @@ const testGrid = [
     { terrain: 'grass', elevation: 1, meta: {} },
   ],
 ];
-const testLayers = [{ name: 'base', terrainKey: 'terrain', frames: [[0, 1]] }];
+const testLayers = [
+  { name: 'base', terrainKey: 'terrain', frames: [[0, 1]] },
+];
 const testWalkable = [[false, true]];
 
 describe('MapService', () => {
-  describe('saveMap', () => {
-    it('should create new record for new user', async () => {
+  describe('createMap', () => {
+    it('should insert a new map and return the created record with UUID id', async () => {
       const { db, mocks } = createMockDb();
-      const data: SaveMapData = {
+      const createdRecord = {
+        id: 'generated-uuid-001',
+        name: 'My Homestead',
+        mapType: 'homestead',
+        userId: 'user-001',
+        seed: 42,
+        width: 2,
+        height: 1,
+        grid: testGrid,
+        layers: testLayers,
+        walkable: testWalkable,
+        metadata: null,
+      };
+      mocks.insertReturning.mockResolvedValue([createdRecord]);
+
+      const data: CreateMapData = {
+        name: 'My Homestead',
+        mapType: 'homestead',
         userId: 'user-001',
         seed: 42,
         width: 2,
@@ -62,175 +94,348 @@ describe('MapService', () => {
         walkable: testWalkable,
       };
 
-      await saveMap(db, data);
+      const result = await createMap(db, data);
 
       expect(mocks.insert).toHaveBeenCalledWith(maps);
       expect(mocks.insertValues).toHaveBeenCalledWith(
         expect.objectContaining({
+          name: 'My Homestead',
+          mapType: 'homestead',
           userId: 'user-001',
           seed: 42,
           width: 2,
           height: 1,
-          grid: testGrid,
-          layers: testLayers,
-          walkable: testWalkable,
         })
       );
-      expect(mocks.onConflictDoUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          target: maps.userId,
-          set: expect.objectContaining({
-            seed: 42,
-            width: 2,
-            height: 1,
-            grid: testGrid,
-            layers: testLayers,
-            walkable: testWalkable,
-          }),
-        })
-      );
+      expect(mocks.insertReturning).toHaveBeenCalled();
+      expect(result.id).toBe('generated-uuid-001');
+      expect(result.mapType).toBe('homestead');
+      expect(result.userId).toBe('user-001');
     });
 
-    it('should update existing record (upsert)', async () => {
+    it('should default name to Untitled when not provided', async () => {
       const { db, mocks } = createMockDb();
-
-      // First save
-      await saveMap(db, {
-        userId: 'user-002',
-        seed: 100,
-        width: 2,
-        height: 1,
-        grid: testGrid,
-        layers: testLayers,
-        walkable: testWalkable,
-      });
-
-      // Second save (upsert)
-      await saveMap(db, {
-        userId: 'user-002',
-        seed: 200,
-        width: 2,
-        height: 1,
-        grid: testGrid,
-        layers: testLayers,
-        walkable: testWalkable,
-      });
-
-      // Verify both calls executed insert + onConflictDoUpdate
-      expect(mocks.insert).toHaveBeenCalledTimes(2);
-      expect(mocks.onConflictDoUpdate).toHaveBeenCalledTimes(2);
-
-      const secondUpsertCall = mocks.onConflictDoUpdate.mock.calls[1][0];
-      expect(secondUpsertCall.target).toBe(maps.userId);
-      expect(secondUpsertCall.set).toEqual(
-        expect.objectContaining({
-          seed: 200,
+      mocks.insertReturning.mockResolvedValue([
+        {
+          id: 'generated-uuid-002',
+          name: 'Untitled',
+          mapType: 'homestead',
+          userId: null,
+          seed: null,
           width: 2,
           height: 1,
           grid: testGrid,
           layers: testLayers,
           walkable: testWalkable,
+          metadata: null,
+        },
+      ]);
+
+      const result = await createMap(db, {
+        mapType: 'homestead',
+        width: 2,
+        height: 1,
+        grid: testGrid,
+        layers: testLayers,
+        walkable: testWalkable,
+      });
+
+      expect(mocks.insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Untitled' })
+      );
+      expect(result.name).toBe('Untitled');
+    });
+
+    it('should default userId and seed to null when not provided', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.insertReturning.mockResolvedValue([
+        {
+          id: 'generated-uuid-003',
+          name: 'Untitled',
+          mapType: 'city',
+          userId: null,
+          seed: null,
+          width: 64,
+          height: 64,
+          grid: {},
+          layers: {},
+          walkable: {},
+          metadata: null,
+        },
+      ]);
+
+      const result = await createMap(db, {
+        mapType: 'city',
+        width: 64,
+        height: 64,
+        grid: {},
+        layers: {},
+        walkable: {},
+      });
+
+      expect(mocks.insertValues).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: null, seed: null })
+      );
+      expect(result.userId).toBeNull();
+      expect(result.seed).toBeNull();
+    });
+  });
+
+  describe('saveMap', () => {
+    it('should update an existing map by mapId', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.updateReturning.mockResolvedValue([{ id: 'map-uuid-001' }]);
+
+      const data: SaveMapData = {
+        mapId: 'map-uuid-001',
+        width: 64,
+        height: 64,
+        grid: testGrid,
+        layers: testLayers,
+        walkable: testWalkable,
+      };
+
+      await saveMap(db, data);
+
+      expect(mocks.update).toHaveBeenCalledWith(maps);
+      expect(mocks.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          width: 64,
+          height: 64,
+          grid: testGrid,
+          layers: testLayers,
+          walkable: testWalkable,
+          updatedAt: expect.any(Date),
         })
+      );
+      expect(mocks.updateWhere).toHaveBeenCalledWith(
+        eq(maps.id, 'map-uuid-001')
+      );
+    });
+
+    it('should throw error when map not found', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.updateReturning.mockResolvedValue([]);
+
+      const data: SaveMapData = {
+        mapId: 'nonexistent-id',
+        width: 64,
+        height: 64,
+        grid: {},
+        layers: {},
+        walkable: {},
+      };
+
+      await expect(saveMap(db, data)).rejects.toThrow(
+        'Map not found: nonexistent-id'
+      );
+    });
+
+    it('should pass optional seed field to update set', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.updateReturning.mockResolvedValue([{ id: 'map-uuid-001' }]);
+
+      const data: SaveMapData = {
+        mapId: 'map-uuid-001',
+        seed: 99,
+        width: 32,
+        height: 32,
+        grid: {},
+        layers: {},
+        walkable: {},
+      };
+
+      await saveMap(db, data);
+
+      expect(mocks.updateSet).toHaveBeenCalledWith(
+        expect.objectContaining({ seed: 99 })
       );
     });
   });
 
   describe('loadMap', () => {
-    it('should return saved map data', async () => {
+    it('should return map data when mapId exists', async () => {
       const { db, mocks } = createMockDb();
-      const expectedMap = {
+      const expectedMap: LoadMapResult = {
+        id: 'map-uuid-001',
+        name: 'Test Map',
+        mapType: 'homestead',
+        userId: 'user-001',
         seed: 42,
-        width: 2,
-        height: 1,
+        width: 64,
+        height: 64,
         grid: testGrid,
         layers: testLayers,
         walkable: testWalkable,
+        metadata: null,
       };
-
       mocks.selectLimit.mockResolvedValue([expectedMap]);
 
-      const loaded = await loadMap(db, 'user-003');
+      const result = await loadMap(db, 'map-uuid-001');
 
       expect(mocks.select).toHaveBeenCalled();
       expect(mocks.selectFrom).toHaveBeenCalledWith(maps);
-      expect(loaded).toEqual({
-        seed: 42,
-        width: 2,
-        height: 1,
-        grid: testGrid,
-        layers: testLayers,
-        walkable: testWalkable,
-      });
+      expect(mocks.selectWhere).toHaveBeenCalledWith(
+        eq(maps.id, 'map-uuid-001')
+      );
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('map-uuid-001');
+      expect(result!.name).toBe('Test Map');
+      expect(result!.mapType).toBe('homestead');
     });
 
-    it('should return null for unknown user', async () => {
+    it('should return null when mapId does not exist', async () => {
       const { db, mocks } = createMockDb();
-
       mocks.selectLimit.mockResolvedValue([]);
 
-      const loaded = await loadMap(db, 'unknown-user');
+      const result = await loadMap(db, 'non-existent-uuid');
 
-      expect(loaded).toBeNull();
+      expect(result).toBeNull();
     });
   });
 
-  describe('round-trip', () => {
-    it('should preserve all map data through save and load cycle', async () => {
+  describe('findMapByUser', () => {
+    it('should find a map by userId and mapType', async () => {
       const { db, mocks } = createMockDb();
-      const complexGrid = [
-        [{ terrain: 'sand', elevation: 0.5, meta: { moisture: 3 } }],
-      ];
-      const complexLayers = [
-        { name: 'autotile', terrainKey: 'sand', frames: [[12]] },
-      ];
-      const complexWalkable = [[true]];
-
-      const data: SaveMapData = {
-        userId: 'user-004',
-        seed: 999,
-        width: 1,
-        height: 1,
-        grid: complexGrid,
-        layers: complexLayers,
-        walkable: complexWalkable,
+      const expectedMap: LoadMapResult = {
+        id: 'map-uuid-001',
+        name: 'My Homestead',
+        mapType: 'homestead',
+        userId: 'user-001',
+        seed: 42,
+        width: 64,
+        height: 64,
+        grid: testGrid,
+        layers: testLayers,
+        walkable: testWalkable,
+        metadata: null,
       };
+      mocks.selectLimit.mockResolvedValue([expectedMap]);
 
-      await saveMap(db, data);
+      const result = await findMapByUser(db, 'user-001', 'homestead');
 
-      // Verify insert was called with the exact data
-      expect(mocks.insertValues).toHaveBeenCalledWith(
-        expect.objectContaining({
-          userId: 'user-004',
-          seed: 999,
-          width: 1,
-          height: 1,
-          grid: complexGrid,
-          layers: complexLayers,
-          walkable: complexWalkable,
-        })
+      expect(mocks.selectFrom).toHaveBeenCalledWith(maps);
+      expect(mocks.selectWhere).toHaveBeenCalledWith(
+        and(eq(maps.userId, 'user-001'), eq(maps.mapType, 'homestead'))
+      );
+      expect(result).not.toBeNull();
+      expect(result!.id).toBe('map-uuid-001');
+      expect(result!.mapType).toBe('homestead');
+    });
+
+    it('should return null when no match found', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.selectLimit.mockResolvedValue([]);
+
+      const result = await findMapByUser(db, 'user-001', 'city');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('listMapsByUser', () => {
+    it('should return all maps for a user', async () => {
+      const { db, mocks } = createMockDb();
+      const expectedMaps = [
+        {
+          id: 'map-uuid-001',
+          name: 'Homestead',
+          mapType: 'homestead',
+          userId: 'user-001',
+          seed: 42,
+          width: 64,
+          height: 64,
+          grid: testGrid,
+          layers: testLayers,
+          walkable: testWalkable,
+          metadata: null,
+        },
+        {
+          id: 'map-uuid-002',
+          name: 'City Plot',
+          mapType: 'city',
+          userId: 'user-001',
+          seed: 7,
+          width: 32,
+          height: 32,
+          grid: {},
+          layers: {},
+          walkable: {},
+          metadata: null,
+        },
+      ];
+      // listMapsByUser has no .limit() — where() returns the result directly
+      mocks.selectWhere.mockResolvedValue(expectedMaps);
+
+      const result = await listMapsByUser(db, 'user-001');
+
+      expect(mocks.selectFrom).toHaveBeenCalledWith(maps);
+      expect(mocks.selectWhere).toHaveBeenCalledWith(
+        eq(maps.userId, 'user-001')
+      );
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('map-uuid-001');
+      expect(result[0].mapType).toBe('homestead');
+      expect(result[1].id).toBe('map-uuid-002');
+      expect(result[1].mapType).toBe('city');
+    });
+
+    it('should return empty array when user has no maps', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.selectWhere.mockResolvedValue([]);
+
+      const result = await listMapsByUser(db, 'user-no-maps');
+
+      expect(result).toHaveLength(0);
+    });
+  });
+
+  describe('listMapsByUserAndType', () => {
+    it('should return maps filtered by userId and mapType', async () => {
+      const { db, mocks } = createMockDb();
+      const expectedMaps = [
+        {
+          id: 'map-uuid-001',
+          name: 'Homestead 1',
+          mapType: 'homestead',
+          userId: 'user-001',
+          seed: 42,
+          width: 64,
+          height: 64,
+          grid: testGrid,
+          layers: testLayers,
+          walkable: testWalkable,
+          metadata: null,
+        },
+      ];
+      mocks.selectWhere.mockResolvedValue(expectedMaps);
+
+      const result = await listMapsByUserAndType(
+        db,
+        'user-001',
+        'homestead'
       );
 
-      // Simulate load returning the same data
-      mocks.selectLimit.mockResolvedValue([
-        {
-          seed: 999,
-          width: 1,
-          height: 1,
-          grid: complexGrid,
-          layers: complexLayers,
-          walkable: complexWalkable,
-        },
-      ]);
+      expect(mocks.selectFrom).toHaveBeenCalledWith(maps);
+      expect(mocks.selectWhere).toHaveBeenCalledWith(
+        and(eq(maps.userId, 'user-001'), eq(maps.mapType, 'homestead'))
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('map-uuid-001');
+      expect(result[0].mapType).toBe('homestead');
+    });
 
-      const result = await loadMap(db, 'user-004');
+    it('should return empty array when no maps match type filter', async () => {
+      const { db, mocks } = createMockDb();
+      mocks.selectWhere.mockResolvedValue([]);
 
-      expect(result).not.toBeNull();
-      expect(result?.seed).toBe(999);
-      expect(result?.width).toBe(1);
-      expect(result?.height).toBe(1);
-      expect(result?.grid).toEqual(complexGrid);
-      expect(result?.layers).toEqual(complexLayers);
-      expect(result?.walkable).toEqual(complexWalkable);
+      const result = await listMapsByUserAndType(
+        db,
+        'user-001',
+        'open_world'
+      );
+
+      expect(result).toHaveLength(0);
     });
   });
 });
