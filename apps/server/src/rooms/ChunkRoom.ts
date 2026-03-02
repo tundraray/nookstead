@@ -42,7 +42,7 @@ import { applyObjectCollisionZones } from '@nookstead/map-lib';
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
   private botManager = new BotManager();
-  private homesteadMapId: string | null = null;
+
   private mapWalkable: boolean[][] = [];
   private botInitInProgress = false;
 
@@ -68,7 +68,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
     this.setSimulationInterval((deltaTime) => {
-      if (this.homesteadMapId === null) return;
+      if (this.state.bots.size === 0) return;
       const updates = this.botManager.tick(deltaTime);
       for (const update of updates) {
         const botSchema = this.state.bots.get(update.id);
@@ -390,15 +390,14 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       `[ChunkRoom] Player joined: sessionId=${client.sessionId}, userId=${userId}, chunk=${this.chunkId}`
     );
 
-    // ── Bot spawn/load for homestead rooms ─────────────────────────────────────
+    // ── Bot spawn/load (all maps are homesteads) ───────────────────────────────
     if (
-      this.chunkId.startsWith('player:') &&
+      this.mapWalkable.length > 0 &&
       this.state.bots.size === 0 &&
       !this.botInitInProgress
     ) {
       this.botInitInProgress = true;
       const mapId = userId;
-      this.homesteadMapId = mapId;
 
       const botConfig = {
         ...this.getMapConfig(),
@@ -494,7 +493,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // ── Bot despawn: save positions when last player leaves ────────────────────
     // Use state.players.size (already decremented above) instead of this.clients.length
     // which may still include the departing client during Colyseus onLeave.
-    if (this.state.players.size === 0 && this.homesteadMapId !== null) {
+    if (this.state.players.size === 0 && this.state.bots.size > 0) {
       const positions = this.botManager.getBotPositions();
       if (positions.length > 0) {
         try {
@@ -516,7 +515,6 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         this.state.bots.delete(botId);
       }
       this.botManager.destroy();
-      this.homesteadMapId = null;
     }
 
     console.log(
@@ -558,9 +556,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       }
     }
 
-    // Bot collision: check if new position overlaps a bot tile (homestead only)
+    // Bot collision: check if new position overlaps a bot tile
     if (
-      this.homesteadMapId !== null &&
+      this.state.bots.size > 0 &&
       this.botManager.isTileOccupiedByBot(result.worldX, result.worldY)
     ) {
       // Rollback: move back by applying negative delta
@@ -599,10 +597,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   }
 
   private handleNpcInteract(client: Client, payload: unknown): void {
-    if (this.homesteadMapId === null) {
+    // No bots loaded in this room
+    if (this.state.bots.size === 0) {
       client.send(ServerMessage.NPC_INTERACT_RESULT, {
         success: false,
-        error: 'NPC interaction not available in this area',
+        error: 'No NPCs in this area',
       });
       return;
     }
