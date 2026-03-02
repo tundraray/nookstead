@@ -78,6 +78,13 @@
       "when": 1772327392447,
       "tag": "0010_high_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1772395082881,
+      "tag": "0011_dizzy_mojo",
+      "breakpoints": true
     }
   ]
 }

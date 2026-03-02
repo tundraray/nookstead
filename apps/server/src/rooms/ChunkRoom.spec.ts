@@ -106,6 +106,10 @@ const mockLoadMap = jest.fn<(db: unknown, userId: string) => Promise<unknown>>()
 const mockSaveMap = jest.fn<(db: unknown, data: unknown) => Promise<void>>();
 const mockGetPublishedTemplates = jest.fn<(db: unknown, mapType: string) => Promise<unknown[]>>();
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
+const mockLoadBots = jest.fn<(db: unknown, mapId: string) => Promise<unknown[]>>().mockResolvedValue([]);
+const mockCreateBot = jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockSaveBotPositions = jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+const mockGetGameObject = jest.fn<(db: unknown, id: string) => Promise<unknown>>().mockResolvedValue(null);
 
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
@@ -114,6 +118,10 @@ jest.mock('@nookstead/db', () => ({
   loadMap: mockLoadMap,
   saveMap: mockSaveMap,
   getPublishedTemplates: mockGetPublishedTemplates,
+  loadBots: mockLoadBots,
+  createBot: mockCreateBot,
+  saveBotPositions: mockSaveBotPositions,
+  getGameObject: mockGetGameObject,
 }));
 
 jest.mock('@nookstead/db/adapters/colyseus', () => ({
