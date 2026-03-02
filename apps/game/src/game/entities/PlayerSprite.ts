@@ -62,11 +62,13 @@ export class PlayerSprite {
     const idleKey = animKey(this.skinKey, 'idle', 'down');
     this.sprite.play(idleKey, true);
 
-    // Name label above sprite
+    // Name label above sprite — high resolution so text stays crisp under camera zoom
     this.nameLabel = scene.add.text(worldX, worldY - 34, name, {
-      fontSize: '10px',
+      fontFamily: '"Press Start 2P"',
+      fontSize: '7px',
       color: '#ffffff',
       align: 'center',
+      resolution: 4,
     });
     this.nameLabel.setOrigin(0.5, 1);
     this.nameLabel.setDepth(PLAYER_DEPTH);

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { World, computeChunkId } from './World.js';
 import { createServerPlayer } from '../models/Player.js';
-import { CHUNK_SIZE, MAX_SPEED, WORLD_BOUNDS } from '@nookstead/shared';
+import { CHUNK_SIZE } from '@nookstead/shared';
 
 describe('World', () => {
   let world: World;
@@ -73,7 +73,7 @@ describe('World', () => {
     });
   });
 
-  describe('Movement validation', () => {
+  describe('Movement', () => {
     it('should move player correctly with basic movement (dx=3, dy=0)', () => {
       const player = createServerPlayer({
         id: 'player-4',
@@ -94,7 +94,7 @@ describe('World', () => {
       expect(result.chunkChanged).toBe(false);
     });
 
-    it('should clamp speed to MAX_SPEED when input exceeds limit', () => {
+    it('should apply large deltas without clamping (client-side validation)', () => {
       const player = createServerPlayer({
         id: 'player-5',
         userId: 'user-5',
@@ -103,40 +103,14 @@ describe('World', () => {
         chunkId: computeChunkId(100, 100),
         direction: 'down',
         skin: 'default',
-        name: 'SpeedTest',
+        name: 'NoClamping',
       });
 
       world.addPlayer(player);
 
-      // Attempt to move dx=100 (way over MAX_SPEED)
       const result = world.movePlayer('player-5', 100, 0);
-
-      // Movement should be clamped to MAX_SPEED magnitude
-      const distance = Math.sqrt(
-        (result.worldX - 100) ** 2 + (result.worldY - 100) ** 2
-      );
-      expect(distance).toBeLessThanOrEqual(MAX_SPEED + 0.001); // floating point tolerance
-    });
-
-    it('should clamp position to WORLD_BOUNDS when exceeding boundaries', () => {
-      const player = createServerPlayer({
-        id: 'player-6',
-        userId: 'user-6',
-        worldX: WORLD_BOUNDS.maxX - 1,
-        worldY: 100,
-        chunkId: computeChunkId(WORLD_BOUNDS.maxX - 1, 100),
-        direction: 'down',
-        skin: 'default',
-        name: 'BoundsTest',
-      });
-
-      world.addPlayer(player);
-
-      // Attempt to move beyond boundary
-      const result = world.movePlayer('player-6', 10, 0);
-
-      // Should be clamped to maxX
-      expect(result.worldX).toBe(WORLD_BOUNDS.maxX);
+      expect(result.worldX).toBe(200);
+      expect(result.worldY).toBe(100);
     });
   });
 
