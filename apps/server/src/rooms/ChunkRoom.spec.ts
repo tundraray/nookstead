@@ -299,8 +299,8 @@ describe('ChunkRoom', () => {
         expect.objectContaining({ mapType: 'homestead', userId: 'user-new' })
       );
 
-      // Assert: loadMap was called with the new map's UUID (not userId)
-      expect(mockLoadMap).toHaveBeenCalledWith(expect.anything(), newMapId);
+      // Assert: loadMap was NOT called (cached data from createMap is used directly)
+      expect(mockLoadMap).not.toHaveBeenCalled();
 
       // Assert: MAP_DATA was sent to client
       expect(mockClient.send).toHaveBeenCalledWith(
@@ -381,8 +381,8 @@ describe('ChunkRoom', () => {
       // Assert: createMap was NOT called (homestead already exists)
       expect(mockCreateMap).not.toHaveBeenCalled();
 
-      // Assert: loadMap was called with the existing map UUID
-      expect(mockLoadMap).toHaveBeenCalledWith(expect.anything(), existingMapId);
+      // Assert: loadMap was NOT called (cached data from findMapByUser is used directly)
+      expect(mockLoadMap).not.toHaveBeenCalled();
 
       // Assert: MAP_DATA was sent
       expect(mockClient.send).toHaveBeenCalledWith(

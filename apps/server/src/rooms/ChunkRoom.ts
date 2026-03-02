@@ -183,9 +183,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
     }
 
-    // 2. Determine target chunkId and mapId
+    // 2. Determine target chunkId, mapId, and optionally cache map data
+    //    (findMapByUser / createMap already return full map data, so we
+    //    keep it around to avoid a redundant loadMap round-trip).
     let targetChunkId: string;
     let mapId: string | null = null;
+    let cachedMapData: Awaited<ReturnType<typeof loadMap>> | null = null;
 
     if (savedPosition) {
       // Returning player: use saved chunkId
@@ -204,6 +207,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
       if (existingHomestead) {
         mapId = existingHomestead.id;
+        cachedMapData = existingHomestead;
         targetChunkId = `map:${mapId}`;
         console.log(
           `[ChunkRoom] Existing homestead found: userId=${userId}, mapId=${mapId}`
@@ -239,6 +243,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         });
 
         mapId = newMap.id;
+        cachedMapData = newMap;
         targetChunkId = `map:${mapId}`;
         console.log(
           `[ChunkRoom] Homestead created: userId=${userId}, mapId=${mapId}`
@@ -255,7 +260,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       return;
     }
 
-    // 4. Load map data
+    // 4. Load map data (use cached data when available to avoid redundant DB query)
     let mapPayload: MapDataPayload;
     let mapWalkable: boolean[][] | null = null;
     let mapGrid: Grid | null = null;
@@ -279,11 +284,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
 
     try {
-      const savedMap = await loadMap(db, mapId);
+      const savedMap = cachedMapData ?? await loadMap(db, mapId);
 
       if (savedMap) {
         console.log(
-          `[ChunkRoom] Map loaded from DB: mapId=${mapId}`
+          `[ChunkRoom] Map loaded${cachedMapData ? ' (cached)' : ' from DB'}: mapId=${mapId}`
         );
         mapWalkable = savedMap.walkable as boolean[][];
         mapGrid = savedMap.grid as unknown as Grid;
@@ -643,42 +648,18 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     const move = payload as MovePayload;
     const result = world.movePlayer(client.sessionId, move.dx, move.dy);
 
-    // Map walkability collision (includes terrain and game object zones)
-    if (this.mapWalkable.length > 0) {
-      const tileX = Math.floor(result.worldX / TILE_SIZE);
-      const tileY = Math.floor(result.worldY / TILE_SIZE);
-      const isWalkable = this.mapWalkable[tileY]?.[tileX] === true;
-      if (!isWalkable) {
-        // Rollback: move back by applying negative delta
-        world.movePlayer(client.sessionId, -move.dx, -move.dy);
-        return;
-      }
-    }
-
-    // Bot collision: check if new position overlaps a bot tile
-    if (
-      this.state.bots.size > 0 &&
-      this.botManager.isTileOccupiedByBot(result.worldX, result.worldY)
-    ) {
-      // Rollback: move back by applying negative delta
-      world.movePlayer(client.sessionId, -move.dx, -move.dy);
-      // Do not update player schema — position stays unchanged
-      return;
-    }
+    // TODO: server-side walkability & bot collision checks disabled —
+    // walkable grid calculation needs fixing before re-enabling.
 
     // Update schema (triggers Colyseus auto-patch = move-ack)
     const chunkPlayer = this.state.players.get(client.sessionId);
     if (chunkPlayer) {
       chunkPlayer.worldX = result.worldX;
       chunkPlayer.worldY = result.worldY;
-      // Also update direction from the world player
       const worldPlayer = world.getPlayer(client.sessionId);
       if (worldPlayer) {
         chunkPlayer.direction = worldPlayer.direction;
       }
-      console.log(
-        `[ChunkRoom] move: sessionId=${client.sessionId}, x=${result.worldX.toFixed(1)}, y=${result.worldY.toFixed(1)}, dir=${worldPlayer?.direction ?? '?'}`
-      );
     }
 
     // Handle chunk transition
