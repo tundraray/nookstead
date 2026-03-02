@@ -275,6 +275,55 @@ describe('World', () => {
     });
   });
 
+  describe('setPlayerPosition', () => {
+    it('should update player position and return true', () => {
+      const player = createServerPlayer({
+        id: 'player-pos-1',
+        userId: 'user-pos-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:test-map',
+        direction: 'down',
+        skin: 'default',
+        name: 'PosTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.setPlayerPosition('player-pos-1', 200, 300);
+      expect(result).toBe(true);
+
+      const updated = world.getPlayer('player-pos-1');
+      expect(updated?.worldX).toBe(200);
+      expect(updated?.worldY).toBe(300);
+    });
+
+    it('should return false for unknown player', () => {
+      const result = world.setPlayerPosition('unknown', 50, 50);
+      expect(result).toBe(false);
+    });
+
+    it('should not affect direction or chunkId', () => {
+      const player = createServerPlayer({
+        id: 'player-pos-2',
+        userId: 'user-pos-2',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:test-map',
+        direction: 'left',
+        skin: 'default',
+        name: 'PosTest2',
+      });
+
+      world.addPlayer(player);
+      world.setPlayerPosition('player-pos-2', 200, 300);
+
+      const updated = world.getPlayer('player-pos-2');
+      expect(updated?.direction).toBe('left');
+      expect(updated?.chunkId).toBe('map:test-map');
+    });
+  });
+
   describe('Edge cases', () => {
     it('should return empty array for empty chunk', () => {
       const players = world.getPlayersInChunk('empty:chunk');

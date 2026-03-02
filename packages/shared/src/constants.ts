@@ -63,6 +63,13 @@ export const CORRECTION_THRESHOLD = 8;
  */
 export const INTERPOLATION_SPEED = 0.2;
 
+/**
+ * Milliseconds after a client-side displacement during which server
+ * reconciliation is suppressed, preventing the server from overwriting
+ * the corrected position before it receives the POSITION_UPDATE.
+ */
+export const DISPLACEMENT_RECONCILE_COOLDOWN_MS = 500;
+
 // Loading screen configuration (FR-19)
 
 /**

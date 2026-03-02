@@ -137,6 +137,23 @@ export class World {
   }
 
   /**
+   * Set a player's absolute position.
+   * Used for client-side displacement corrections that need to be
+   * reflected on the server.
+   *
+   * Returns true if the player was found and updated, false otherwise.
+   */
+  setPlayerPosition(playerId: string, x: number, y: number): boolean {
+    const player = this.players.get(playerId);
+    if (!player) {
+      return false;
+    }
+    player.worldX = x;
+    player.worldY = y;
+    return true;
+  }
+
+  /**
    * Get player by ID.
    * Returns undefined if player is not found.
    */

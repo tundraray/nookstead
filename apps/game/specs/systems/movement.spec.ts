@@ -402,6 +402,98 @@ describe('calculateMovement', () => {
   });
 });
 
+  describe('feetOffsetY adjusts tile lookup', () => {
+    it('should use offset-adjusted Y for collision when feetOffsetY is set', () => {
+      // 8×8 map. Player at y=48 (feet on tile boundary).
+      // Without offset: pixelToTile(48,16) = 3. With feetOffsetY=1: pixelToTile(47,16) = 2.
+      // Block tile row 3 so only the offset-corrected path succeeds.
+      const walkable = makeWalkable(8, 8);
+      const grid = makeGrid(8, 8);
+      for (let x = 0; x < 8; x++) walkable[3][x] = false; // block entire row 3
+
+      const input = defaultInput({
+        position: { x: 32, y: 48 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        delta: 16,
+        walkable,
+        grid,
+        mapWidth: 8,
+        mapHeight: 8,
+        feetOffsetY: 1,
+      });
+      const result = calculateMovement(input);
+      // With feetOffsetY=1, feet tile Y = floor((48-1)/16) = 2, which is walkable
+      expect(result.blocked.x).toBe(false);
+      expect(result.x).toBeGreaterThan(32);
+    });
+
+    it('should block movement when offset-adjusted Y lands on unwalkable tile', () => {
+      const walkable = makeWalkable(8, 8);
+      const grid = makeGrid(8, 8);
+      for (let x = 0; x < 8; x++) walkable[2][x] = false; // block row 2
+
+      const input = defaultInput({
+        position: { x: 32, y: 48 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        delta: 16,
+        walkable,
+        grid,
+        mapWidth: 8,
+        mapHeight: 8,
+        feetOffsetY: 1,
+      });
+      const result = calculateMovement(input);
+      // With feetOffsetY=1, feet tile Y = floor(47/16) = 2, which is blocked
+      expect(result.blocked.x).toBe(true);
+      expect(result.x).toBe(32);
+    });
+
+    it('should default to feetOffsetY=0 when not provided', () => {
+      const walkable = makeWalkable(8, 8);
+      const grid = makeGrid(8, 8);
+      for (let x = 0; x < 8; x++) walkable[3][x] = false; // block row 3
+
+      const input = defaultInput({
+        position: { x: 32, y: 48 },
+        direction: { x: 1, y: 0 },
+        speed: 100,
+        delta: 16,
+        walkable,
+        grid,
+        mapWidth: 8,
+        mapHeight: 8,
+        // no feetOffsetY — defaults to 0
+      });
+      const result = calculateMovement(input);
+      // Without offset: pixelToTile(48,16) = 3, which is blocked
+      expect(result.blocked.x).toBe(true);
+    });
+
+    it('should apply feetOffsetY to Y-axis collision check', () => {
+      const walkable = makeWalkable(8, 8);
+      const grid = makeGrid(8, 8);
+      walkable[3][2] = false; // block tile (2,3)
+
+      const input = defaultInput({
+        position: { x: 32, y: 47 },
+        direction: { x: 0, y: 1 },
+        speed: 100,
+        delta: 50, // displacement = 5px → candidateY = 52
+        walkable,
+        grid,
+        mapWidth: 8,
+        mapHeight: 8,
+        feetOffsetY: 1,
+      });
+      const result = calculateMovement(input);
+      // candidateY = 52, feetTileY = floor((52-1)/16) = floor(51/16) = 3
+      // tile (2,3) is blocked
+      expect(result.blocked.y).toBe(true);
+    });
+  });
+
 describe('getTerrainSpeedModifier', () => {
   it('should return 1.0 for grass terrain', () => {
     const grid = makeGrid(4, 4, 'grass');
@@ -433,5 +525,13 @@ describe('getTerrainSpeedModifier', () => {
     const grid = makeGrid(4, 4, 'grass');
     const result = getTerrainSpeedModifier(0, 0, grid, 16);
     expect(result).toBe(1.0);
+  });
+
+  it('should apply feetOffsetY to tile lookup', () => {
+    // At y=48 with tileSize=16: floor(48/16)=3. With feetOffsetY=1: floor(47/16)=2.
+    const grid = makeGrid(4, 4, 'grass');
+    grid[2][2] = makeCell('water'); // tile (2,2) = water (0.5)
+    const result = getTerrainSpeedModifier(32, 48, grid, 16, 1);
+    expect(result).toBe(0.5);
   });
 });

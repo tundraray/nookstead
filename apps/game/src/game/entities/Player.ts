@@ -24,8 +24,14 @@ import { type Direction, animKey } from '../characters/frame-map';
 import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
-import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
+import {
+  CORRECTION_THRESHOLD,
+  INTERPOLATION_SPEED,
+  DISPLACEMENT_RECONCILE_COOLDOWN_MS,
+  ClientMessage,
+} from '@nookstead/shared';
 import { findNearestWalkable } from '../systems/displacement';
+import { getRoom } from '../../services/colyseus';
 
 export class Player extends Phaser.GameObjects.Sprite {
   public readonly sheetKey: string;
@@ -52,6 +58,8 @@ export class Player extends Phaser.GameObjects.Sprite {
   private isInterpolating = false;
   /** True while the player is displaced — suppresses repeated spiral searches. */
   private displaced = false;
+  /** Timestamp of the last displacement correction (used for reconciliation cooldown). */
+  private displacedAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -115,7 +123,7 @@ export class Player extends Phaser.GameObjects.Sprite {
 
     // Displacement check: if on a non-walkable tile, relocate to nearest walkable
     const tileX = Math.floor(this.x / TILE_SIZE);
-    const tileY = Math.floor(this.y / TILE_SIZE) - 1; // -1: feet anchor (origin 0.5, 1.0)
+    const tileY = Math.floor((this.y - 1) / TILE_SIZE);
     const walkable = this.mapData.walkable;
     if (
       walkable &&
@@ -140,6 +148,16 @@ export class Player extends Phaser.GameObjects.Sprite {
           this.authoritativeX = this.x;
           this.authoritativeY = this.y;
           this.isInterpolating = false;
+          this.displacedAt = time;
+
+          // Notify server of corrected position
+          const room = getRoom();
+          if (room) {
+            room.send(ClientMessage.POSITION_UPDATE, {
+              x: this.x,
+              y: this.y,
+            });
+          }
         }
         this.displaced = true;
       }
@@ -188,6 +206,15 @@ export class Player extends Phaser.GameObjects.Sprite {
    * Interpolation continues even when state transitions from Walk to Idle.
    */
   reconcile(serverX: number, serverY: number): void {
+    // Skip reconciliation during displacement cooldown to prevent the server
+    // from overwriting the corrected position before it receives POSITION_UPDATE.
+    if (
+      this.displacedAt > 0 &&
+      performance.now() - this.displacedAt < DISPLACEMENT_RECONCILE_COOLDOWN_MS
+    ) {
+      return;
+    }
+
     this.authoritativeX = serverX;
     this.authoritativeY = serverY;
 

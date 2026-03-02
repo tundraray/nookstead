@@ -166,6 +166,7 @@ describe('WalkState', () => {
         mapWidth: 10,
         mapHeight: 10,
         tileSize: 16,
+        feetOffsetY: 1,
       });
     });
 

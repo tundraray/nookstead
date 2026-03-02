@@ -3,7 +3,7 @@ import { EventBus } from '../EventBus';
 import { TILE_SIZE, FRAME_SIZE, MAP_WIDTH, MAP_HEIGHT, CLICK_THRESHOLD } from '../constants';
 import { MapRenderer } from '@nookstead/map-renderer';
 import type { MapDataPayload, GeneratedMap } from '@nookstead/shared';
-import { isTileLayer, isObjectLayer, findSpawnTile } from '@nookstead/shared';
+import { isTileLayer, isObjectLayer, findSpawnTile, ClientMessage } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
@@ -24,6 +24,7 @@ export class Game extends Scene {
   private serverSpawnY: number | undefined;
   private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
   private disconnectHandler?: () => void;
+  private hardResetHandler?: () => void;
 
   constructor() {
     super('Game');
@@ -219,6 +220,15 @@ export class Game extends Scene {
     };
     EventBus.on('multiplayer:disconnected', this.disconnectHandler);
 
+    // Hard reset: teleport player to spawn via server
+    this.hardResetHandler = () => {
+      if (this.room) {
+        this.player.clearMoveTarget();
+        this.room.send(ClientMessage.HARD_RESET);
+      }
+    };
+    EventBus.on('player:hard-reset', this.hardResetHandler);
+
     EventBus.emit('current-scene-ready', this);
   }
 
@@ -235,6 +245,10 @@ export class Game extends Scene {
     if (this.disconnectHandler) {
       EventBus.off('multiplayer:disconnected', this.disconnectHandler);
       this.disconnectHandler = undefined;
+    }
+    if (this.hardResetHandler) {
+      EventBus.off('player:hard-reset', this.hardResetHandler);
+      this.hardResetHandler = undefined;
     }
     this.playerManager.destroy();
     this.objectRenderer?.destroy();

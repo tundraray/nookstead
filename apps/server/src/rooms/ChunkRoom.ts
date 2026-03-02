@@ -32,6 +32,7 @@ import {
   findSpawnTile,
   isObjectLayer,
   type MovePayload,
+  type PositionUpdatePayload,
   type AuthData,
   type ChunkTransitionPayload,
   type MapDataPayload,
@@ -85,6 +86,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private botManager = new BotManager();
 
   private mapWalkable: boolean[][] = [];
+  private mapGrid: Grid | null = null;
   private botInitInProgress = false;
   private positionSaveTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -104,8 +106,19 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       this.handleMove(client as Client, payload);
     });
 
+    this.onMessage(
+      ClientMessage.POSITION_UPDATE,
+      (client, payload: unknown) => {
+        this.handlePositionUpdate(client as Client, payload);
+      }
+    );
+
     this.onMessage(ClientMessage.NPC_INTERACT, (client, payload: unknown) => {
       this.handleNpcInteract(client as Client, payload);
+    });
+
+    this.onMessage(ClientMessage.HARD_RESET, (client) => {
+      this.handleHardReset(client as Client);
     });
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
@@ -383,9 +396,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       }
     }
 
-    // Store walkable grid for bot manager access
+    // Store walkable grid and terrain grid for bot manager / hard reset access
     if (mapWalkable) {
       this.mapWalkable = mapWalkable;
+    }
+    if (mapGrid) {
+      this.mapGrid = mapGrid;
     }
 
     // 5. Determine spawn position
@@ -676,6 +692,30 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
   }
 
+  private handlePositionUpdate(client: Client, payload: unknown): void {
+    if (
+      !payload ||
+      typeof payload !== 'object' ||
+      typeof (payload as PositionUpdatePayload).x !== 'number' ||
+      typeof (payload as PositionUpdatePayload).y !== 'number'
+    ) {
+      return;
+    }
+
+    const { x, y } = payload as PositionUpdatePayload;
+
+    if (!world.setPlayerPosition(client.sessionId, x, y)) {
+      return;
+    }
+
+    // Update schema so Colyseus patches reach other clients
+    const chunkPlayer = this.state.players.get(client.sessionId);
+    if (chunkPlayer) {
+      chunkPlayer.worldX = x;
+      chunkPlayer.worldY = y;
+    }
+  }
+
   private handleNpcInteract(client: Client, payload: unknown): void {
     // No bots loaded in this room
     if (this.state.bots.size === 0) {
@@ -732,6 +772,45 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         error: result.error,
       });
     }
+  }
+
+  private handleHardReset(client: Client): void {
+    if (this.mapWalkable.length === 0 || !this.mapGrid) {
+      client.send(ServerMessage.ERROR, { message: 'Map not loaded' });
+      return;
+    }
+
+    const mapHeight = this.mapWalkable.length;
+    const mapWidth = this.mapWalkable[0]?.length ?? 0;
+
+    let spawnX: number;
+    let spawnY: number;
+
+    try {
+      const spawn = findSpawnTile(
+        this.mapWalkable,
+        this.mapGrid,
+        mapWidth,
+        mapHeight
+      );
+      spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
+      spawnY = (spawn.tileY + 1) * TILE_SIZE;
+    } catch {
+      spawnX = DEFAULT_SPAWN.worldX;
+      spawnY = DEFAULT_SPAWN.worldY;
+    }
+
+    world.setPlayerPosition(client.sessionId, spawnX, spawnY);
+
+    const chunkPlayer = this.state.players.get(client.sessionId);
+    if (chunkPlayer) {
+      chunkPlayer.worldX = spawnX;
+      chunkPlayer.worldY = spawnY;
+    }
+
+    console.log(
+      `[ChunkRoom] Hard reset: sessionId=${client.sessionId}, teleported to (${spawnX}, ${spawnY})`
+    );
   }
 
   /**

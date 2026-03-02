@@ -2,6 +2,7 @@ export const ClientMessage = {
   MOVE: 'move',
   POSITION_UPDATE: 'position_update',
   NPC_INTERACT: 'npc_interact',
+  HARD_RESET: 'hard_reset',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
