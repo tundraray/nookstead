@@ -1,0 +1,134 @@
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import type { DrizzleClient } from '../core/client';
+import {
+  dialogueSessions,
+  type DialogueSession,
+} from '../schema/dialogue-sessions';
+import {
+  dialogueMessages,
+  type DialogueMessage,
+} from '../schema/dialogue-messages';
+
+export interface CreateSessionData {
+  botId: string;
+  playerId: string;
+  userId?: string;
+}
+
+export interface AddMessageData {
+  sessionId: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Create a new dialogue session record.
+ * Errors propagate to caller (fail-fast).
+ */
+export async function createDialogueSession(
+  db: DrizzleClient,
+  data: CreateSessionData
+): Promise<DialogueSession> {
+  const result = await db
+    .insert(dialogueSessions)
+    .values({
+      botId: data.botId,
+      playerId: data.playerId,
+      userId: data.userId,
+    })
+    .returning();
+
+  if (result.length === 0) {
+    throw new Error('[dialogue] createDialogueSession: insert returned no rows');
+  }
+
+  return result[0];
+}
+
+/**
+ * Mark a dialogue session as ended by setting endedAt.
+ * Errors propagate to caller.
+ */
+export async function endDialogueSession(
+  db: DrizzleClient,
+  sessionId: string
+): Promise<void> {
+  await db
+    .update(dialogueSessions)
+    .set({ endedAt: new Date() })
+    .where(eq(dialogueSessions.id, sessionId));
+}
+
+/**
+ * Add a message to a dialogue session.
+ * Errors propagate to caller (caller handles fire-and-forget).
+ */
+export async function addDialogueMessage(
+  db: DrizzleClient,
+  data: AddMessageData
+): Promise<DialogueMessage> {
+  const result = await db
+    .insert(dialogueMessages)
+    .values({
+      sessionId: data.sessionId,
+      role: data.role,
+      content: data.content,
+    })
+    .returning();
+
+  if (result.length === 0) {
+    throw new Error('[dialogue] addDialogueMessage: insert returned no rows');
+  }
+
+  return result[0];
+}
+
+/**
+ * Get recent dialogue messages between a bot and a user (by persistent userId).
+ * Returns messages across all sessions, ordered by createdAt descending,
+ * limited to the most recent N messages.
+ */
+export async function getRecentDialogueHistory(
+  db: DrizzleClient,
+  botId: string,
+  userId: string,
+  limit = 20
+): Promise<Array<{ role: string; content: string; createdAt: Date }>> {
+  const rows = await db
+    .select({
+      role: dialogueMessages.role,
+      content: dialogueMessages.content,
+      createdAt: dialogueMessages.createdAt,
+    })
+    .from(dialogueMessages)
+    .innerJoin(
+      dialogueSessions,
+      eq(dialogueMessages.sessionId, dialogueSessions.id)
+    )
+    .where(
+      and(
+        eq(dialogueSessions.botId, botId),
+        eq(dialogueSessions.userId, userId),
+        isNotNull(dialogueSessions.userId)
+      )
+    )
+    .orderBy(desc(dialogueMessages.createdAt))
+    .limit(limit);
+
+  // Return in chronological order (oldest first)
+  return rows.reverse();
+}
+
+/**
+ * Get all messages for a specific dialogue session.
+ */
+export async function getDialogueSessionMessages(
+  db: DrizzleClient,
+  sessionId: string
+): Promise<DialogueMessage[]> {
+  return await db
+    .select()
+    .from(dialogueMessages)
+    .where(eq(dialogueMessages.sessionId, sessionId))
+    .orderBy(dialogueMessages.createdAt);
+}

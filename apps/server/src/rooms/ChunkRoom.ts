@@ -20,6 +20,10 @@ import {
   loadBots,
   saveBotPositions,
   createBot,
+  createDialogueSession,
+  endDialogueSession,
+  addDialogueMessage,
+  getRecentDialogueHistory,
 } from '@nookstead/db';
 import {
   PATCH_RATE_MS,
@@ -41,12 +45,11 @@ import {
   type CollisionZoneDef,
   type DialogueMessagePayload,
   type DialogueStartPayload,
-  type DialogueStreamChunkPayload,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
+import { DialogueService } from '../npc-service/ai/DialogueService';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
-const DIALOGUE_STREAM_DELAY_MS = 100;
 
 // ---------------------------------------------------------------------------
 // ChunkId parsing helpers
@@ -95,8 +98,18 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private positionSaveTimer: ReturnType<typeof setInterval> | null = null;
   private dialogueSessions = new Map<
     string,
-    { botId: string; streamTimers: ReturnType<typeof setTimeout>[] }
+    {
+      botId: string;
+      dbSessionId: string;
+      abortController: AbortController | null;
+      persona: {
+        personality?: string | null;
+        role?: string | null;
+        speechStyle?: string | null;
+      } | null;
+    }
   >();
+  private dialogueService: DialogueService | null = null;
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -105,6 +118,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         : 'city:capital';
     this.setState(new ChunkRoomState());
     this.setPatchRate(PATCH_RATE_MS);
+
+    // Initialize DialogueService for AI-powered NPC conversations
+    const config = loadConfig();
+    this.dialogueService = new DialogueService({
+      apiKey: config.openaiApiKey,
+    });
 
     // Register with ChunkManager
     chunkManager.registerRoom(this.chunkId, this);
@@ -663,12 +682,23 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   }
 
   override onDispose(): void {
-    // Cancel all dialogue timers and clean up sessions
+    // Abort all in-flight AI streams and clean up DB sessions
     for (const [sessionId, session] of this.dialogueSessions) {
-      for (const timer of session.streamTimers) {
-        clearTimeout(timer);
-      }
+      session.abortController?.abort();
+
+      const db = getGameDb();
+      endDialogueSession(db, session.dbSessionId).catch((err: unknown) => {
+        console.error(
+          `[ChunkRoom] onDispose: failed to end session: dbSessionId=${session.dbSessionId}`,
+          err
+        );
+      });
+
       this.botManager.endInteraction(session.botId, sessionId);
+
+      console.log(
+        `[ChunkRoom] Dialogue ended: sessionId=${sessionId}, botId=${session.botId}, reason=leave`
+      );
     }
     this.dialogueSessions.clear();
 
@@ -681,16 +711,18 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     console.log(`[ChunkRoom] Room disposed: chunk:${this.chunkId}`);
   }
 
-  private handleDialogueMessage(client: Client, payload: unknown): void {
+  private async handleDialogueMessage(client: Client, payload: unknown): Promise<void> {
     const session = this.dialogueSessions.get(client.sessionId);
     if (!session) {
       return;
     }
 
+    // Validate payload
     if (
       typeof payload !== 'object' ||
       payload === null ||
-      typeof (payload as DialogueMessagePayload).text !== 'string'
+      typeof (payload as DialogueMessagePayload).text !== 'string' ||
+      (payload as DialogueMessagePayload).text.trim() === ''
     ) {
       return;
     }
@@ -700,29 +732,90 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       `[ChunkRoom] Dialogue message: sessionId=${client.sessionId}, text=${text.slice(0, 50)}`
     );
 
-    // Cancel any in-flight stream timers
-    for (const timer of session.streamTimers) {
-      clearTimeout(timer);
+    // Abort any in-flight stream
+    session.abortController?.abort();
+
+    const db = getGameDb();
+
+    // Save user message (fire-and-forget)
+    addDialogueMessage(db, {
+      sessionId: session.dbSessionId,
+      role: 'user',
+      content: text,
+    }).catch((err: unknown) => {
+      console.error(
+        `[ChunkRoom] Failed to save user message: sessionId=${client.sessionId}`,
+        err
+      );
+    });
+
+    // Load conversation history (fail gracefully -- empty array on error)
+    let conversationHistory: Array<{ role: string; content: string }> = [];
+    const player = world.getPlayer(client.sessionId);
+    if (player?.userId) {
+      try {
+        conversationHistory = await getRecentDialogueHistory(
+          db,
+          session.botId,
+          player.userId,
+          20
+        );
+      } catch (err) {
+        console.error(
+          `[ChunkRoom] Failed to load dialogue history: sessionId=${client.sessionId}`,
+          err
+        );
+      }
     }
-    session.streamTimers = [];
 
-    // Pseudo-streaming echo: send each word back with a delay
-    const words = text.split(/\s+/).filter((w) => w.length > 0);
-    for (let i = 0; i < words.length; i++) {
-      const timer = setTimeout(() => {
-        const chunk: DialogueStreamChunkPayload = {
-          text: words[i] + (i < words.length - 1 ? ' ' : ''),
-        };
-        client.send(ServerMessage.DIALOGUE_STREAM_CHUNK, chunk);
+    // Create AbortController for this stream
+    const abortController = new AbortController();
+    session.abortController = abortController;
 
-        // After last word, send end-turn
-        if (i === words.length - 1) {
-          client.send(ServerMessage.DIALOGUE_END_TURN, {});
-          session.streamTimers = [];
-        }
-      }, DIALOGUE_STREAM_DELAY_MS * (i + 1));
+    // Get bot name from state
+    const botSchema = this.state.bots.get(session.botId);
+    const botName = botSchema?.name ?? 'NPC';
 
-      session.streamTimers.push(timer);
+    // Stream AI response
+    let fullText = '';
+    try {
+      const stream = this.dialogueService!.streamResponse({
+        botName,
+        persona: session.persona,
+        playerText: text,
+        conversationHistory,
+        abortSignal: abortController.signal,
+      });
+
+      for await (const chunk of stream) {
+        client.send(ServerMessage.DIALOGUE_STREAM_CHUNK, { text: chunk });
+        fullText += chunk;
+      }
+    } catch (err) {
+      console.error(
+        `[ChunkRoom] Stream error: sessionId=${client.sessionId}`,
+        err
+      );
+    }
+
+    // Send end-of-turn marker
+    client.send(ServerMessage.DIALOGUE_END_TURN, {});
+
+    // Clear abort controller
+    session.abortController = null;
+
+    // Save assistant message (fire-and-forget)
+    if (fullText.length > 0) {
+      addDialogueMessage(db, {
+        sessionId: session.dbSessionId,
+        role: 'assistant',
+        content: fullText,
+      }).catch((err: unknown) => {
+        console.error(
+          `[ChunkRoom] Failed to save assistant message: sessionId=${client.sessionId}`,
+          err
+        );
+      });
     }
   }
 
@@ -732,10 +825,17 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       return;
     }
 
-    // Cancel all stream timers
-    for (const timer of session.streamTimers) {
-      clearTimeout(timer);
-    }
+    // Abort any in-flight AI stream
+    session.abortController?.abort();
+
+    // End DB session (fire-and-forget)
+    const db = getGameDb();
+    endDialogueSession(db, session.dbSessionId).catch((err: unknown) => {
+      console.error(
+        `[ChunkRoom] Failed to end dialogue session: dbSessionId=${session.dbSessionId}`,
+        err
+      );
+    });
 
     // End interaction in BotManager
     this.botManager.endInteraction(session.botId, client.sessionId);
@@ -827,7 +927,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
   }
 
-  private handleNpcInteract(client: Client, payload: unknown): void {
+  private async handleNpcInteract(client: Client, payload: unknown): Promise<void> {
     // No bots loaded in this room
     if (this.state.bots.size === 0) {
       client.send(ServerMessage.NPC_INTERACT_RESULT, {
@@ -882,11 +982,45 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         return;
       }
 
+      // Create DB dialogue session (fail-fast)
+      let dbSessionId: string;
+      try {
+        const db = getGameDb();
+        const userId = (client.auth as AuthData)?.userId;
+        const dbSession = await createDialogueSession(db, {
+          botId,
+          playerId: client.sessionId,
+          userId: userId,
+        });
+        dbSessionId = dbSession.id;
+      } catch (err) {
+        console.error(
+          `[ChunkRoom] Failed to create dialogue session: botId=${botId}, sessionId=${client.sessionId}`,
+          err
+        );
+        // Rollback: release bot from interaction
+        this.botManager.endInteraction(botId, client.sessionId);
+        client.send(ServerMessage.NPC_INTERACT_RESULT, {
+          success: false,
+          error: 'Failed to initialize dialogue',
+        });
+        return;
+      }
+
+      // Cache persona from bot record (null for MVP; persona seeding is a separate task)
+      const persona = null;
+
       // Track dialogue session
       this.dialogueSessions.set(client.sessionId, {
         botId,
-        streamTimers: [],
+        dbSessionId,
+        abortController: null,
+        persona,
       });
+
+      console.log(
+        `[ChunkRoom] Dialogue session created: sessionId=${client.sessionId}, botId=${botId}, dbSessionId=${dbSessionId}`
+      );
 
       // Sync bot state to Colyseus schema
       const botSchema = this.state.bots.get(botId);

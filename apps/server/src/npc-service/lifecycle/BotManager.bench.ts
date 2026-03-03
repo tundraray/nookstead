@@ -26,6 +26,9 @@ function makeBotRecord(index: number) {
     worldX: (10 + index * 4) * TILE_SIZE,
     worldY: (10 + index * 4) * TILE_SIZE,
     direction: 'down',
+    personality: null,
+    role: null,
+    speechStyle: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

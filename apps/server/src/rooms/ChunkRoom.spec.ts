@@ -62,6 +62,7 @@ jest.mock('../config', () => ({
     authSecret: 'test-secret',
     databaseUrl: 'postgres://test',
     corsOrigin: 'http://localhost:3000',
+    openaiApiKey: 'sk-test-key',
   }),
 }));
 

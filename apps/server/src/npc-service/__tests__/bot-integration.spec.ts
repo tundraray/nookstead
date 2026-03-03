@@ -60,6 +60,7 @@ jest.mock('../../config', () => ({
     authSecret: 'test-secret',
     databaseUrl: 'postgres://test',
     corsOrigin: 'http://localhost:3000',
+    openaiApiKey: 'sk-test-key',
   }),
 }));
 
@@ -137,6 +138,14 @@ const mockSaveBotPositions =
   jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>();
 const mockCreateBot =
   jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockCreateDialogueSession =
+  jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockEndDialogueSession =
+  jest.fn<(db: unknown, sessionId: string) => Promise<void>>();
+const mockAddDialogueMessage =
+  jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockGetRecentDialogueHistory =
+  jest.fn<(db: unknown, botId: string, userId: string, limit: number) => Promise<unknown[]>>();
 
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
@@ -151,6 +160,10 @@ jest.mock('@nookstead/db', () => ({
   loadBots: mockLoadBots,
   saveBotPositions: mockSaveBotPositions,
   createBot: mockCreateBot,
+  createDialogueSession: mockCreateDialogueSession,
+  endDialogueSession: mockEndDialogueSession,
+  addDialogueMessage: mockAddDialogueMessage,
+  getRecentDialogueHistory: mockGetRecentDialogueHistory,
 }));
 
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
@@ -164,6 +177,16 @@ jest.mock('@nookstead/db/adapters/colyseus', () => ({
 jest.mock('@nookstead/map-lib', () => ({
   __esModule: true,
   applyObjectCollisionZones: jest.fn(),
+}));
+
+// Mock DialogueService — AI-powered NPC dialogue
+const mockStreamResponse = jest.fn();
+
+jest.mock('../../npc-service/ai/DialogueService', () => ({
+  __esModule: true,
+  DialogueService: jest.fn().mockImplementation(() => ({
+    streamResponse: mockStreamResponse,
+  })),
 }));
 
 // Mock SessionTracker singleton
@@ -686,6 +709,38 @@ describe('dialogue system', () => {
   const MAP_ID = 'map-dialogue-homestead';
   const BOT_ID = 'bot-dialogue';
 
+  /** Drain microtask queue — Promise.resolve() uses V8's internal queue, NOT faked by jest.useFakeTimers(). */
+  async function flushPromises(): Promise<void> {
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve();
+    }
+  }
+
+  /** Start a dialogue interaction and flush the async fire-and-forget. */
+  async function startDialogue(
+    client: MockClient = mockClient
+  ): Promise<void> {
+    const interactHandler = messageHandlers.get(
+      ClientMessage.NPC_INTERACT
+    );
+    expect(interactHandler).toBeDefined();
+    interactHandler!(client, { botId: BOT_ID });
+    await flushPromises();
+  }
+
+  /** Send a dialogue message and flush the async fire-and-forget. */
+  async function sendDialogueMessage(
+    client: MockClient,
+    text: string
+  ): Promise<void> {
+    const msgHandler = messageHandlers.get(
+      ClientMessage.DIALOGUE_MESSAGE
+    );
+    expect(msgHandler).toBeDefined();
+    msgHandler!(client, { text });
+    await flushPromises();
+  }
+
   beforeEach(async () => {
     jest.useFakeTimers();
     messageHandlers.clear();
@@ -695,6 +750,11 @@ describe('dialogue system', () => {
     mockClient = {
       sessionId: 'session-dialogue',
       send: jest.fn(),
+    };
+    // Set auth (normally done by onAuth; handleNpcInteract reads client.auth.userId)
+    (mockClient as unknown as Record<string, unknown>).auth = {
+      userId: 'user-dialogue',
+      email: 'dialogue@test.com',
     };
 
     // Default mocks
@@ -721,6 +781,26 @@ describe('dialogue system', () => {
     mockSaveBotPositions.mockResolvedValue(undefined);
     mockSavePosition.mockResolvedValue(undefined);
 
+    // DB dialogue mocks (AI flow)
+    mockCreateDialogueSession.mockResolvedValue({
+      id: 'test-db-session-id',
+      botId: BOT_ID,
+      playerId: 'session-dialogue',
+      userId: 'user-dialogue',
+      startedAt: new Date(),
+      endedAt: null,
+    });
+    mockEndDialogueSession.mockResolvedValue(undefined);
+    mockAddDialogueMessage.mockResolvedValue({ id: 'msg-id' });
+    mockGetRecentDialogueHistory.mockResolvedValue([]);
+
+    // Default DialogueService.streamResponse mock (empty stream)
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        /* empty stream */
+      })()
+    );
+
     room.onCreate({ chunkId: `map:${MAP_ID}` });
 
     const authData: AuthData = {
@@ -739,17 +819,8 @@ describe('dialogue system', () => {
     jest.useRealTimers();
   });
 
-  /** Helper: start a dialogue interaction */
-  function startDialogue(client: MockClient = mockClient): void {
-    const interactHandler = messageHandlers.get(
-      ClientMessage.NPC_INTERACT
-    );
-    expect(interactHandler).toBeDefined();
-    interactHandler!(client, { botId: BOT_ID });
-  }
-
-  it('NPC_INTERACT success starts dialogue: bot enters interacting, DIALOGUE_START sent', () => {
-    startDialogue();
+  it('NPC_INTERACT success starts dialogue: bot enters interacting, DIALOGUE_START sent', async () => {
+    await startDialogue();
 
     // Should receive DIALOGUE_START
     const startCall = mockClient.send.mock.calls.find(
@@ -777,26 +848,54 @@ describe('dialogue system', () => {
     expect(botSchema!.state).toBe('interacting');
   });
 
-  it('DIALOGUE_MESSAGE triggers word-by-word echo chunks', () => {
-    startDialogue();
+  it('DB session created on NPC_INTERACT via createDialogueSession', async () => {
+    await startDialogue();
+
+    expect(mockCreateDialogueSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      {
+        botId: BOT_ID,
+        playerId: 'session-dialogue',
+        userId: 'user-dialogue',
+      }
+    );
+  });
+
+  it('DIALOGUE_MESSAGE triggers AI stream chunks', async () => {
+    await startDialogue();
     mockClient.send.mockClear();
 
-    const msgHandler = messageHandlers.get(
-      ClientMessage.DIALOGUE_MESSAGE
+    // Mock streamResponse to yield two chunks
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        yield 'Hello';
+        yield ' friend';
+      })()
     );
-    expect(msgHandler).toBeDefined();
-    msgHandler!(mockClient, { text: 'hello world' });
 
-    // Advance enough time to deliver all pseudo-stream chunks (2 words * 100ms each + buffer)
-    jest.advanceTimersByTime(300);
+    // handleDialogueMessage calls world.getPlayer for conversation history
+    mockWorld.getPlayer.mockReturnValue({
+      id: 'session-dialogue',
+      sessionId: 'session-dialogue',
+      userId: 'user-dialogue',
+      worldX: 24,
+      worldY: 24,
+      chunkId: `map:${MAP_ID}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: 'dialogue',
+    });
+
+    await sendDialogueMessage(mockClient, 'hello world');
 
     // Should receive 2 stream chunks + 1 end turn
     const chunkCalls = mockClient.send.mock.calls.filter(
       ([type]) => type === ServerMessage.DIALOGUE_STREAM_CHUNK
     );
     expect(chunkCalls).toHaveLength(2);
-    expect(chunkCalls[0][1]).toEqual({ text: 'hello ' });
-    expect(chunkCalls[1][1]).toEqual({ text: 'world' });
+    expect(chunkCalls[0][1]).toEqual({ text: 'Hello' });
+    expect(chunkCalls[1][1]).toEqual({ text: ' friend' });
 
     const endTurnCalls = mockClient.send.mock.calls.filter(
       ([type]) => type === ServerMessage.DIALOGUE_END_TURN
@@ -804,39 +903,64 @@ describe('dialogue system', () => {
     expect(endTurnCalls).toHaveLength(1);
   });
 
-  it('DIALOGUE_END cancels streaming and returns bot to idle', () => {
-    startDialogue();
-
-    // Start streaming
-    const msgHandler = messageHandlers.get(
-      ClientMessage.DIALOGUE_MESSAGE
-    );
-    msgHandler!(mockClient, { text: 'one two three four five' });
-
-    // Deliver only the first chunk
-    jest.advanceTimersByTime(100);
+  it('sends fallback *shrugs* when AI stream yields fallback', async () => {
+    await startDialogue();
     mockClient.send.mockClear();
 
-    // End dialogue (cancels remaining timers)
-    const endHandler = messageHandlers.get(ClientMessage.DIALOGUE_END);
-    expect(endHandler).toBeDefined();
-    endHandler!(mockClient, {});
+    // Mock streamResponse to yield a single fallback chunk
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        yield '*shrugs*';
+      })()
+    );
 
-    // Advance enough time to cover all cancelled timers (5 words * 100ms each + buffer)
-    jest.advanceTimersByTime(600);
+    mockWorld.getPlayer.mockReturnValue({
+      id: 'session-dialogue',
+      sessionId: 'session-dialogue',
+      userId: 'user-dialogue',
+      worldX: 24,
+      worldY: 24,
+      chunkId: `map:${MAP_ID}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: 'dialogue',
+    });
+
+    await sendDialogueMessage(mockClient, 'hey');
 
     const chunkCalls = mockClient.send.mock.calls.filter(
       ([type]) => type === ServerMessage.DIALOGUE_STREAM_CHUNK
     );
-    expect(chunkCalls).toHaveLength(0);
+    expect(chunkCalls).toHaveLength(1);
+    expect(chunkCalls[0][1]).toEqual({ text: '*shrugs*' });
+
+    const endTurnCalls = mockClient.send.mock.calls.filter(
+      ([type]) => type === ServerMessage.DIALOGUE_END_TURN
+    );
+    expect(endTurnCalls).toHaveLength(1);
+  });
+
+  it('DIALOGUE_END cleans up: endDialogueSession called, bot returns to idle', async () => {
+    await startDialogue();
+
+    // End dialogue
+    const endHandler = messageHandlers.get(ClientMessage.DIALOGUE_END);
+    expect(endHandler).toBeDefined();
+    endHandler!(mockClient, {});
+
+    // endDialogueSession should have been called with the DB session ID
+    expect(mockEndDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      'test-db-session-id'
+    );
 
     // Bot state should be idle
     const botSchema = room.state.bots.get(BOT_ID);
     expect(botSchema!.state).toBe('idle');
   });
 
-  it('MOVE during dialogue is rejected', () => {
-    startDialogue();
+  it('MOVE during dialogue is rejected', async () => {
+    await startDialogue();
     mockWorld.movePlayer.mockReset();
 
     const moveHandler = messageHandlers.get(ClientMessage.MOVE);
@@ -847,14 +971,8 @@ describe('dialogue system', () => {
     expect(mockWorld.movePlayer).not.toHaveBeenCalled();
   });
 
-  it('player disconnect during dialogue cleans up session and bot', async () => {
-    startDialogue();
-
-    // Start streaming
-    const msgHandler = messageHandlers.get(
-      ClientMessage.DIALOGUE_MESSAGE
-    );
-    msgHandler!(mockClient, { text: 'one two three' });
+  it('player disconnect during dialogue triggers cleanup', async () => {
+    await startDialogue();
 
     // Setup world.getPlayer for onLeave
     mockWorld.getPlayer.mockReturnValue({
@@ -873,14 +991,11 @@ describe('dialogue system', () => {
     // Act: simulate disconnect
     await room.onLeave(mockClient as never);
 
-    // Advance enough time to cover all cancelled timers (3 words * 100ms each + buffer)
-    mockClient.send.mockClear();
-    jest.advanceTimersByTime(400);
-
-    const chunkCalls = mockClient.send.mock.calls.filter(
-      ([type]) => type === ServerMessage.DIALOGUE_STREAM_CHUNK
+    // endDialogueSession should have been called
+    expect(mockEndDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      'test-db-session-id'
     );
-    expect(chunkCalls).toHaveLength(0);
 
     // Bot state should be idle (cleaned up by onLeave)
     const botSchema = room.state.bots.get(BOT_ID);
@@ -892,7 +1007,7 @@ describe('dialogue system', () => {
 
   it('second player interact on busy bot gets error', async () => {
     // Start dialogue with first player
-    startDialogue();
+    await startDialogue();
 
     // Create second player
     const mockClient2: MockClient = {
@@ -915,6 +1030,7 @@ describe('dialogue system', () => {
       ClientMessage.NPC_INTERACT
     );
     interactHandler!(mockClient2, { botId: BOT_ID });
+    await flushPromises();
 
     // Should get 'Bot is busy' error
     const resultCall = mockClient2.send.mock.calls.find(
