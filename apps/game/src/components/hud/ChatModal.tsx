@@ -113,6 +113,7 @@ export function ChatModal({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.stopPropagation()}
             placeholder="Type a message..."
             disabled={isStreaming}
             aria-label="Chat message input"
