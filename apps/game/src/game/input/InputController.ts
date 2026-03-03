@@ -36,7 +36,6 @@ export function isTextInputFocused(): boolean {
  * exposes directional input as a simple vector plus facing direction.
  */
 export class InputController {
-  private keyboard: Phaser.Input.Keyboard.KeyboardPlugin;
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd: Record<string, Phaser.Input.Keyboard.Key>;
   private _facingDirection: Direction = 'down';
@@ -54,8 +53,6 @@ export class InputController {
         'InputController requires scene.input.keyboard to be available'
       );
     }
-    this.keyboard = keyboard;
-
     // Prevent Phaser from calling preventDefault() on keyboard events
     // globally, so WASD/arrow keys still work in HTML inputs and textareas.
     keyboard.disableGlobalCapture();
