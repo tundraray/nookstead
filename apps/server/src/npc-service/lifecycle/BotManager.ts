@@ -197,6 +197,10 @@ export class BotManager {
       return { success: false, error: 'Bot not found' };
     }
 
+    if (this.isInteracting(botId)) {
+      return { success: false, error: 'Bot is busy' };
+    }
+
     const dx = (playerX - bot.worldX) / TILE_SIZE;
     const dy = (playerY - bot.worldY) / TILE_SIZE;
     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -237,6 +241,78 @@ export class BotManager {
   }
 
   /**
+   * Get persona fields for a bot (personality, role, speechStyle).
+   * Returns null if bot not found or has no persona data.
+   */
+  getBotPersona(
+    botId: string
+  ): { personality: string | null; role: string | null; speechStyle: string | null } | null {
+    const bot = this.bots.get(botId);
+    if (!bot) return null;
+    if (!bot.personality && !bot.role && !bot.speechStyle) return null;
+    return {
+      personality: bot.personality,
+      role: bot.role,
+      speechStyle: bot.speechStyle,
+    };
+  }
+
+  /**
+   * Start a dialogue interaction between a player and a bot.
+   * Sets bot state to 'interacting' and records the player session ID.
+   *
+   * @returns true if interaction started, false if bot is busy or not found
+   */
+  startInteraction(botId: string, playerId: string): boolean {
+    const bot = this.bots.get(botId);
+    if (!bot || bot.state === 'interacting') {
+      return false;
+    }
+
+    bot.state = 'interacting';
+    bot.interactingPlayerId = playerId;
+    bot.targetX = null;
+    bot.targetY = null;
+    bot.idleTicks = 0;
+    bot.walkStartTime = null;
+
+    return true;
+  }
+
+  /**
+   * End a dialogue interaction. Transitions bot back to idle.
+   * No-op if playerId doesn't match the current interacting player.
+   */
+  endInteraction(botId: string, playerId: string): void {
+    const bot = this.bots.get(botId);
+    if (!bot || bot.interactingPlayerId !== playerId) {
+      return;
+    }
+
+    this.transitionToIdle(bot);
+    bot.interactingPlayerId = null;
+  }
+
+  /**
+   * Check whether a bot is currently in a dialogue interaction.
+   */
+  isInteracting(botId: string): boolean {
+    const bot = this.bots.get(botId);
+    return bot?.state === 'interacting';
+  }
+
+  /**
+   * End all interactions for a given player (e.g., on disconnect).
+   */
+  endAllInteractionsForPlayer(playerId: string): void {
+    for (const bot of this.bots.values()) {
+      if (bot.interactingPlayerId === playerId) {
+        this.endInteraction(bot.id, playerId);
+      }
+    }
+  }
+
+  /**
    * Clear all bots. Called when room is cleaned up.
    */
   destroy(): void {
@@ -247,6 +323,7 @@ export class BotManager {
   // ─── Private helpers ────────────────────────────────────────────────────────
 
   private tickBot(bot: ServerBot, deltaMs: number, now: number): boolean {
+    if (bot.state === 'interacting') return false;
     if (bot.state === 'idle') {
       return this.tickIdle(bot);
     } else {

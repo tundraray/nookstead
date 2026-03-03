@@ -104,3 +104,14 @@ export {
   type CreateBotData,
   type BotPositionUpdate,
 } from './services/npc-bot';
+export {
+  createDialogueSession,
+  endDialogueSession,
+  addDialogueMessage,
+  getRecentDialogueHistory,
+  getDialogueSessionMessages,
+  getDialogueHistoryByUser,
+  type CreateSessionData,
+  type AddMessageData,
+  type DialogueSessionWithMessages,
+} from './services/dialogue';

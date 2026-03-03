@@ -46,6 +46,15 @@
 - If map-lib typecheck fails (e.g., legacy code errors), declarations are NOT generated and genmap gets "has no exported member" errors
 - Fix: resolve map-lib type errors first, then run `pnpm nx typecheck map-lib` to regenerate declarations
 
+## AI Dialogue Integration (plan-021)
+- AI SDK v6 (`ai@^6.0.105`): `streamText()` returns `StreamTextResult` synchronously (NOT a Promise)
+- Use `maxOutputTokens` (NOT `maxTokens`) in AI SDK v6 -- the old name was removed
+- `openai.chat(modelId)` for Chat Completions API; `openai(modelId)` uses Responses API
+- `createOpenAI({ apiKey })` from `@ai-sdk/openai` creates the provider
+- `result.textStream` is `AsyncIterableStream<string>` -- use `for await` to consume
+- Server typecheck: `pnpm nx typecheck server` (NOT standalone tsc)
+- Pre-existing BotManager test fixture errors after persona columns added (Task 2) -- not blocking DialogueService
+
 ## Canvas Coordinate Conversion
 - `pixelToTile` function in map-editor-canvas.tsx already handles screen->tile conversion
 - Uses `Math.floor(worldCoord / TILE_SIZE)` which produces integer tile coords

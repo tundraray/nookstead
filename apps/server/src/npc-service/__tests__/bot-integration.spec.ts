@@ -60,6 +60,7 @@ jest.mock('../../config', () => ({
     authSecret: 'test-secret',
     databaseUrl: 'postgres://test',
     corsOrigin: 'http://localhost:3000',
+    openaiApiKey: 'sk-test-key',
   }),
 }));
 
@@ -137,6 +138,14 @@ const mockSaveBotPositions =
   jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>();
 const mockCreateBot =
   jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockCreateDialogueSession =
+  jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockEndDialogueSession =
+  jest.fn<(db: unknown, sessionId: string) => Promise<void>>();
+const mockAddDialogueMessage =
+  jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
+const mockGetRecentDialogueHistory =
+  jest.fn<(db: unknown, botId: string, userId: string, limit: number) => Promise<unknown[]>>();
 
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
@@ -151,6 +160,10 @@ jest.mock('@nookstead/db', () => ({
   loadBots: mockLoadBots,
   saveBotPositions: mockSaveBotPositions,
   createBot: mockCreateBot,
+  createDialogueSession: mockCreateDialogueSession,
+  endDialogueSession: mockEndDialogueSession,
+  addDialogueMessage: mockAddDialogueMessage,
+  getRecentDialogueHistory: mockGetRecentDialogueHistory,
 }));
 
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
@@ -164,6 +177,16 @@ jest.mock('@nookstead/db/adapters/colyseus', () => ({
 jest.mock('@nookstead/map-lib', () => ({
   __esModule: true,
   applyObjectCollisionZones: jest.fn(),
+}));
+
+// Mock DialogueService — AI-powered NPC dialogue
+const mockStreamResponse = jest.fn();
+
+jest.mock('../../npc-service/ai/DialogueService', () => ({
+  __esModule: true,
+  DialogueService: jest.fn().mockImplementation(() => ({
+    streamResponse: mockStreamResponse,
+  })),
 }));
 
 // Mock SessionTracker singleton
@@ -186,7 +209,11 @@ jest.mock('../../sessions', () => ({
 /* ------------------------------------------------------------------ */
 import { ChunkRoom } from '../../rooms/ChunkRoom';
 import type { AuthData } from '@nookstead/shared';
-import { DEFAULT_BOT_COUNT } from '@nookstead/shared';
+import {
+  DEFAULT_BOT_COUNT,
+  ClientMessage,
+  ServerMessage,
+} from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Test helpers                                                       */
@@ -669,5 +696,348 @@ describe('Bot collision blocks player movement', () => {
       3,
       0
     );
+  });
+});
+
+/* ================================================================ */
+/*  INT-4: Dialogue System                                           */
+/* ================================================================ */
+
+describe('dialogue system', () => {
+  let room: ChunkRoom;
+  let mockClient: MockClient;
+  const MAP_ID = 'map-dialogue-homestead';
+  const BOT_ID = 'bot-dialogue';
+
+  /** Drain microtask queue — Promise.resolve() uses V8's internal queue, NOT faked by jest.useFakeTimers(). */
+  async function flushPromises(): Promise<void> {
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve();
+    }
+  }
+
+  /** Start a dialogue interaction and flush the async fire-and-forget. */
+  async function startDialogue(
+    client: MockClient = mockClient
+  ): Promise<void> {
+    const interactHandler = messageHandlers.get(
+      ClientMessage.NPC_INTERACT
+    );
+    expect(interactHandler).toBeDefined();
+    interactHandler!(client, { botId: BOT_ID });
+    await flushPromises();
+  }
+
+  /** Send a dialogue message and flush the async fire-and-forget. */
+  async function sendDialogueMessage(
+    client: MockClient,
+    text: string
+  ): Promise<void> {
+    const msgHandler = messageHandlers.get(
+      ClientMessage.DIALOGUE_MESSAGE
+    );
+    expect(msgHandler).toBeDefined();
+    msgHandler!(client, { text });
+    await flushPromises();
+  }
+
+  beforeEach(async () => {
+    jest.useFakeTimers();
+    messageHandlers.clear();
+    jest.clearAllMocks();
+
+    room = new ChunkRoom();
+    mockClient = {
+      sessionId: 'session-dialogue',
+      send: jest.fn(),
+    };
+    // Set auth (normally done by onAuth; handleNpcInteract reads client.auth.userId)
+    (mockClient as unknown as Record<string, unknown>).auth = {
+      userId: 'user-dialogue',
+      email: 'dialogue@test.com',
+    };
+
+    // Default mocks
+    mockLoadPosition.mockResolvedValue(null);
+    mockFindMapByUser.mockResolvedValue(
+      makeMapRecord(MAP_ID, 'user-dialogue')
+    );
+    mockGetPublishedTemplates.mockResolvedValue([makeHomesteadTemplate()]);
+    mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
+    mockGetGameObject.mockResolvedValue(null);
+
+    // Bot at worldX=24, worldY=24 — player will be at same position (within range)
+    mockLoadBots.mockResolvedValue([
+      makeNpcBotRecord({
+        id: BOT_ID,
+        mapId: MAP_ID,
+        name: 'Sage',
+        skin: 'scout_4',
+        worldX: 24,
+        worldY: 24,
+        direction: 'down',
+      }),
+    ]);
+    mockSaveBotPositions.mockResolvedValue(undefined);
+    mockSavePosition.mockResolvedValue(undefined);
+
+    // DB dialogue mocks (AI flow)
+    mockCreateDialogueSession.mockResolvedValue({
+      id: 'test-db-session-id',
+      botId: BOT_ID,
+      userId: 'user-dialogue',
+      startedAt: new Date(),
+      endedAt: null,
+    });
+    mockEndDialogueSession.mockResolvedValue(undefined);
+    mockAddDialogueMessage.mockResolvedValue({ id: 'msg-id' });
+    mockGetRecentDialogueHistory.mockResolvedValue([]);
+
+    // Default DialogueService.streamResponse mock (empty stream)
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        /* empty stream */
+      })()
+    );
+
+    room.onCreate({ chunkId: `map:${MAP_ID}` });
+
+    const authData: AuthData = {
+      userId: 'user-dialogue',
+      email: 'dialogue@test.com',
+    };
+
+    await room.onJoin(mockClient as never, {}, authData);
+
+    // Reset send mock after onJoin (it sends MAP_DATA etc.)
+    mockClient.send.mockClear();
+  });
+
+  afterEach(() => {
+    room.onDispose();
+    jest.useRealTimers();
+  });
+
+  it('NPC_INTERACT success starts dialogue: bot enters interacting, DIALOGUE_START sent', async () => {
+    await startDialogue();
+
+    // Should receive DIALOGUE_START
+    const startCall = mockClient.send.mock.calls.find(
+      ([type]) => type === ServerMessage.DIALOGUE_START
+    );
+    expect(startCall).toBeDefined();
+    expect(startCall![1]).toEqual({
+      botId: BOT_ID,
+      botName: 'Sage',
+    });
+
+    // Should receive NPC_INTERACT_RESULT with dialogueStarted: true
+    const resultCall = mockClient.send.mock.calls.find(
+      ([type]) => type === ServerMessage.NPC_INTERACT_RESULT
+    );
+    expect(resultCall).toBeDefined();
+    expect((resultCall![1] as Record<string, unknown>).success).toBe(true);
+    expect((resultCall![1] as Record<string, unknown>).dialogueStarted).toBe(
+      true
+    );
+
+    // Bot schema state should be 'interacting'
+    const botSchema = room.state.bots.get(BOT_ID);
+    expect(botSchema).toBeDefined();
+    expect(botSchema!.state).toBe('interacting');
+  });
+
+  it('DB session created on NPC_INTERACT via createDialogueSession', async () => {
+    await startDialogue();
+
+    expect(mockCreateDialogueSession).toHaveBeenCalledTimes(1);
+    expect(mockCreateDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      {
+        botId: BOT_ID,
+        userId: 'user-dialogue',
+      }
+    );
+  });
+
+  it('DIALOGUE_MESSAGE triggers AI stream chunks', async () => {
+    await startDialogue();
+    mockClient.send.mockClear();
+
+    // Mock streamResponse to yield two chunks
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        yield 'Hello';
+        yield ' friend';
+      })()
+    );
+
+    // handleDialogueMessage calls world.getPlayer for conversation history
+    mockWorld.getPlayer.mockReturnValue({
+      id: 'session-dialogue',
+      sessionId: 'session-dialogue',
+      userId: 'user-dialogue',
+      worldX: 24,
+      worldY: 24,
+      chunkId: `map:${MAP_ID}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: 'dialogue',
+    });
+
+    await sendDialogueMessage(mockClient, 'hello world');
+
+    // Should receive 2 stream chunks + 1 end turn
+    const chunkCalls = mockClient.send.mock.calls.filter(
+      ([type]) => type === ServerMessage.DIALOGUE_STREAM_CHUNK
+    );
+    expect(chunkCalls).toHaveLength(2);
+    expect(chunkCalls[0][1]).toEqual({ text: 'Hello' });
+    expect(chunkCalls[1][1]).toEqual({ text: ' friend' });
+
+    const endTurnCalls = mockClient.send.mock.calls.filter(
+      ([type]) => type === ServerMessage.DIALOGUE_END_TURN
+    );
+    expect(endTurnCalls).toHaveLength(1);
+  });
+
+  it('sends fallback *shrugs* when AI stream yields fallback', async () => {
+    await startDialogue();
+    mockClient.send.mockClear();
+
+    // Mock streamResponse to yield a single fallback chunk
+    mockStreamResponse.mockReturnValue(
+      (async function* () {
+        yield '*shrugs*';
+      })()
+    );
+
+    mockWorld.getPlayer.mockReturnValue({
+      id: 'session-dialogue',
+      sessionId: 'session-dialogue',
+      userId: 'user-dialogue',
+      worldX: 24,
+      worldY: 24,
+      chunkId: `map:${MAP_ID}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: 'dialogue',
+    });
+
+    await sendDialogueMessage(mockClient, 'hey');
+
+    const chunkCalls = mockClient.send.mock.calls.filter(
+      ([type]) => type === ServerMessage.DIALOGUE_STREAM_CHUNK
+    );
+    expect(chunkCalls).toHaveLength(1);
+    expect(chunkCalls[0][1]).toEqual({ text: '*shrugs*' });
+
+    const endTurnCalls = mockClient.send.mock.calls.filter(
+      ([type]) => type === ServerMessage.DIALOGUE_END_TURN
+    );
+    expect(endTurnCalls).toHaveLength(1);
+  });
+
+  it('DIALOGUE_END cleans up: endDialogueSession called, bot returns to idle', async () => {
+    await startDialogue();
+
+    // End dialogue
+    const endHandler = messageHandlers.get(ClientMessage.DIALOGUE_END);
+    expect(endHandler).toBeDefined();
+    endHandler!(mockClient, {});
+
+    // endDialogueSession should have been called with the DB session ID
+    expect(mockEndDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      'test-db-session-id'
+    );
+
+    // Bot state should be idle
+    const botSchema = room.state.bots.get(BOT_ID);
+    expect(botSchema!.state).toBe('idle');
+  });
+
+  it('MOVE during dialogue is rejected', async () => {
+    await startDialogue();
+    mockWorld.movePlayer.mockReset();
+
+    const moveHandler = messageHandlers.get(ClientMessage.MOVE);
+    expect(moveHandler).toBeDefined();
+    moveHandler!(mockClient, { dx: 1, dy: 0 });
+
+    // World.movePlayer should NOT have been called
+    expect(mockWorld.movePlayer).not.toHaveBeenCalled();
+  });
+
+  it('player disconnect during dialogue triggers cleanup', async () => {
+    await startDialogue();
+
+    // Setup world.getPlayer for onLeave
+    mockWorld.getPlayer.mockReturnValue({
+      id: 'session-dialogue',
+      sessionId: 'session-dialogue',
+      userId: 'user-dialogue',
+      worldX: 24,
+      worldY: 24,
+      chunkId: `map:${MAP_ID}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: 'dialogue',
+    });
+    (room as unknown as { clients: unknown[] }).clients = [];
+
+    // Act: simulate disconnect
+    await room.onLeave(mockClient as never);
+
+    // endDialogueSession should have been called
+    expect(mockEndDialogueSession).toHaveBeenCalledWith(
+      expect.anything(), // db
+      'test-db-session-id'
+    );
+
+    // Bot state should be idle (cleaned up by onLeave)
+    const botSchema = room.state.bots.get(BOT_ID);
+    // Bot may have been cleared if last player left, but if it exists it should be idle
+    if (botSchema) {
+      expect(botSchema.state).toBe('idle');
+    }
+  });
+
+  it('second player interact on busy bot gets error', async () => {
+    // Start dialogue with first player
+    await startDialogue();
+
+    // Create second player
+    const mockClient2: MockClient = {
+      sessionId: 'session-dialogue-2',
+      send: jest.fn(),
+    };
+
+    // Join second player
+    mockLoadPosition.mockResolvedValue(null);
+    mockLoadBots.mockResolvedValue([]); // Bots already loaded
+    const authData2: AuthData = {
+      userId: 'user-dialogue-2',
+      email: 'dialogue2@test.com',
+    };
+    await room.onJoin(mockClient2 as never, {}, authData2);
+    mockClient2.send.mockClear();
+
+    // Second player tries to interact with the same bot
+    const interactHandler = messageHandlers.get(
+      ClientMessage.NPC_INTERACT
+    );
+    interactHandler!(mockClient2, { botId: BOT_ID });
+    await flushPromises();
+
+    // Should get 'Bot is busy' error
+    const resultCall = mockClient2.send.mock.calls.find(
+      ([type]) => type === ServerMessage.NPC_INTERACT_RESULT
+    );
+    expect(resultCall).toBeDefined();
+    expect(resultCall![1]).toEqual({
+      success: false,
+      error: 'Bot is busy',
+    });
   });
 });

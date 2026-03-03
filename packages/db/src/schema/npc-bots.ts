@@ -1,6 +1,7 @@
 import {
   pgTable,
   real,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -26,6 +27,9 @@ export const npcBots = pgTable('npc_bots', {
   worldX: real('world_x').notNull().default(0),
   worldY: real('world_y').notNull().default(0),
   direction: varchar('direction', { length: 8 }).notNull().default('down'),
+  personality: text('personality'),
+  role: varchar('role', { length: 64 }),
+  speechStyle: text('speech_style'),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

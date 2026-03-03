@@ -2,7 +2,7 @@
  * State machine states for a bot companion.
  * Bots alternate between IDLE (waiting) and WALKING (moving toward a target).
  */
-export type BotAnimState = 'idle' | 'walking';
+export type BotAnimState = 'idle' | 'walking' | 'interacting';
 
 /**
  * Runtime state of a single bot, mirroring Colyseus ChunkBot schema fields.
@@ -41,5 +41,5 @@ export interface NpcBotData {
  * On failure: { success: false, error: string }
  */
 export type NpcInteractResult =
-  | { success: true; bot: NpcBotData }
+  | { success: true; bot: NpcBotData; dialogueStarted: true }
   | { success: false; error: string };

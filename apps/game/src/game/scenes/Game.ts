@@ -8,6 +8,7 @@ import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
+import { isMovementLocked, setupMovementLock, teardownMovementLock } from '../systems/dialogue-lock';
 import type { GameObjectCache } from '../services/game-object-cache';
 import { findNearestWalkable } from '../systems/displacement';
 
@@ -179,6 +180,9 @@ export class Game extends Scene {
       },
     );
 
+    // Movement lock: listen for dialogue lock/unlock events
+    setupMovementLock();
+
     // Click-to-move: track pointer down position to distinguish clicks from drags
     let pointerDownX = 0;
     let pointerDownY = 0;
@@ -187,6 +191,8 @@ export class Game extends Scene {
       pointerDownY = pointer.y;
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (isMovementLocked()) return;
+
       const dx = pointer.x - pointerDownX;
       const dy = pointer.y - pointerDownY;
       if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD) return;
@@ -242,6 +248,7 @@ export class Game extends Scene {
   }
 
   shutdown(): void {
+    teardownMovementLock();
     if (this.disconnectHandler) {
       EventBus.off('multiplayer:disconnected', this.disconnectHandler);
       this.disconnectHandler = undefined;

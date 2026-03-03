@@ -10,6 +10,7 @@
 
 import type { State } from '../StateMachine';
 import { animKey } from '../../characters/frame-map';
+import { isMovementLocked } from '../../systems/dialogue-lock';
 import type { PlayerContext } from './types';
 
 /**
@@ -34,6 +35,8 @@ export class IdleState implements State {
   }
 
   update(_delta: number): void {
+    if (isMovementLocked()) return;
+
     if (
       this.context.inputController.isMoving() ||
       this.context.moveTarget !== null
