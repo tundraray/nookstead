@@ -3,7 +3,6 @@ import {
   pgTable,
   timestamp,
   uuid,
-  varchar,
 } from 'drizzle-orm/pg-core';
 import { npcBots } from './npc-bots';
 import { users } from './users';
@@ -15,10 +14,9 @@ export const dialogueSessions = pgTable(
     botId: uuid('bot_id')
       .notNull()
       .references(() => npcBots.id, { onDelete: 'cascade' }),
-    playerId: varchar('player_id', { length: 255 }).notNull(),
-    userId: uuid('user_id').references(() => users.id, {
-      onDelete: 'set null',
-    }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     startedAt: timestamp('started_at', { withTimezone: true })
       .defaultNow()
       .notNull(),

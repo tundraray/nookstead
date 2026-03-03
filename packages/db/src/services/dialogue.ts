@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import {
   dialogueSessions,
@@ -11,8 +11,7 @@ import {
 
 export interface CreateSessionData {
   botId: string;
-  playerId: string;
-  userId?: string;
+  userId: string;
 }
 
 export interface AddMessageData {
@@ -33,7 +32,6 @@ export async function createDialogueSession(
     .insert(dialogueSessions)
     .values({
       botId: data.botId,
-      playerId: data.playerId,
       userId: data.userId,
     })
     .returning();
@@ -108,8 +106,7 @@ export async function getRecentDialogueHistory(
     .where(
       and(
         eq(dialogueSessions.botId, botId),
-        eq(dialogueSessions.userId, userId),
-        isNotNull(dialogueSessions.userId)
+        eq(dialogueSessions.userId, userId)
       )
     )
     .orderBy(desc(dialogueMessages.createdAt))
@@ -131,4 +128,86 @@ export async function getDialogueSessionMessages(
     .from(dialogueMessages)
     .where(eq(dialogueMessages.sessionId, sessionId))
     .orderBy(dialogueMessages.createdAt);
+}
+
+export interface DialogueSessionWithMessages {
+  sessionId: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  messages: Array<{ role: string; content: string; createdAt: Date }>;
+}
+
+/**
+ * Get dialogue history for a bot-user pair, grouped by session.
+ * Returns ended sessions ordered by startedAt (oldest first),
+ * each containing their messages in chronological order.
+ */
+export async function getDialogueHistoryByUser(
+  db: DrizzleClient,
+  botId: string,
+  userId: string,
+  sessionLimit = 10
+): Promise<DialogueSessionWithMessages[]> {
+  // Fetch ended sessions for this bot-user pair
+  const sessions = await db
+    .select({
+      id: dialogueSessions.id,
+      startedAt: dialogueSessions.startedAt,
+      endedAt: dialogueSessions.endedAt,
+    })
+    .from(dialogueSessions)
+    .where(
+      and(
+        eq(dialogueSessions.botId, botId),
+        eq(dialogueSessions.userId, userId)
+      )
+    )
+    .orderBy(desc(dialogueSessions.startedAt))
+    .limit(sessionLimit);
+
+  if (sessions.length === 0) {
+    return [];
+  }
+
+  // Fetch messages for all sessions in one query
+  const sessionIds = sessions.map((s) => s.id);
+  const allMessages = await db
+    .select({
+      sessionId: dialogueMessages.sessionId,
+      role: dialogueMessages.role,
+      content: dialogueMessages.content,
+      createdAt: dialogueMessages.createdAt,
+    })
+    .from(dialogueMessages)
+    .innerJoin(
+      dialogueSessions,
+      eq(dialogueMessages.sessionId, dialogueSessions.id)
+    )
+    .where(
+      and(
+        eq(dialogueSessions.botId, botId),
+        eq(dialogueSessions.userId, userId)
+      )
+    )
+    .orderBy(asc(dialogueMessages.createdAt));
+
+  // Group messages by session
+  const messagesBySession = new Map<
+    string,
+    Array<{ role: string; content: string; createdAt: Date }>
+  >();
+  for (const msg of allMessages) {
+    if (!sessionIds.includes(msg.sessionId)) continue;
+    const list = messagesBySession.get(msg.sessionId) ?? [];
+    list.push({ role: msg.role, content: msg.content, createdAt: msg.createdAt });
+    messagesBySession.set(msg.sessionId, list);
+  }
+
+  // Build result in chronological order (oldest session first)
+  return sessions.reverse().map((s) => ({
+    sessionId: s.id,
+    startedAt: s.startedAt,
+    endedAt: s.endedAt,
+    messages: messagesBySession.get(s.id) ?? [],
+  }));
 }

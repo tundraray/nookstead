@@ -785,7 +785,6 @@ describe('dialogue system', () => {
     mockCreateDialogueSession.mockResolvedValue({
       id: 'test-db-session-id',
       botId: BOT_ID,
-      playerId: 'session-dialogue',
       userId: 'user-dialogue',
       startedAt: new Date(),
       endedAt: null,
@@ -856,7 +855,6 @@ describe('dialogue system', () => {
       expect.anything(), // db
       {
         botId: BOT_ID,
-        playerId: 'session-dialogue',
         userId: 'user-dialogue',
       }
     );

@@ -989,7 +989,6 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         const userId = (client.auth as AuthData)?.userId;
         const dbSession = await createDialogueSession(db, {
           botId,
-          playerId: client.sessionId,
           userId: userId,
         });
         dbSessionId = dbSession.id;

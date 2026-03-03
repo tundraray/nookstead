@@ -110,6 +110,8 @@ export {
   addDialogueMessage,
   getRecentDialogueHistory,
   getDialogueSessionMessages,
+  getDialogueHistoryByUser,
   type CreateSessionData,
   type AddMessageData,
+  type DialogueSessionWithMessages,
 } from './services/dialogue';

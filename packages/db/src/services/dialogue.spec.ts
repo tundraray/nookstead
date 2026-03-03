@@ -69,7 +69,6 @@ describe('DialogueRepository', () => {
       const fakeSession = {
         id: 'session-uuid',
         botId: 'bot-id',
-        playerId: 'player-session-id',
         userId: 'user-id',
         startedAt: new Date('2026-01-15T10:00:00Z'),
         endedAt: null,
@@ -78,7 +77,6 @@ describe('DialogueRepository', () => {
 
       const result = await createDialogueSession(db, {
         botId: 'bot-id',
-        playerId: 'player-session-id',
         userId: 'user-id',
       });
 
@@ -86,7 +84,6 @@ describe('DialogueRepository', () => {
       expect(mocks.insert).toHaveBeenCalledWith(dialogueSessions);
       expect(mocks.insertValues).toHaveBeenCalledWith({
         botId: 'bot-id',
-        playerId: 'player-session-id',
         userId: 'user-id',
       });
       expect(mocks.returning).toHaveBeenCalledTimes(1);
@@ -99,7 +96,7 @@ describe('DialogueRepository', () => {
       await expect(
         createDialogueSession(db, {
           botId: 'bot-id',
-          playerId: 'player-session-id',
+          userId: 'user-id',
         })
       ).rejects.toThrow('insert returned no rows');
     });

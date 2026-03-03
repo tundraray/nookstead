@@ -28,6 +28,7 @@ export function HUD({ uiScale }: HUDProps) {
 
   // Dialogue chat state
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatBotId, setChatBotId] = useState('');
   const [chatBotName, setChatBotName] = useState('');
   const [chatTransport, setChatTransport] = useState<ColyseusTransport | null>(
     null
@@ -58,6 +59,7 @@ export function HUD({ uiScale }: HUDProps) {
       const transport = new ColyseusTransport(room);
       transportRef.current = transport;
 
+      setChatBotId(data.botId);
       setChatBotName(data.botName);
       setChatTransport(transport);
       setChatOpen(true);
@@ -88,6 +90,7 @@ export function HUD({ uiScale }: HUDProps) {
 
       setChatOpen(false);
       setChatTransport(null);
+      setChatBotId('');
       setChatBotName('');
 
       EventBus.emit('dialogue:unlock-movement');
@@ -119,9 +122,10 @@ export function HUD({ uiScale }: HUDProps) {
       </GameModal>
       {chatTransport && (
         <ChatModal
-          key={chatBotName}
+          key={chatBotId}
           open={chatOpen}
           onOpenChange={handleChatClose}
+          botId={chatBotId}
           botName={chatBotName}
           transport={chatTransport}
         />
