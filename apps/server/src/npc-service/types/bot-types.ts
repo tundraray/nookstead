@@ -27,6 +27,12 @@ export interface ServerBot {
   lastKnownY: number;
   /** Session ID of player currently in dialogue, or null if free. */
   interactingPlayerId: string | null;
+  /** NPC personality description (nullable, from DB). */
+  personality: string | null;
+  /** NPC role (nullable, from DB). */
+  role: string | null;
+  /** NPC speech style (nullable, from DB). */
+  speechStyle: string | null;
 }
 
 /**
@@ -94,5 +100,8 @@ export function createServerBot(record: NpcBot): ServerBot {
     lastKnownX: record.worldX,
     lastKnownY: record.worldY,
     interactingPlayerId: null,
+    personality: record.personality ?? null,
+    role: record.role ?? null,
+    speechStyle: record.speechStyle ?? null,
   };
 }

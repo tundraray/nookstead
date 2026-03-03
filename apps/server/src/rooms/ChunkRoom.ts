@@ -805,7 +805,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     session.abortController = null;
 
     // Save assistant message (fire-and-forget)
-    if (fullText.length > 0) {
+    if (fullText.length > 0 && !abortController.signal.aborted) {
       addDialogueMessage(db, {
         sessionId: session.dbSessionId,
         role: 'assistant',
@@ -1006,8 +1006,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         return;
       }
 
-      // Cache persona from bot record (null for MVP; persona seeding is a separate task)
-      const persona = null;
+      // Load persona from bot record (personality, role, speechStyle)
+      const persona = this.botManager.getBotPersona(botId);
 
       // Track dialogue session
       this.dialogueSessions.set(client.sessionId, {

@@ -241,6 +241,23 @@ export class BotManager {
   }
 
   /**
+   * Get persona fields for a bot (personality, role, speechStyle).
+   * Returns null if bot not found or has no persona data.
+   */
+  getBotPersona(
+    botId: string
+  ): { personality: string | null; role: string | null; speechStyle: string | null } | null {
+    const bot = this.bots.get(botId);
+    if (!bot) return null;
+    if (!bot.personality && !bot.role && !bot.speechStyle) return null;
+    return {
+      personality: bot.personality,
+      role: bot.role,
+      speechStyle: bot.speechStyle,
+    };
+  }
+
+  /**
    * Start a dialogue interaction between a player and a bot.
    * Sets bot state to 'interacting' and records the player session ID.
    *
