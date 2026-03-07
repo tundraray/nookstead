@@ -1,6 +1,7 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import { maps } from '../schema/maps';
+import { users } from '../schema/users';
 
 /** Valid map types. */
 export type MapType = 'homestead' | 'city' | 'open_world';
@@ -233,6 +234,34 @@ export async function findMapByType(
 /**
  * List maps by user and type.
  */
+/**
+ * Lightweight map list for dropdowns.
+ * Returns id, name (with owner-name fallback), and mapType.
+ */
+export interface MapLite {
+  id: string;
+  name: string;
+  mapType: string;
+}
+
+export async function listAllMapsLite(
+  db: DrizzleClient
+): Promise<MapLite[]> {
+  const result = await db
+    .select({
+      id: maps.id,
+      name: sql<string>`coalesce(${maps.name}, ${users.name}, 'Untitled')`.as(
+        'display_name'
+      ),
+      mapType: maps.mapType,
+    })
+    .from(maps)
+    .leftJoin(users, eq(maps.userId, users.id))
+    .orderBy(maps.name);
+
+  return result as MapLite[];
+}
+
 export async function listMapsByUserAndType(
   db: DrizzleClient,
   userId: string,

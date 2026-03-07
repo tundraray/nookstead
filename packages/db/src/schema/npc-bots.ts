@@ -1,6 +1,8 @@
 import {
+  jsonb,
   pgTable,
   real,
+  smallint,
   text,
   timestamp,
   uuid,
@@ -30,6 +32,12 @@ export const npcBots = pgTable('npc_bots', {
   personality: text('personality'),
   role: varchar('role', { length: 64 }),
   speechStyle: text('speech_style'),
+  bio: text('bio'),
+  age: smallint('age'),
+  traits: jsonb('traits').$type<string[]>(),
+  goals: jsonb('goals').$type<string[]>(),
+  fears: jsonb('fears').$type<string[]>(),
+  interests: jsonb('interests').$type<string[]>(),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

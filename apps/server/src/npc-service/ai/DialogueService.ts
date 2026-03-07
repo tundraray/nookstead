@@ -1,21 +1,34 @@
 import { streamText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
+import {
+  buildSystemPrompt,
+  buildLegacyPrompt,
+  PromptContext,
+} from './SystemPromptBuilder';
 
 const DEFAULT_MODEL = 'gpt-4o-mini';
 const MAX_PLAYER_TEXT_LENGTH = 500;
 const MAX_TOKENS = 300;
 const FALLBACK_MESSAGE = '*shrugs*';
 
-export interface NpcPersona {
-  personality?: string | null;
-  role?: string | null;
-  speechStyle?: string | null;
+export interface SeedPersona {
+  personality: string | null;
+  role: string | null;
+  speechStyle: string | null;
+  bio: string | null;
+  age: number | null;
+  traits: string[] | null;
+  goals: string[] | null;
+  fears: string[] | null;
+  interests: string[] | null;
 }
 
 export interface StreamResponseParams {
   botName: string;
-  persona: NpcPersona | null;
+  persona: SeedPersona | null;
   playerText: string;
+  playerName: string;
+  meetingCount: number;
   conversationHistory: Array<{ role: string; content: string }>;
   abortSignal?: AbortSignal;
 }
@@ -30,12 +43,15 @@ export class DialogueService {
   }
 
   async *streamResponse(params: StreamResponseParams): AsyncGenerator<string> {
-    const { botName, persona, playerText, conversationHistory, abortSignal } =
-      params;
+    console.log(
+      `[DialogueService] streamResponse: meetingCount=${params.meetingCount}, playerName=${params.playerName}`
+    );
+
+    const { playerText, conversationHistory, abortSignal } = params;
 
     const truncatedText = playerText.slice(0, MAX_PLAYER_TEXT_LENGTH);
 
-    const system = this.buildSystemPrompt(botName, persona);
+    const system = this.buildSystemPrompt(params);
 
     const messages = [
       ...conversationHistory.map((m) => ({
@@ -66,30 +82,17 @@ export class DialogueService {
     }
   }
 
-  private buildSystemPrompt(
-    botName: string,
-    persona: NpcPersona | null
-  ): string {
-    if (
-      persona &&
-      (persona.personality || persona.role || persona.speechStyle)
-    ) {
-      const parts: string[] = [
-        `You are ${botName}, a character in a farming RPG called Nookstead.`,
-      ];
-      if (persona.role) {
-        parts.push(`Your role: ${persona.role}.`);
-      }
-      if (persona.personality) {
-        parts.push(`Your personality: ${persona.personality}.`);
-      }
-      if (persona.speechStyle) {
-        parts.push(`Your speech style: ${persona.speechStyle}.`);
-      }
-      parts.push('Keep responses concise (1-3 sentences). Stay in character.');
-      return parts.join(' ');
+  private buildSystemPrompt(params: StreamResponseParams): string {
+    const { persona, botName, playerName, meetingCount } = params;
+    if (persona && persona.bio !== null) {
+      const context: PromptContext = {
+        persona,
+        botName,
+        playerName,
+        meetingCount,
+      };
+      return buildSystemPrompt(context);
     }
-
-    return `You are ${botName}, a friendly NPC in a farming RPG called Nookstead. Keep responses concise (1-3 sentences) and stay in character as a helpful town resident.`;
+    return buildLegacyPrompt(botName, persona);
   }
 }

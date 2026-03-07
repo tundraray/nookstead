@@ -33,6 +33,18 @@ export interface ServerBot {
   role: string | null;
   /** NPC speech style (nullable, from DB). */
   speechStyle: string | null;
+  /** NPC biography (nullable, from DB). */
+  bio: string | null;
+  /** NPC age (nullable, from DB). */
+  age: number | null;
+  /** NPC personality traits array (nullable, from DB). */
+  traits: string[] | null;
+  /** NPC personal goals array (nullable, from DB). */
+  goals: string[] | null;
+  /** NPC fears array (nullable, from DB). */
+  fears: string[] | null;
+  /** NPC interests array (nullable, from DB). */
+  interests: string[] | null;
 }
 
 /**
@@ -103,5 +115,11 @@ export function createServerBot(record: NpcBot): ServerBot {
     personality: record.personality ?? null,
     role: record.role ?? null,
     speechStyle: record.speechStyle ?? null,
+    bio: record.bio ?? null,
+    age: record.age ?? null,
+    traits: (record.traits as string[] | null) ?? null,
+    goals: (record.goals as string[] | null) ?? null,
+    fears: (record.fears as string[] | null) ?? null,
+    interests: (record.interests as string[] | null) ?? null,
   };
 }

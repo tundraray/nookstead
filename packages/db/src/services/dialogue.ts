@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, sql } from 'drizzle-orm';
 import type { DrizzleClient } from '../core/client';
 import {
   dialogueSessions,
@@ -8,6 +8,7 @@ import {
   dialogueMessages,
   type DialogueMessage,
 } from '../schema/dialogue-messages';
+import { users } from '../schema/users';
 
 export interface CreateSessionData {
   botId: string;
@@ -210,4 +211,105 @@ export async function getDialogueHistoryByUser(
     endedAt: s.endedAt,
     messages: messagesBySession.get(s.id) ?? [],
   }));
+}
+
+/**
+ * Admin view of a dialogue session with user info and message count.
+ */
+export interface AdminDialogueSession {
+  sessionId: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  userId: string;
+  userName: string | null;
+  userEmail: string;
+  messageCount: number;
+}
+
+/**
+ * Get dialogue sessions for a specific bot with user info and message counts.
+ * Used by the admin NPC editor to browse conversations.
+ * Returns sessions ordered by start time (newest first).
+ * Errors propagate to caller (fail-fast principle).
+ *
+ * @param db - Drizzle database instance
+ * @param botId - Bot UUID
+ * @param params - Pagination parameters (limit defaults to 20, offset defaults to 0)
+ * @returns Array of AdminDialogueSession records
+ */
+export async function getAdminDialogueSessions(
+  db: DrizzleClient,
+  botId: string,
+  params?: { limit?: number; offset?: number }
+): Promise<AdminDialogueSession[]> {
+  const limit = params?.limit ?? 20;
+  const offset = params?.offset ?? 0;
+
+  const rows = await db
+    .select({
+      sessionId: dialogueSessions.id,
+      startedAt: dialogueSessions.startedAt,
+      endedAt: dialogueSessions.endedAt,
+      userId: dialogueSessions.userId,
+      userName: users.name,
+      userEmail: users.email,
+      messageCount: sql<number>`cast(count(${dialogueMessages.id}) as int)`,
+    })
+    .from(dialogueSessions)
+    .leftJoin(users, eq(dialogueSessions.userId, users.id))
+    .leftJoin(
+      dialogueMessages,
+      eq(dialogueSessions.id, dialogueMessages.sessionId)
+    )
+    .where(eq(dialogueSessions.botId, botId))
+    .groupBy(
+      dialogueSessions.id,
+      dialogueSessions.startedAt,
+      dialogueSessions.endedAt,
+      dialogueSessions.userId,
+      users.name,
+      users.email
+    )
+    .orderBy(desc(dialogueSessions.startedAt))
+    .limit(limit)
+    .offset(offset);
+
+  return rows.map((r) => ({
+    sessionId: r.sessionId,
+    startedAt: r.startedAt,
+    endedAt: r.endedAt,
+    userId: r.userId,
+    userName: r.userName,
+    userEmail: r.userEmail ?? '',
+    messageCount: r.messageCount ?? 0,
+  }));
+}
+
+/**
+ * Get the number of dialogue sessions between a specific bot and user.
+ * Used for relationship context (meetingCount).
+ * Leverages the idx_ds_bot_user index for efficient lookup.
+ * Errors propagate to caller (fail-fast principle).
+ *
+ * @param db - Drizzle database instance
+ * @param botId - Bot UUID
+ * @param userId - User UUID
+ * @returns The count of dialogue sessions as a number
+ */
+export async function getSessionCountForPair(
+  db: DrizzleClient,
+  botId: string,
+  userId: string,
+): Promise<number> {
+  const result = await db
+    .select({ count: count() })
+    .from(dialogueSessions)
+    .where(
+      and(
+        eq(dialogueSessions.botId, botId),
+        eq(dialogueSessions.userId, userId),
+      ),
+    );
+
+  return Number(result[0]?.count ?? 0);
 }

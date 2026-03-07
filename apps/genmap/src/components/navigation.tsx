@@ -12,6 +12,7 @@ const navItems = [
   { href: '/materials', label: 'Materials' },
   { href: '/maps', label: 'Maps' },
   { href: '/templates', label: 'Templates' },
+  { href: '/npcs', label: 'NPCs' },
 ];
 
 export function Navigation() {

@@ -22,6 +22,8 @@ export {
   listMapsByUser,
   listMapsByUserAndType,
   type MapType,
+  listAllMapsLite,
+  type MapLite,
   type CreateMapData,
   type SaveMapData,
   type LoadMapResult,
@@ -99,9 +101,16 @@ export * from './services/tileset';
 export * from './services/tileset-tag';
 export {
   createBot,
+  createBotAdmin,
+  getBotById,
+  listAllBots,
+  updateBot,
+  deleteBot,
   loadBots,
   saveBotPositions,
   type CreateBotData,
+  type AdminCreateBotData,
+  type UpdateBotData,
   type BotPositionUpdate,
 } from './services/npc-bot';
 export {
@@ -111,7 +120,10 @@ export {
   getRecentDialogueHistory,
   getDialogueSessionMessages,
   getDialogueHistoryByUser,
+  getAdminDialogueSessions,
+  getSessionCountForPair,
   type CreateSessionData,
   type AddMessageData,
   type DialogueSessionWithMessages,
+  type AdminDialogueSession,
 } from './services/dialogue';
