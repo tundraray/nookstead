@@ -48,13 +48,19 @@
   ],
   "references": [
     {
-      "path": "../../packages/map-lib"
+      "path": "../../packages/shared"
     },
     {
       "path": "../../packages/s3"
     },
     {
+      "path": "../../packages/map-lib"
+    },
+    {
       "path": "../../packages/db"
+    },
+    {
+      "path": "../../packages/ai"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { DialogueService } from '../DialogueService.js';
+import type { SeedPersona } from '../DialogueService.js';
 
 // Mock the 'ai' package's streamText function
 jest.mock('ai', () => ({
@@ -23,6 +24,32 @@ async function* makeTextStream(chunks: string[]): AsyncIterable<string> {
   }
 }
 
+/** Full SeedPersona fixture with bio non-null (triggers 6-section prompt) */
+const fullSeedPersona: SeedPersona = {
+  personality: 'grumpy but kind',
+  role: 'farmer',
+  speechStyle: 'rustic dialect',
+  bio: 'A seasoned farmer who loves the land.',
+  age: 50,
+  traits: ['grumpy', 'kind'],
+  goals: null,
+  fears: null,
+  interests: null,
+};
+
+/** SeedPersona with bio null (triggers legacy prompt path) */
+const legacySeedPersona: SeedPersona = {
+  personality: 'grumpy but kind',
+  role: 'farmer',
+  speechStyle: 'rustic dialect',
+  bio: null,
+  age: null,
+  traits: null,
+  goals: null,
+  fears: null,
+  interests: null,
+};
+
 describe('DialogueService', () => {
   let service: DialogueService;
 
@@ -41,6 +68,8 @@ describe('DialogueService', () => {
       botName: 'Farmer Bob',
       persona: null,
       playerText: 'Hi there',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
     })) {
       chunks.push(chunk);
@@ -59,6 +88,8 @@ describe('DialogueService', () => {
       botName: 'Farmer Bob',
       persona: null,
       playerText: 'Hi there',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
     })) {
       chunks.push(chunk);
@@ -78,6 +109,8 @@ describe('DialogueService', () => {
       botName: 'Farmer Bob',
       persona: null,
       playerText: 'Hi',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
       abortSignal: controller.signal,
     })) {
@@ -95,12 +128,10 @@ describe('DialogueService', () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     for await (const _ of service.streamResponse({
       botName: 'Farmer Bob',
-      persona: {
-        personality: 'grumpy but kind',
-        role: 'farmer',
-        speechStyle: 'rustic dialect',
-      },
+      persona: fullSeedPersona,
       playerText: 'Hello',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
     })) {
       // drain
@@ -109,9 +140,11 @@ describe('DialogueService', () => {
     const callArgs = mockStreamText.mock.calls[0]?.[0] as {
       system?: string;
     };
-    expect(callArgs?.system).toContain('grumpy but kind');
+    // Full persona (bio non-null) triggers buildSystemPrompt with Russian text
+    expect(callArgs?.system).toContain('Ты —');
     expect(callArgs?.system).toContain('farmer');
     expect(callArgs?.system).toContain('rustic dialect');
+    expect(callArgs?.system).toContain('ПРАВИЛА');
   });
 
   it('uses default system prompt when persona is null', async () => {
@@ -124,6 +157,8 @@ describe('DialogueService', () => {
       botName: 'Villager',
       persona: null,
       playerText: 'Hello',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
     })) {
       // drain
@@ -132,8 +167,10 @@ describe('DialogueService', () => {
     const callArgs = mockStreamText.mock.calls[0]?.[0] as {
       system?: string;
     };
-    expect(callArgs?.system).toContain('friendly NPC');
+    // Null persona triggers buildLegacyPrompt with Russian fallback
+    expect(callArgs?.system).toContain('Ты —');
     expect(callArgs?.system).toContain('Villager');
+    expect(callArgs?.system).toContain('ПРАВИЛА');
   });
 
   it('includes conversation history in messages array', async () => {
@@ -151,6 +188,8 @@ describe('DialogueService', () => {
       botName: 'Farmer Bob',
       persona: null,
       playerText: 'How are you?',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: history,
     })) {
       // drain
@@ -186,6 +225,8 @@ describe('DialogueService', () => {
       botName: 'Farmer Bob',
       persona: null,
       playerText: longText,
+      playerName: 'TestPlayer',
+      meetingCount: 0,
       conversationHistory: [],
     })) {
       // drain
@@ -197,5 +238,77 @@ describe('DialogueService', () => {
     const lastMessage = callArgs?.messages?.at(-1);
     expect(lastMessage?.content).toHaveLength(500);
     expect(lastMessage?.content).toBe('a'.repeat(500));
+  });
+
+  // --- Prompt selection path tests ---
+
+  it('should use 6-section prompt when persona has non-null bio', async () => {
+    mockStreamText.mockReturnValue({
+      textStream: makeTextStream([]),
+    } as never);
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of service.streamResponse({
+      botName: 'Farmer Bob',
+      persona: fullSeedPersona,
+      playerText: 'Hello',
+      playerName: 'TestPlayer',
+      meetingCount: 2,
+      conversationHistory: [],
+    })) {
+      // drain
+    }
+
+    const callArgs = mockStreamText.mock.calls[0]?.[0] as {
+      system?: string;
+    };
+    const prompt = callArgs?.system ?? '';
+    const sections = prompt.split('\n\n');
+
+    // buildSystemPrompt produces exactly 6 sections
+    expect(sections).toHaveLength(6);
+    // Identity section starts with Russian character intro
+    expect(prompt).toMatch(/^Ты — Farmer Bob/);
+    // Relationship section references playerName and meetingCount
+    expect(prompt).toContain('TestPlayer');
+    expect(prompt).toContain('2 раз');
+    // Guardrails section present
+    expect(prompt).toContain('ПРАВИЛА');
+  });
+
+  it('should use legacy prompt when persona has null bio', async () => {
+    mockStreamText.mockReturnValue({
+      textStream: makeTextStream([]),
+    } as never);
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of service.streamResponse({
+      botName: 'Farmer Bob',
+      persona: legacySeedPersona,
+      playerText: 'Hello',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
+      conversationHistory: [],
+    })) {
+      // drain
+    }
+
+    const callArgs = mockStreamText.mock.calls[0]?.[0] as {
+      system?: string;
+    };
+    const prompt = callArgs?.system ?? '';
+    const sections = prompt.split('\n\n');
+
+    // Legacy prompt produces 3 sections: identity, guardrails, format
+    expect(sections).toHaveLength(3);
+    // Should contain identity with bot name
+    expect(prompt).toContain('Ты —');
+    expect(prompt).toContain('Farmer Bob');
+    // Should contain personality (used by buildLegacyPrompt)
+    expect(prompt).toContain('grumpy but kind');
+    // Guardrails present
+    expect(prompt).toContain('ПРАВИЛА');
+    // Should NOT have the 6-section markers like memory placeholder
+    expect(prompt).not.toContain('Пока нет воспоминаний');
   });
 });

@@ -19,6 +19,7 @@ import type {
 } from '../types/bot-types.js';
 import { createServerBot } from '../types/bot-types.js';
 import type { NpcBot } from '@nookstead/db';
+import type { SeedPersona } from '../ai/DialogueService.js';
 
 /**
  * Manages all NPC bot companions for a single homestead (ChunkRoom instance).
@@ -241,20 +242,46 @@ export class BotManager {
   }
 
   /**
-   * Get persona fields for a bot (personality, role, speechStyle).
-   * Returns null if bot not found or has no persona data.
+   * Get the full seed persona for a bot.
+   * Returns SeedPersona extracted from bot's persona fields.
+   * Returns null only if bot not found by botId.
    */
-  getBotPersona(
-    botId: string
-  ): { personality: string | null; role: string | null; speechStyle: string | null } | null {
+  getBotPersona(botId: string): SeedPersona | null {
     const bot = this.bots.get(botId);
     if (!bot) return null;
-    if (!bot.personality && !bot.role && !bot.speechStyle) return null;
     return {
-      personality: bot.personality,
-      role: bot.role,
-      speechStyle: bot.speechStyle,
+      personality: bot.personality ?? null,
+      role: bot.role ?? null,
+      speechStyle: bot.speechStyle ?? null,
+      bio: bot.bio ?? null,
+      age: bot.age ?? null,
+      traits: bot.traits ?? null,
+      goals: bot.goals ?? null,
+      fears: bot.fears ?? null,
+      interests: bot.interests ?? null,
     };
+  }
+
+  /**
+   * Update persona fields for a bot in memory.
+   * Called after AI character generation completes asynchronously.
+   * Accepts a partial SeedPersona -- only provided (non-undefined) fields are updated.
+   */
+  updateBotPersona(
+    botId: string,
+    persona: Partial<SeedPersona>
+  ): void {
+    const bot = this.bots.get(botId);
+    if (!bot) return;
+    if (persona.personality !== undefined) bot.personality = persona.personality;
+    if (persona.role !== undefined) bot.role = persona.role;
+    if (persona.speechStyle !== undefined) bot.speechStyle = persona.speechStyle;
+    if (persona.bio !== undefined) bot.bio = persona.bio;
+    if (persona.age !== undefined) bot.age = persona.age;
+    if (persona.traits !== undefined) bot.traits = persona.traits;
+    if (persona.goals !== undefined) bot.goals = persona.goals;
+    if (persona.fears !== undefined) bot.fears = persona.fears;
+    if (persona.interests !== undefined) bot.interests = persona.interests;
   }
 
   /**

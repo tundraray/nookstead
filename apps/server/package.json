@@ -83,6 +83,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.39",
+    "@nookstead/ai": "workspace:*",
     "@nookstead/db": "workspace:*",
     "@nookstead/map-lib": "workspace:*",
     "@nookstead/shared": "workspace:*",

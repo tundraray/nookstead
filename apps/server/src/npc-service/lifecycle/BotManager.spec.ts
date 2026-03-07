@@ -67,6 +67,12 @@ function makeBotRecord(overrides?: Partial<NpcBot>): NpcBot {
     personality: overrides?.personality ?? null,
     role: overrides?.role ?? null,
     speechStyle: overrides?.speechStyle ?? null,
+    bio: overrides?.bio ?? null,
+    age: overrides?.age ?? null,
+    traits: overrides?.traits ?? null,
+    goals: overrides?.goals ?? null,
+    fears: overrides?.fears ?? null,
+    interests: overrides?.interests ?? null,
     createdAt: overrides?.createdAt ?? new Date('2026-01-01'),
     updatedAt: overrides?.updatedAt ?? new Date('2026-01-01'),
   };

@@ -19,6 +19,9 @@
     },
     {
       "path": "../../packages/db/tsconfig.lib.json"
+    },
+    {
+      "path": "../../packages/ai/tsconfig.lib.json"
     }
   ]
 }

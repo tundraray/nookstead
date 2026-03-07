@@ -29,6 +29,12 @@ function makeBotRecord(index: number) {
     personality: null,
     role: null,
     speechStyle: null,
+    bio: null,
+    age: null,
+    traits: null,
+    goals: null,
+    fears: null,
+    interests: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

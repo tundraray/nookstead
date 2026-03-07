@@ -29,6 +29,9 @@
     },
     {
       "path": "./packages/s3"
+    },
+    {
+      "path": "./packages/ai"
     }
   ]
 }

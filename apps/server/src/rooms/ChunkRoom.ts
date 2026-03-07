@@ -24,6 +24,8 @@ import {
   endDialogueSession,
   addDialogueMessage,
   getRecentDialogueHistory,
+  getSessionCountForPair,
+  updateBot,
 } from '@nookstead/db';
 import {
   PATCH_RATE_MS,
@@ -48,6 +50,8 @@ import {
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
+import type { SeedPersona } from '../npc-service/ai/DialogueService';
+import { generateNpcCharacter } from '@nookstead/ai';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
 
@@ -102,11 +106,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       botId: string;
       dbSessionId: string;
       abortController: AbortController | null;
-      persona: {
-        personality?: string | null;
-        role?: string | null;
-        speechStyle?: string | null;
-      } | null;
+      persona: SeedPersona | null;
     }
   >();
   private dialogueService: DialogueService | null = null;
@@ -566,6 +566,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
             worldY
           );
 
+          const createdBots = [];
           for (const gen of generated) {
             try {
               const record = await createBot(db, {
@@ -578,11 +579,38 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
               });
               this.botManager.addBot(record);
               this.addBotToState(record);
+              createdBots.push(record);
             } catch (createErr) {
               console.error(
                 '[ChunkRoom] Failed to persist bot:',
                 createErr
               );
+            }
+          }
+
+          // Fire-and-forget: generate AI personalities for new bots
+          const config = loadConfig();
+          if (config.openaiApiKey) {
+            for (const bot of createdBots) {
+              generateNpcCharacter(config.openaiApiKey, bot.name)
+                .then((character) =>
+                  updateBot(db, bot.id, character)
+                )
+                .then((updated) => {
+                  if (updated) {
+                    this.botManager.updateBotPersona(bot.id, {
+                      personality: updated.personality,
+                      role: updated.role,
+                      speechStyle: updated.speechStyle,
+                    });
+                  }
+                })
+                .catch((err) =>
+                  console.error(
+                    `[ChunkRoom] AI character generation failed for ${bot.name}:`,
+                    err
+                  )
+                );
             }
           }
         }
@@ -776,12 +804,29 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     const botSchema = this.state.bots.get(session.botId);
     const botName = botSchema?.name ?? 'NPC';
 
+    // Query meeting count for relationship context (best-effort, default 0)
+    let meetingCount = 0;
+    if (player?.userId) {
+      try {
+        meetingCount = await getSessionCountForPair(db, session.botId, player.userId);
+      } catch (err) {
+        console.warn(
+          `[ChunkRoom] Session count query failed (using default 0): botId=${session.botId}, error=${err}`
+        );
+      }
+    }
+
+    // Extract player name from world state
+    const playerName = player?.name ?? 'Stranger';
+
     // Stream AI response
     let fullText = '';
     try {
       const stream = this.dialogueService!.streamResponse({
         botName,
         persona: session.persona,
+        playerName,
+        meetingCount,
         playerText: text,
         conversationHistory,
         abortSignal: abortController.signal,
