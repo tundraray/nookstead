@@ -13,3 +13,11 @@ export interface DialogueStartPayload {
 export interface DialogueStreamChunkPayload {
   text: string;
 }
+
+/** Server -> Client: dialogue start with relationship context */
+export interface DialogueStartWithRelationshipPayload {
+  botId: string;
+  botName: string;
+  relationship?: import('./relationship').RelationshipData;
+  availableActions?: import('./relationship').DialogueActionType[];
+}

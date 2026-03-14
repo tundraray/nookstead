@@ -31,6 +31,10 @@ export interface StreamResponseParams {
   meetingCount: number;
   conversationHistory: Array<{ role: string; content: string }>;
   abortSignal?: AbortSignal;
+  memories?: import('../memory/MemoryRetrieval').ScoredMemory[];
+  relationship?: import('@nookstead/shared').RelationshipData;
+  turnCount?: number;
+  pendingInjection?: string | null;
 }
 
 export class DialogueService {
@@ -83,13 +87,17 @@ export class DialogueService {
   }
 
   private buildSystemPrompt(params: StreamResponseParams): string {
-    const { persona, botName, playerName, meetingCount } = params;
+    const { persona, botName, playerName, meetingCount, memories, relationship, turnCount, pendingInjection } = params;
     if (persona && persona.bio !== null) {
       const context: PromptContext = {
         persona,
         botName,
         playerName,
         meetingCount,
+        memories,
+        relationship,
+        turnCount,
+        pendingInjection,
       };
       return buildSystemPrompt(context);
     }

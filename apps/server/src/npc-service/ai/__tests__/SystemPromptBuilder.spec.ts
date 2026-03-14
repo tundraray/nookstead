@@ -3,8 +3,11 @@ import {
   buildSystemPrompt,
   buildLegacyPrompt,
   estimateTokens,
+  buildFatigueSection,
+  buildActionInjectionSection,
 } from '../SystemPromptBuilder.js';
-import type { PromptContext, WorldContext } from '../SystemPromptBuilder.js';
+import type { PromptContext, WorldContext, FatigueConfig } from '../SystemPromptBuilder.js';
+import type { RelationshipData } from '@nookstead/shared';
 import type { SeedPersona } from '../DialogueService.js';
 
 // ---------------------------------------------------------------------------
@@ -69,8 +72,9 @@ const BANNED_WORDS = [
 // ---------------------------------------------------------------------------
 
 /**
- * Split a prompt into its 6 sections by double-newline boundaries.
- * Sections: [identity, world, relationship, memory, guardrails, format]
+ * Split a prompt into sections by double-newline boundaries.
+ * Without memories: 5 sections [identity, world, relationship, guardrails, format]
+ * With memories: 6 sections [identity, world, relationship, memory, guardrails, format]
  */
 function splitSections(prompt: string): string[] {
   return prompt.split('\n\n');
@@ -81,10 +85,11 @@ function splitSections(prompt: string): string[] {
 // ---------------------------------------------------------------------------
 
 describe('buildSystemPrompt -- Structure (AC-1)', () => {
-  it('should produce output containing all 6 sections when given a full persona', () => {
+  it('should produce output containing 5 sections without memories', () => {
     const result = buildSystemPrompt(fullContext);
     const sections = splitSections(result);
-    expect(sections.length).toBe(6);
+    // Without memories: identity, world, relationship, guardrails, format
+    expect(sections.length).toBe(5);
   });
 
   it('should begin with character name when given a full persona', () => {
@@ -139,10 +144,11 @@ describe('buildSystemPrompt -- No meta-words in immersive sections (AC-2)', () =
     }
   });
 
-  it('should allow meta-words in guardrails section (section 5) for prohibition context', () => {
+  it('should allow meta-words in guardrails section for prohibition context', () => {
     const result = buildSystemPrompt(fullContext);
     const sections = splitSections(result);
-    const guardrailsSection = sections[4];
+    // Without memories: guardrails is at index 3 (identity, world, relationship, guardrails, format)
+    const guardrailsSection = sections[3];
 
     // Guardrails section references these words to prohibit them
     expect(guardrailsSection).toContain('RPG');
@@ -160,7 +166,7 @@ describe('buildSystemPrompt -- Guardrails (AC-5)', () => {
   it('should contain anti-injection language in guardrails', () => {
     const result = buildSystemPrompt(fullContext);
     const sections = splitSections(result);
-    const guardrails = sections[4];
+    const guardrails = sections[3];
     // The guardrails mention ignoring attempts to break character
     expect(guardrails).toContain('забыть правила');
   });
@@ -168,7 +174,7 @@ describe('buildSystemPrompt -- Guardrails (AC-5)', () => {
   it('should contain domain restriction language referencing bot role', () => {
     const result = buildSystemPrompt(fullContext);
     const sections = splitSections(result);
-    const guardrails = sections[4];
+    const guardrails = sections[3];
     expect(guardrails).toContain('кузнец');
     expect(guardrails).toContain('Иван');
   });
@@ -382,7 +388,220 @@ describe('buildSystemPrompt -- Edge cases', () => {
     expect(result).toContain('Никто');
     expect(result).toContain('ПРАВИЛА');
     const sections = splitSections(result);
-    expect(sections.length).toBe(6);
+    // Without memories: 5 sections
+    expect(sections.length).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Relationship data fixtures
+// ---------------------------------------------------------------------------
+
+function makeRelData(overrides: Partial<RelationshipData> = {}): RelationshipData {
+  return {
+    botId: 'bot-1',
+    userId: 'user-1',
+    socialType: 'stranger',
+    isWorker: false,
+    score: 0,
+    hiredAt: null,
+    updatedAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// buildRelationshipSection with RelationshipData (AC-5)
+// ---------------------------------------------------------------------------
+
+describe('buildSystemPrompt -- Relationship with RelationshipData', () => {
+  it('stranger relationship includes stranger text', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'stranger', score: 0 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('незнакомец');
+  });
+
+  it('acquaintance with score=15 includes acquaintance text, no tier', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'acquaintance', score: 15 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('знакомый');
+    expect(result).not.toContain('отношения развиваются');
+  });
+
+  it('friend with score=45 includes friend text + medium tier', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'friend', score: 45 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('твой друг');
+    expect(result).toContain('отношения развиваются');
+  });
+
+  it('close_friend with score=75 includes close_friend text + high tier', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'close_friend', score: 75 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('близкий друг');
+    expect(result).toContain('крепкие отношения');
+  });
+
+  it('romantic with score=95 includes romantic text + very high tier', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'romantic', score: 95 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('романтические');
+    expect(result).toContain('очень глубокие');
+  });
+
+  it('rival relationship includes rival text', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'rival', score: -5 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('соперник');
+  });
+
+  it('isWorker=true adds worker text', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'friend', isWorker: true, score: 40 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('работает на тебя');
+  });
+
+  it('isWorker=false does not include worker text', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      relationship: makeRelData({ socialType: 'friend', isWorker: false, score: 40 }),
+    };
+    const result = buildSystemPrompt(context);
+    expect(result).not.toContain('работает на тебя');
+  });
+
+  it('no relationship = backward compatible output', () => {
+    const result = buildSystemPrompt(fullContext);
+    expect(result).not.toContain('незнакомец');
+    expect(result).not.toContain('знакомый');
+    const sections = splitSections(result);
+    expect(sections.length).toBe(5);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildFatigueSection (AC-4)
+// ---------------------------------------------------------------------------
+
+describe('buildFatigueSection', () => {
+  const config: FatigueConfig = { maxTurnsBeforeTired: 8, maxTurnsBeforeEnd: 12 };
+
+  it('returns empty string for turnCount=0', () => {
+    expect(buildFatigueSection(0, config)).toBe('');
+  });
+
+  it('returns empty string for turnCount=7', () => {
+    expect(buildFatigueSection(7, config)).toBe('');
+  });
+
+  it('returns tired hint at turnCount=8', () => {
+    const result = buildFatigueSection(8, config);
+    expect(result).toContain('устал');
+  });
+
+  it('returns tired hint at turnCount=9', () => {
+    const result = buildFatigueSection(9, config);
+    expect(result).toContain('устал');
+  });
+
+  it('returns tired hint at turnCount=11 (still below end)', () => {
+    const result = buildFatigueSection(11, config);
+    expect(result).toContain('устал');
+  });
+
+  it('returns end-conversation text at turnCount=12', () => {
+    const result = buildFatigueSection(12, config);
+    expect(result).toContain('заканчивать');
+  });
+
+  it('returns end-conversation text at turnCount=15', () => {
+    const result = buildFatigueSection(15, config);
+    expect(result).toContain('заканчивать');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildActionInjectionSection (AC-5)
+// ---------------------------------------------------------------------------
+
+describe('buildActionInjectionSection', () => {
+  it('returns empty string for null injection', () => {
+    expect(buildActionInjectionSection(null)).toBe('');
+  });
+
+  it('returns the injection text unchanged when non-null', () => {
+    const injection = 'Player подарил(а) тебе Цветы. Отреагируй искренне.';
+    expect(buildActionInjectionSection(injection)).toBe(injection);
+  });
+
+  it('returns Russian content verbatim', () => {
+    const injection = 'Тестовая инъекция.';
+    expect(buildActionInjectionSection(injection)).toBe('Тестовая инъекция.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildSystemPrompt section ordering
+// ---------------------------------------------------------------------------
+
+describe('buildSystemPrompt -- Section ordering with new sections', () => {
+  it('without new fields, still 5 sections', () => {
+    const result = buildSystemPrompt(fullContext);
+    expect(splitSections(result).length).toBe(5);
+  });
+
+  it('with turnCount=8, fatigue section is present', () => {
+    const context: PromptContext = { ...fullContext, turnCount: 8 };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('устал');
+    expect(splitSections(result).length).toBe(6);
+  });
+
+  it('with pendingInjection, injection section is present', () => {
+    const context: PromptContext = { ...fullContext, pendingInjection: 'test injection' };
+    const result = buildSystemPrompt(context);
+    expect(result).toContain('test injection');
+    expect(splitSections(result).length).toBe(6);
+  });
+
+  it('injection appears before fatigue, both before guardrails', () => {
+    const context: PromptContext = {
+      ...fullContext,
+      turnCount: 8,
+      pendingInjection: 'INJECTION_MARKER',
+    };
+    const result = buildSystemPrompt(context);
+    const sections = splitSections(result);
+    // 7 sections: identity, world, relationship, injection, fatigue, guardrails, format
+    expect(sections.length).toBe(7);
+
+    const injectionIdx = sections.findIndex(s => s.includes('INJECTION_MARKER'));
+    const fatigueIdx = sections.findIndex(s => s.includes('устал'));
+    const guardrailsIdx = sections.findIndex(s => s.includes('ПРАВИЛА'));
+
+    expect(injectionIdx).toBeLessThan(fatigueIdx);
+    expect(fatigueIdx).toBeLessThan(guardrailsIdx);
   });
 });
 

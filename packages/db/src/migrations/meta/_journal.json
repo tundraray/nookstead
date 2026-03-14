@@ -120,6 +120,13 @@
       "when": 1772896325617,
       "tag": "0016_tired_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1773524188733,
+      "tag": "0016_quick_johnny_storm",
+      "breakpoints": true
     }
   ]
 }

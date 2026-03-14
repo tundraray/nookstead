@@ -265,8 +265,8 @@ describe('DialogueService', () => {
     const prompt = callArgs?.system ?? '';
     const sections = prompt.split('\n\n');
 
-    // buildSystemPrompt produces exactly 6 sections
-    expect(sections).toHaveLength(6);
+    // buildSystemPrompt produces 5 sections without memories (identity, world, relationship, guardrails, format)
+    expect(sections).toHaveLength(5);
     // Identity section starts with Russian character intro
     expect(prompt).toMatch(/^Ты — Farmer Bob/);
     // Relationship section references playerName and meetingCount

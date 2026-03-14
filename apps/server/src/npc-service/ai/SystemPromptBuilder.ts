@@ -1,4 +1,7 @@
 import type { SeedPersona } from './DialogueService';
+import type { ScoredMemory } from '../memory/MemoryRetrieval';
+import type { RelationshipData, RelationshipSocialType } from '@nookstead/shared';
+import { FATIGUE_DEFAULTS } from '../relationships/index.js';
 
 export interface WorldContext {
   season: string;
@@ -8,12 +11,21 @@ export interface WorldContext {
   location: string;
 }
 
+export interface FatigueConfig {
+  maxTurnsBeforeTired: number;
+  maxTurnsBeforeEnd: number;
+}
+
 export interface PromptContext {
   persona: SeedPersona;
   botName: string;
   playerName: string;
   meetingCount: number;
   worldContext?: WorldContext;
+  memories?: ScoredMemory[];
+  relationship?: RelationshipData;
+  turnCount?: number;
+  pendingInjection?: string | null;
 }
 
 const BIO_MAX_LENGTH = 300;
@@ -106,18 +118,73 @@ function buildWorldSection(worldContext?: WorldContext): string {
   return 'Сейчас: весна, день, ясно. Ты занимаешься своими делами.';
 }
 
+const socialTypePromptMap: Record<RelationshipSocialType, string> = {
+  stranger: 'Это незнакомец.',
+  acquaintance: 'Это знакомый — вы виделись несколько раз.',
+  friend: 'Это твой друг — вы хорошо знаете друг друга.',
+  close_friend: 'Это твой близкий друг — вы очень доверяете друг другу.',
+  romantic: 'Это очень близкий тебе человек, которому ты испытываешь романтические чувства.',
+  rival: 'Это твой соперник — у вас напряжённые отношения.',
+};
+
+function scoreTierText(score: number): string {
+  if (score >= 90) return 'Ваши отношения очень глубокие.';
+  if (score >= 60) return 'У вас крепкие отношения.';
+  if (score >= 30) return 'Ваши отношения развиваются.';
+  return '';
+}
+
 function buildRelationshipSection(
   playerName: string,
-  meetingCount: number
+  meetingCount: number,
+  relationship?: RelationshipData
 ): string {
   const parts: string[] = [];
   parts.push(`К тебе подходит ${playerName}.`);
   parts.push(meetingText(playerName, meetingCount));
+
+  if (relationship) {
+    parts.push(socialTypePromptMap[relationship.socialType]);
+    const tier = scoreTierText(relationship.score);
+    if (tier) parts.push(tier);
+    if (relationship.isWorker) {
+      parts.push('Этот человек работает на тебя.');
+    }
+  }
+
   return parts.join('\n');
 }
 
-function buildMemorySection(): string {
-  return '(Пока нет воспоминаний)';
+export function buildFatigueSection(
+  turnCount: number,
+  config: FatigueConfig
+): string {
+  if (turnCount >= config.maxTurnsBeforeEnd) {
+    return 'Тебе нужно заканчивать разговор. Попрощайся естественно и вежливо.';
+  }
+  if (turnCount >= config.maxTurnsBeforeTired) {
+    return 'Ты устал(а) от долгого разговора. Отвечай короче.';
+  }
+  return '';
+}
+
+export function buildActionInjectionSection(
+  injection: string | null
+): string {
+  if (!injection) return '';
+  return injection;
+}
+
+function buildMemorySection(
+  memories?: ScoredMemory[],
+  playerName?: string
+): string {
+  if (!memories || memories.length === 0) {
+    return '';
+  }
+  const header = `ТВОИ ВОСПОМИНАНИЯ О ${playerName ?? 'этом человеке'}`;
+  const items = memories.map((m) => `- ${m.memory.content}`).join('\n');
+  return `${header}\n${items}`;
 }
 
 function buildGuardrailsSection(
@@ -148,11 +215,20 @@ export function buildSystemPrompt(context: PromptContext): string {
   const { persona, botName, playerName, meetingCount, worldContext } =
     context;
 
+  const memorySection = buildMemorySection(context.memories, playerName);
+  const injectionSection = buildActionInjectionSection(context.pendingInjection ?? null);
+  const fatigueSection = buildFatigueSection(
+    context.turnCount ?? 0,
+    FATIGUE_DEFAULTS
+  );
+
   const sections = [
     buildIdentitySection(botName, persona),
     buildWorldSection(worldContext),
-    buildRelationshipSection(playerName, meetingCount),
-    buildMemorySection(),
+    buildRelationshipSection(playerName, meetingCount, context.relationship),
+    ...(memorySection ? [memorySection] : []),
+    ...(injectionSection ? [injectionSection] : []),
+    ...(fatigueSection ? [fatigueSection] : []),
     buildGuardrailsSection(botName, persona.role),
     buildFormatSection(),
   ];

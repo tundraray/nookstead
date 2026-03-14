@@ -25,8 +25,22 @@ import {
   addDialogueMessage,
   getRecentDialogueHistory,
   getSessionCountForPair,
+  getMemoriesForBot,
+  getEffectiveConfig,
   updateBot,
+  getOrCreateRelationship,
+  updateRelationship,
 } from '@nookstead/db';
+import { MemoryStream, scoreAndRankMemories, type ScoredMemory } from '../npc-service/memory';
+import {
+  processAction,
+  evaluateProgression,
+  getAvailableActions,
+  rowToRelationshipData,
+  SCORE_DELTAS,
+  FATIGUE_DEFAULTS,
+} from '../npc-service/relationships/index.js';
+import type { RelationshipData, DialogueActionPayload } from '@nookstead/shared';
 import {
   PATCH_RATE_MS,
   AVAILABLE_SKINS,
@@ -46,7 +60,7 @@ import {
   type SerializedLayer,
   type CollisionZoneDef,
   type DialogueMessagePayload,
-  type DialogueStartPayload,
+  type DialogueStartWithRelationshipPayload,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
@@ -107,11 +121,16 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       dbSessionId: string;
       abortController: AbortController | null;
       persona: SeedPersona | null;
+      memories: ScoredMemory[];
+      relationship: RelationshipData | null;
+      turnCount: number;
+      pendingInjection: string | null;
     }
   >();
   private dialogueService: DialogueService | null = null;
   private serverEpoch!: number;
   private clockConfig!: { dayDurationSeconds: number; seasonDurationDays: number };
+  private memoryStream: MemoryStream | null = null;
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -136,6 +155,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       dayDurationSeconds: config.dayDurationSeconds,
       seasonDurationDays: config.seasonDurationDays,
     };
+
+    // Initialize MemoryStream for NPC memory creation
+    this.memoryStream = new MemoryStream({
+      apiKey: config.openaiApiKey,
+    });
 
     // Register with ChunkManager
     chunkManager.registerRoom(this.chunkId, this);
@@ -170,6 +194,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     this.onMessage(ClientMessage.DIALOGUE_END, (client) => {
       this.handleDialogueEnd(client as Client, 'close');
     });
+
+    this.onMessage(
+      ClientMessage.DIALOGUE_ACTION,
+      (client, payload: unknown) => {
+        this.handleDialogueAction(client as Client, payload);
+      }
+    );
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
     this.setSimulationInterval((deltaTime) => {
@@ -848,7 +879,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Extract player name from world state
     const playerName = player?.name ?? 'Stranger';
 
-    // Stream AI response
+    // Increment turn count
+    session.turnCount += 1;
+
+    // Stream AI response (with relationship, fatigue, and injection context)
     let fullText = '';
     try {
       const stream = this.dialogueService!.streamResponse({
@@ -859,6 +893,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         playerText: text,
         conversationHistory,
         abortSignal: abortController.signal,
+        memories: session.memories,
+        relationship: session.relationship ?? undefined,
+        turnCount: session.turnCount,
+        pendingInjection: session.pendingInjection,
       });
 
       for await (const chunk of stream) {
@@ -871,6 +909,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         err
       );
     }
+
+    // Clear pending injection after one turn (consumed)
+    session.pendingInjection = null;
 
     // Send end-of-turn marker
     client.send(ServerMessage.DIALOGUE_END_TURN, {});
@@ -891,6 +932,14 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         );
       });
     }
+
+    // Fatigue auto-end: close dialogue after maxTurnsBeforeEnd
+    if (session.turnCount >= FATIGUE_DEFAULTS.maxTurnsBeforeEnd) {
+      console.log(
+        `[ChunkRoom] Fatigue auto-end: sessionId=${client.sessionId}, turnCount=${session.turnCount}`
+      );
+      this.handleDialogueEnd(client, 'fatigue');
+    }
   }
 
   private handleDialogueEnd(client: Client, reason: string): void {
@@ -899,33 +948,186 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       return;
     }
 
+    // Capture all data into locals before cleanup deletes session (I003)
+    const botId = session.botId;
+    const dbSessionId = session.dbSessionId;
+    const botSchema = this.state.bots.get(botId);
+    const botName = botSchema?.name ?? 'NPC';
+    const player = world.getPlayer(client.sessionId);
+    const userId = (client.auth as AuthData)?.userId;
+    const playerName = player?.name ?? 'Stranger';
+    const relationship = session.relationship;
+    const persona = session.persona;
+
     // Abort any in-flight AI stream
     session.abortController?.abort();
 
     // End DB session (fire-and-forget)
     const db = getGameDb();
-    endDialogueSession(db, session.dbSessionId).catch((err: unknown) => {
+    endDialogueSession(db, dbSessionId).catch((err: unknown) => {
       console.error(
-        `[ChunkRoom] Failed to end dialogue session: dbSessionId=${session.dbSessionId}`,
+        `[ChunkRoom] Failed to end dialogue session: dbSessionId=${dbSessionId}`,
         err
       );
     });
 
+    // Fire-and-forget: apply normalDialogue score delta and evaluate progression
+    if (userId && relationship) {
+      const newScore = relationship.score + SCORE_DELTAS.normalDialogue;
+      const updatedRel: RelationshipData = { ...relationship, score: newScore };
+      const newSocialType = evaluateProgression(updatedRel, persona?.traits);
+      const needsUpdate = newScore !== relationship.score || newSocialType !== relationship.socialType;
+
+      if (needsUpdate) {
+        updateRelationship(db, botId, userId, {
+          score: newScore,
+          socialType: newSocialType,
+        }).catch((err: unknown) => {
+          console.error(
+            `[ChunkRoom] Relationship progression update failed: botId=${botId}, userId=${userId}`,
+            err
+          );
+        });
+      }
+    }
+
+    // Fire-and-forget: create memory from dialogue (uses only captured locals)
+    if (this.memoryStream && userId) {
+      getEffectiveConfig(db, botId)
+        .then((config) =>
+          getSessionCountForPair(db, botId, userId).then((count) =>
+            this.memoryStream!.createDialogueMemory({
+              db,
+              botId,
+              userId,
+              dialogueSessionId: dbSessionId,
+              isFirstMeeting: count <= 1,
+              botName,
+              playerName,
+              config,
+            })
+          )
+        )
+        .catch((err: unknown) => {
+          console.error('[ChunkRoom] Memory creation failed:', err);
+        });
+    }
+
     // End interaction in BotManager
-    this.botManager.endInteraction(session.botId, client.sessionId);
+    this.botManager.endInteraction(botId, client.sessionId);
 
     // Sync bot state back to idle in Colyseus schema
-    const botSchema = this.state.bots.get(session.botId);
     if (botSchema) {
       botSchema.state = 'idle';
     }
 
     console.log(
-      `[ChunkRoom] Dialogue ended: sessionId=${client.sessionId}, botId=${session.botId}, reason=${reason}`
+      `[ChunkRoom] Dialogue ended: sessionId=${client.sessionId}, botId=${botId}, reason=${reason}`
     );
 
     // Remove session
     this.dialogueSessions.delete(client.sessionId);
+  }
+
+  private async handleDialogueAction(client: Client, payload: unknown): Promise<void> {
+    const session = this.dialogueSessions.get(client.sessionId);
+    if (!session) {
+      return;
+    }
+
+    // Reject actions during NPC streaming
+    if (session.abortController) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: 'unknown',
+        message: 'NPC is speaking',
+      });
+      return;
+    }
+
+    // Validate payload
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      typeof (payload as DialogueActionPayload).action !== 'object'
+    ) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: 'unknown',
+        message: 'Invalid action payload',
+      });
+      return;
+    }
+
+    const { action } = payload as DialogueActionPayload;
+    const userId = (client.auth as AuthData)?.userId;
+    const player = world.getPlayer(client.sessionId);
+    const playerName = player?.name ?? 'Stranger';
+
+    if (!session.relationship || !userId) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: action.type,
+        message: 'Нет данных об отношениях.',
+      });
+      return;
+    }
+
+    const db = getGameDb();
+    const result = await processAction(
+      db,
+      session.botId,
+      userId,
+      action,
+      session.relationship,
+      playerName
+    );
+
+    // Update session relationship on success
+    if (result.success && result.updatedRelationship) {
+      session.relationship = result.updatedRelationship;
+    }
+
+    // Store prompt injection for next turn
+    if (result.success && result.promptInjection) {
+      session.pendingInjection = result.promptInjection;
+    }
+
+    // Fire-and-forget: create action memory for gift actions
+    if (result.success && action.type === 'give_gift' && this.memoryStream) {
+      const { getGift } = await import('../npc-service/relationships/gift-registry.js');
+      const gift = getGift(action.params.giftId);
+      this.memoryStream
+        .createActionMemory({
+          db,
+          botId: session.botId,
+          userId,
+          playerName,
+          memoryTemplate: gift.memoryTemplate,
+          importance: gift.importance,
+          dialogueSessionId: session.dbSessionId,
+        })
+        .catch((err: unknown) => {
+          console.error(
+            `[ChunkRoom] Gift memory creation failed: botId=${session.botId}`,
+            err
+          );
+        });
+    }
+
+    // Send result to client (include updated available actions)
+    const availableActions = session.relationship
+      ? getAvailableActions(session.relationship)
+      : [];
+
+    client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+      ...result,
+      availableActions,
+    });
+
+    console.log(
+      `[ChunkRoom] Dialogue action: sessionId=${client.sessionId}, type=${action.type}, success=${result.success}`
+    );
   }
 
   private handleMove(client: Client, payload: unknown): void {
@@ -1083,12 +1285,54 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       // Load persona from bot record (personality, role, speechStyle)
       const persona = this.botManager.getBotPersona(botId);
 
+      // Retrieve memories for this bot-user pair (best-effort, empty on failure)
+      let memories: ScoredMemory[] = [];
+      const userId = (client.auth as AuthData)?.userId;
+      if (userId) {
+        try {
+          const db = getGameDb();
+          const effectiveConfig = await getEffectiveConfig(db, botId);
+          const rawMemories = await getMemoriesForBot(db, botId, userId);
+          memories = scoreAndRankMemories(rawMemories, {
+            topK: effectiveConfig.topK,
+            halfLifeHours: effectiveConfig.halfLifeHours,
+            recencyWeight: effectiveConfig.recencyWeight,
+            importanceWeight: effectiveConfig.importanceWeight,
+            tokenBudget: effectiveConfig.tokenBudget,
+          });
+        } catch (err) {
+          console.warn(
+            `[ChunkRoom] Memory retrieval failed (continuing without memories): botId=${botId}`,
+            err
+          );
+        }
+      }
+
+      // Load relationship (best-effort, default to null/stranger)
+      let relationship: RelationshipData | null = null;
+      if (userId) {
+        try {
+          const db2 = getGameDb();
+          const relRow = await getOrCreateRelationship(db2, botId, userId);
+          relationship = rowToRelationshipData(relRow);
+        } catch (err) {
+          console.warn(
+            `[ChunkRoom] Relationship load failed (defaulting to stranger): botId=${botId}`,
+            err
+          );
+        }
+      }
+
       // Track dialogue session
       this.dialogueSessions.set(client.sessionId, {
         botId,
         dbSessionId,
         abortController: null,
         persona,
+        memories,
+        relationship,
+        turnCount: 0,
+        pendingInjection: null,
       });
 
       console.log(
@@ -1101,10 +1345,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         botSchema.state = 'interacting';
       }
 
-      // Send dialogue start to client
-      const startPayload: DialogueStartPayload = {
+      // Send dialogue start to client (with relationship context)
+      const availableActions = relationship ? getAvailableActions(relationship) : [];
+      const startPayload: DialogueStartWithRelationshipPayload = {
         botId,
         botName: result.name,
+        relationship: relationship ?? undefined,
+        availableActions,
       };
       client.send(ServerMessage.DIALOGUE_START, startPayload);
 

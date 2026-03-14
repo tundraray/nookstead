@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AVAILABLE_SKINS } from '@nookstead/shared';
+import { NpcMemoriesTab } from './memories-tab';
+import { NpcRelationshipsTab } from './relationships-tab';
 import {
   useNpcDialogues,
   type AdminDialogueSession,
@@ -313,6 +315,8 @@ export default function NpcEditPage() {
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
           <TabsTrigger value="dialogues">Dialogues</TabsTrigger>
+          <TabsTrigger value="memories">Memories</TabsTrigger>
+          <TabsTrigger value="relationships">Relationships</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details">
@@ -662,6 +666,16 @@ export default function NpcEditPage() {
                 </Button>
               </div>
             )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="memories">
+          <NpcMemoriesTab botId={id} />
+        </TabsContent>
+
+        <TabsContent value="relationships">
+          <div className="mt-4">
+            <NpcRelationshipsTab botId={id} />
           </div>
         </TabsContent>
       </Tabs>

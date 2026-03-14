@@ -3,6 +3,13 @@
 import { useChat } from '@ai-sdk/react';
 import { Fragment, useEffect, useRef, useState, useCallback } from 'react';
 import type { ColyseusTransport } from '@/services/ColyseusTransport';
+import type {
+  RelationshipData,
+  DialogueActionType,
+  DialogueAction,
+  RelationshipSocialType,
+  GiftId,
+} from '@nookstead/shared';
 import { GameModal } from './GameModal';
 
 interface HistoryMessage {
@@ -24,7 +31,38 @@ interface ChatModalProps {
   botId: string;
   botName: string;
   transport: ColyseusTransport | null;
+  initialRelationship?: RelationshipData | null;
+  initialAvailableActions?: DialogueActionType[];
 }
+
+type ActionFeedback = { type: 'success' | 'error'; message: string } | null;
+
+const CLIENT_GIFT_OPTIONS: readonly { id: GiftId; label: string }[] = [
+  { id: 'flowers', label: 'Цветы' },
+  { id: 'pie', label: 'Пирог' },
+  { id: 'mushrooms', label: 'Грибы' },
+  { id: 'herbs', label: 'Травы' },
+  { id: 'fishing_rod', label: 'Удочка' },
+  { id: 'carved_wood', label: 'Деревянная фигурка' },
+  { id: 'pottery', label: 'Глиняный горшок' },
+  { id: 'knitted_scarf', label: 'Вязаный шарф' },
+  { id: 'old_book', label: 'Старая книга' },
+  { id: 'recipe_book', label: 'Книга рецептов' },
+  { id: 'silver_ring', label: 'Серебряное кольцо' },
+  { id: 'love_letter', label: 'Любовное письмо' },
+  { id: 'perfume', label: 'Духи' },
+  { id: 'candles', label: 'Свечи' },
+  { id: 'honey_cake', label: 'Медовый торт' },
+] as const;
+
+const socialTypeLabels: Record<RelationshipSocialType, string> = {
+  stranger: 'незнакомец',
+  acquaintance: 'знакомый',
+  friend: 'друг',
+  close_friend: 'близкий друг',
+  romantic: 'романтический интерес',
+  rival: 'соперник',
+};
 
 export function ChatModal({
   open,
@@ -32,17 +70,78 @@ export function ChatModal({
   botId,
   botName,
   transport,
+  initialRelationship,
+  initialAvailableActions,
 }: ChatModalProps) {
   const [input, setInput] = useState('');
   const [historySessions, setHistorySessions] = useState<HistorySession[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const messageListRef = useRef<HTMLDivElement>(null);
 
+  // Relationship and action state
+  const [relationship, setRelationship] = useState<RelationshipData | null>(
+    initialRelationship ?? null
+  );
+  const [availableActions, setAvailableActions] = useState<
+    DialogueActionType[]
+  >(initialAvailableActions ?? []);
+  const [showGiftSubmenu, setShowGiftSubmenu] = useState(false);
+  const [showAskAboutInput, setShowAskAboutInput] = useState(false);
+  const [askAboutTopic, setAskAboutTopic] = useState('');
+  const [actionFeedback, setActionFeedback] = useState<ActionFeedback>(null);
+  const feedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: transport ?? undefined,
   });
 
   const isStreaming = status === 'streaming' || status === 'submitted';
+
+  // Send a dialogue action to the server via transport
+  const handleAction = useCallback(
+    (action: DialogueAction) => {
+      transport?.sendDialogueAction(action);
+    },
+    [transport]
+  );
+
+  // Listen for DIALOGUE_ACTION_RESULT from the server
+  useEffect(() => {
+    if (!transport) return;
+    const cleanup = transport.onDialogueActionResult((result) => {
+      if (result.success) {
+        if (result.updatedRelationship) {
+          setRelationship(result.updatedRelationship);
+        }
+        if (result.availableActions) {
+          setAvailableActions(result.availableActions);
+        }
+        setActionFeedback({
+          type: 'success',
+          message: 'Действие выполнено!',
+        });
+      } else {
+        setActionFeedback({
+          type: 'error',
+          message: result.message ?? 'Не удалось выполнить действие',
+        });
+      }
+      // Auto-clear feedback after 3 seconds
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+      feedbackTimeoutRef.current = setTimeout(
+        () => setActionFeedback(null),
+        3000
+      );
+    });
+    return () => {
+      cleanup();
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+    };
+  }, [transport]);
 
   // Fetch dialogue history when modal opens
   const fetchHistory = useCallback(async () => {
@@ -90,6 +189,17 @@ export function ChatModal({
       // Clear chat messages on close
       setMessages([]);
       setInput('');
+      // Reset relationship/action state
+      setRelationship(null);
+      setAvailableActions([]);
+      setShowGiftSubmenu(false);
+      setShowAskAboutInput(false);
+      setAskAboutTopic('');
+      setActionFeedback(null);
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+        feedbackTimeoutRef.current = null;
+      }
     }
     onOpenChange(nextOpen);
   }
@@ -102,6 +212,15 @@ export function ChatModal({
 
     sendMessage({ text: trimmed });
     setInput('');
+  }
+
+  // Handle ask_about submission
+  function handleAskAboutSubmit() {
+    const trimmed = askAboutTopic.trim();
+    if (!trimmed) return;
+    handleAction({ type: 'ask_about', params: { topic: trimmed } });
+    setAskAboutTopic('');
+    setShowAskAboutInput(false);
   }
 
   const hasHistory = historySessions.some((s) => s.messages.length > 0);
@@ -198,6 +317,139 @@ export function ChatModal({
             </div>
           )}
         </div>
+
+        {/* Relationship status indicator */}
+        {relationship && (
+          <p className="chat-modal__relationship-status">
+            Отношения: {socialTypeLabels[relationship.socialType]}
+            {relationship.isWorker && ' (работник)'}
+          </p>
+        )}
+
+        {/* Action buttons panel */}
+        {availableActions.length > 0 && (
+          <div className="chat-modal__actions" style={{ position: 'relative' }}>
+            <div className="chat-modal__actions-row">
+              {availableActions.includes('give_gift') && (
+                <button
+                  className="chat-modal__action-btn"
+                  disabled={isStreaming}
+                  onClick={() => setShowGiftSubmenu((prev) => !prev)}
+                >
+                  Подарить подарок
+                </button>
+              )}
+              {availableActions.includes('hire') && (
+                <button
+                  className="chat-modal__action-btn"
+                  disabled={isStreaming}
+                  onClick={() => handleAction({ type: 'hire' })}
+                >
+                  Нанять на работу
+                </button>
+              )}
+              {availableActions.includes('dismiss') && (
+                <button
+                  className="chat-modal__action-btn"
+                  disabled={isStreaming}
+                  onClick={() => handleAction({ type: 'dismiss' })}
+                >
+                  Уволить
+                </button>
+              )}
+              {availableActions.includes('ask_about') && (
+                <button
+                  className="chat-modal__action-btn"
+                  disabled={isStreaming}
+                  onClick={() => setShowAskAboutInput((prev) => !prev)}
+                >
+                  Спросить о...
+                </button>
+              )}
+            </div>
+
+            {/* Gift selection submenu */}
+            {showGiftSubmenu && (
+              <>
+                {/* Backdrop to close submenu on outside click */}
+                <div
+                  className="chat-modal__submenu-backdrop"
+                  onClick={() => setShowGiftSubmenu(false)}
+                />
+                <div className="chat-modal__gift-submenu">
+                  <p className="chat-modal__gift-submenu-title">
+                    Выбери подарок:
+                  </p>
+                  <div className="chat-modal__gift-grid">
+                    {CLIENT_GIFT_OPTIONS.map((gift) => (
+                      <button
+                        key={gift.id}
+                        className="chat-modal__gift-option"
+                        onClick={() => {
+                          handleAction({
+                            type: 'give_gift',
+                            params: { giftId: gift.id },
+                          });
+                          setShowGiftSubmenu(false);
+                        }}
+                      >
+                        {gift.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Ask about topic input */}
+            {showAskAboutInput && (
+              <div className="chat-modal__ask-about">
+                <input
+                  className="chat-modal__ask-about-input"
+                  type="text"
+                  value={askAboutTopic}
+                  onChange={(e) => setAskAboutTopic(e.target.value)}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') {
+                      handleAskAboutSubmit();
+                    }
+                    if (e.key === 'Escape') {
+                      setShowAskAboutInput(false);
+                    }
+                  }}
+                  placeholder="О чём спросить..."
+                  autoFocus
+                />
+                <button
+                  className="chat-modal__ask-about-send"
+                  onClick={handleAskAboutSubmit}
+                  disabled={!askAboutTopic.trim()}
+                >
+                  Спросить
+                </button>
+              </div>
+            )}
+
+            {/* Action feedback */}
+            {actionFeedback && (
+              <div
+                className={`chat-modal__action-feedback chat-modal__action-feedback--${actionFeedback.type}`}
+              >
+                {actionFeedback.message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Action feedback when no actions available (still show result if received) */}
+        {availableActions.length === 0 && actionFeedback && (
+          <div
+            className={`chat-modal__action-feedback chat-modal__action-feedback--${actionFeedback.type}`}
+          >
+            {actionFeedback.message}
+          </div>
+        )}
 
         {/* Input form */}
         <form className="chat-modal__form" onSubmit={handleSubmit}>

@@ -18,6 +18,8 @@ import {
   ClientMessage,
   ServerMessage,
   type DialogueStreamChunkPayload,
+  type DialogueAction,
+  type DialogueActionResultPayload,
 } from '@nookstead/shared';
 
 /** Generate a simple unique ID for text part tracking. */
@@ -274,6 +276,38 @@ export class ColyseusTransport implements ChatTransport<UIMessage> {
    */
   reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
     return Promise.resolve(null);
+  }
+
+  /**
+   * Send a dialogue action (give_gift, hire, dismiss, ask_about) to the server.
+   * Actions are sent outside the AI SDK streaming flow, directly via the room.
+   */
+  sendDialogueAction(action: DialogueAction): void {
+    this.room?.send(ClientMessage.DIALOGUE_ACTION, { action });
+  }
+
+  /**
+   * Register a callback for DIALOGUE_ACTION_RESULT messages from the server.
+   * Returns a cleanup function to unregister the listener.
+   */
+  onDialogueActionResult(
+    callback: (result: DialogueActionResultPayload) => void
+  ): () => void {
+    if (!this.room) {
+      return () => {
+        /* no-op: no room */
+      };
+    }
+
+    const unsub = this.room.onMessage(
+      ServerMessage.DIALOGUE_ACTION_RESULT,
+      (result: DialogueActionResultPayload) => {
+        callback(result);
+      }
+    );
+    this.unsubscribers.push(unsub);
+
+    return unsub;
   }
 
   /**

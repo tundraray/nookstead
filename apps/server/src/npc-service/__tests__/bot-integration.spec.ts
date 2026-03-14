@@ -146,6 +146,20 @@ const mockAddDialogueMessage =
   jest.fn<(db: unknown, data: unknown) => Promise<unknown>>();
 const mockGetRecentDialogueHistory =
   jest.fn<(db: unknown, botId: string, userId: string, limit: number) => Promise<unknown[]>>();
+const mockGetSessionCountForPair =
+  jest.fn<(db: unknown, botId: string, userId: string) => Promise<number>>();
+const mockGetEffectiveConfig =
+  jest.fn<(db: unknown, botId: string) => Promise<unknown>>();
+const mockGetMemoriesForBot =
+  jest.fn<(db: unknown, botId: string, userId: string) => Promise<unknown[]>>();
+const mockGetOrCreateRelationship =
+  jest.fn<(db: unknown, botId: string, userId: string) => Promise<unknown>>();
+const mockUpdateRelationship =
+  jest.fn<(db: unknown, botId: string, userId: string, data: unknown) => Promise<unknown>>();
+const mockUpdateBot =
+  jest.fn<(db: unknown, botId: string, data: unknown) => Promise<unknown>>();
+const mockGetDialogueSessionMessages =
+  jest.fn<(db: unknown, sessionId: string) => Promise<unknown[]>>();
 
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
@@ -164,6 +178,13 @@ jest.mock('@nookstead/db', () => ({
   endDialogueSession: mockEndDialogueSession,
   addDialogueMessage: mockAddDialogueMessage,
   getRecentDialogueHistory: mockGetRecentDialogueHistory,
+  getSessionCountForPair: mockGetSessionCountForPair,
+  getEffectiveConfig: mockGetEffectiveConfig,
+  getMemoriesForBot: mockGetMemoriesForBot,
+  getOrCreateRelationship: mockGetOrCreateRelationship,
+  updateRelationship: mockUpdateRelationship,
+  updateBot: mockUpdateBot,
+  getDialogueSessionMessages: mockGetDialogueSessionMessages,
 }));
 
 const mockGetGameDb = jest.fn<() => unknown>().mockReturnValue({});
@@ -792,6 +813,34 @@ describe('dialogue system', () => {
     mockEndDialogueSession.mockResolvedValue(undefined);
     mockAddDialogueMessage.mockResolvedValue({ id: 'msg-id' });
     mockGetRecentDialogueHistory.mockResolvedValue([]);
+    mockGetSessionCountForPair.mockResolvedValue(0);
+    mockGetEffectiveConfig.mockResolvedValue({
+      topK: 10,
+      halfLifeHours: 48,
+      recencyWeight: 1.0,
+      importanceWeight: 1.0,
+      maxMemoriesPerNpc: 1000,
+      tokenBudget: 400,
+      importanceFirstMeeting: 7,
+      importanceNormalDialogue: 4,
+      importanceEmotionalDialogue: 6,
+      importanceGiftReceived: 7,
+      importanceQuestRelated: 8,
+    });
+    mockGetMemoriesForBot.mockResolvedValue([]);
+
+    // Relationship mocks
+    mockGetOrCreateRelationship.mockResolvedValue({
+      botId: BOT_ID,
+      userId: 'user-dialogue',
+      socialType: 'stranger',
+      isWorker: false,
+      score: 0,
+      hiredAt: null,
+      updatedAt: new Date(),
+    });
+    mockUpdateRelationship.mockResolvedValue(undefined);
+    mockGetDialogueSessionMessages.mockResolvedValue([]);
 
     // Default DialogueService.streamResponse mock (empty stream)
     mockStreamResponse.mockReturnValue(
@@ -829,6 +878,14 @@ describe('dialogue system', () => {
     expect(startCall![1]).toEqual({
       botId: BOT_ID,
       botName: 'Sage',
+      relationship: expect.objectContaining({
+        botId: BOT_ID,
+        userId: 'user-dialogue',
+        socialType: 'stranger',
+        isWorker: false,
+        score: 0,
+      }),
+      availableActions: [],
     });
 
     // Should receive NPC_INTERACT_RESULT with dialogueStarted: true
