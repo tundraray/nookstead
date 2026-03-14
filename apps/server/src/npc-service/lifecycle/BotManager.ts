@@ -4,6 +4,8 @@ import {
   BOT_WANDER_INTERVAL_TICKS,
   BOT_INTERACTION_RADIUS,
   BOT_STUCK_TIMEOUT_MS,
+  BOT_MAX_PATHFIND_FAILURES,
+  BOT_EXTENDED_IDLE_TICKS,
   MAX_WANDER_TARGET_ATTEMPTS,
   TILE_SIZE,
   BOT_NAMES,
@@ -20,6 +22,7 @@ import type {
 import { createServerBot } from '../types/bot-types.js';
 import type { NpcBot } from '@nookstead/db';
 import type { SeedPersona } from '../ai/DialogueService.js';
+import { Pathfinder, NPCMovementEngine } from '../movement/index.js';
 
 /**
  * Manages all NPC bot companions for a single homestead (ChunkRoom instance).
@@ -28,7 +31,9 @@ import type { SeedPersona } from '../ai/DialogueService.js';
  * - Initialize bots from DB records (loadBots result)
  * - Generate new bots for first-time homestead visits
  * - Run the IDLE/WALKING state machine each tick
- * - Detect stuck bots and pick new wander targets
+ * - Compute A* waypoint paths for bot navigation
+ * - Detect stuck bots and teleport to nearest walkable tile
+ * - Handle dynamic walkability grid changes
  * - Validate player interactions (NPC_INTERACT)
  * - Report changed bot states (BotUpdate[]) for Colyseus schema sync
  * - Provide bot positions for DB persistence on despawn
@@ -39,6 +44,8 @@ import type { SeedPersona } from '../ai/DialogueService.js';
 export class BotManager {
   private bots = new Map<string, ServerBot>();
   private config!: BotManagerConfig;
+  private pathfinder!: Pathfinder;
+  private engines = new Map<string, NPCMovementEngine>();
 
   /**
    * Initialize BotManager with map config and populate bots from DB records.
@@ -50,10 +57,14 @@ export class BotManager {
   init(config: BotManagerConfig, records: NpcBot[]): void {
     this.config = config;
     this.bots.clear();
+    this.engines.clear();
+
+    this.pathfinder = new Pathfinder(config.mapWalkable);
 
     for (const record of records) {
       const bot = createServerBot(record);
       this.bots.set(bot.id, bot);
+      this.engines.set(bot.id, new NPCMovementEngine());
     }
 
     console.log(`[BotManager] init: ${this.bots.size} bots loaded`);
@@ -61,7 +72,7 @@ export class BotManager {
 
   /**
    * Generate N new bots with unique names and random skins.
-   * Does not persist to DB — ChunkRoom calls createBot() for each result.
+   * Does not persist to DB -- ChunkRoom calls createBot() for each result.
    *
    * Returns an array of partial bot data for ChunkRoom to persist.
    * Count is capped at MAX_BOTS_PER_HOMESTEAD.
@@ -128,6 +139,7 @@ export class BotManager {
   addBot(record: NpcBot): void {
     const bot = createServerBot(record);
     this.bots.set(bot.id, bot);
+    this.engines.set(bot.id, new NPCMovementEngine());
     console.log(`[BotManager] Bot spawned: ${bot.id} "${bot.name}"`);
   }
 
@@ -302,6 +314,10 @@ export class BotManager {
     bot.targetY = null;
     bot.idleTicks = 0;
     bot.walkStartTime = null;
+    bot.waypoints = [];
+    bot.currentWaypointIndex = 0;
+    bot.routeComputedAt = 0;
+    this.engines.get(botId)?.clearPath();
 
     return true;
   }
@@ -340,21 +356,77 @@ export class BotManager {
   }
 
   /**
+   * Handle a walkability grid change at a specific tile coordinate.
+   * Updates the Pathfinder's internal grid and, if the tile became non-walkable,
+   * checks each walking bot's remaining waypoints for blockages.
+   * Affected bots get their path recomputed or transition to IDLE.
+   *
+   * @param x - Tile X coordinate that changed
+   * @param y - Tile Y coordinate that changed
+   * @param walkable - New walkability state of the tile
+   */
+  onWalkabilityChanged(x: number, y: number, walkable: boolean): void {
+    this.pathfinder.setWalkableAt(x, y, walkable);
+
+    if (!walkable) {
+      for (const bot of this.bots.values()) {
+        if (bot.state !== 'walking') continue;
+        const engine = this.engines.get(bot.id);
+        if (!engine) continue;
+        if (engine.isWaypointBlocked(x, y)) {
+          // Recompute path from current position to original target
+          const currentTileX = Math.floor(bot.worldX / TILE_SIZE);
+          const currentTileY = Math.floor(bot.worldY / TILE_SIZE);
+          if (bot.targetX !== null && bot.targetY !== null) {
+            const targetTileX = Math.floor(bot.targetX / TILE_SIZE);
+            const targetTileY = Math.floor(bot.targetY / TILE_SIZE);
+            const newPath = this.pathfinder.findPath(
+              currentTileX,
+              currentTileY,
+              targetTileX,
+              targetTileY
+            );
+            if (newPath.length > 0) {
+              bot.waypoints = newPath;
+              bot.currentWaypointIndex = 0;
+              engine.setPath(newPath);
+              console.log(
+                `[BotManager] path recalculated for bot ${bot.id} after grid change`
+              );
+            } else {
+              this.transitionToIdle(bot);
+              console.log(
+                `[BotManager] path invalidated for bot ${bot.id}, transitioning to IDLE`
+              );
+            }
+          } else {
+            this.transitionToIdle(bot);
+            console.log(
+              `[BotManager] path invalidated for bot ${bot.id}, transitioning to IDLE`
+            );
+          }
+        }
+      }
+    }
+  }
+
+  /**
    * Clear all bots. Called when room is cleaned up.
    */
   destroy(): void {
     this.bots.clear();
+    this.engines.clear();
     console.log('[BotManager] destroyed');
   }
 
-  // ─── Private helpers ────────────────────────────────────────────────────────
+  // --- Private helpers -------------------------------------------------------
 
   private tickBot(bot: ServerBot, deltaMs: number, now: number): boolean {
     if (bot.state === 'interacting') return false;
     if (bot.state === 'idle') {
       return this.tickIdle(bot);
     } else {
-      return this.tickWalking(bot, deltaMs, now);
+      return this.tickWalkingWaypoint(bot, deltaMs, now);
     }
   }
 
@@ -366,8 +438,13 @@ export class BotManager {
     return false;
   }
 
-  private tickWalking(bot: ServerBot, deltaMs: number, now: number): boolean {
-    if (bot.targetX === null || bot.targetY === null) {
+  private tickWalkingWaypoint(
+    bot: ServerBot,
+    deltaMs: number,
+    now: number
+  ): boolean {
+    const engine = this.engines.get(bot.id);
+    if (!engine || !engine.hasPath()) {
       this.transitionToIdle(bot);
       return true;
     }
@@ -381,52 +458,51 @@ export class BotManager {
             (bot.worldY - bot.lastKnownY) ** 2
         );
         if (distFromStart < TILE_SIZE) {
-          // Bot hasn't moved more than 1 tile — truly stuck
+          // Bot hasn't moved more than 1 tile -- truly stuck
+          // Teleport to nearest walkable tile
+          const safeTile = this.findAnyWalkableTile();
+          if (safeTile) {
+            bot.worldX = safeTile.tileX * TILE_SIZE + TILE_SIZE / 2;
+            bot.worldY = safeTile.tileY * TILE_SIZE + TILE_SIZE / 2;
+          }
           console.log(
-            `[BotManager] Bot ${bot.id} stuck (moved ${distFromStart.toFixed(1)}px in ${elapsed}ms) — going idle`
+            `[BotManager] Bot ${bot.id} stuck (moved ${distFromStart.toFixed(1)}px in ${elapsed}ms) -- teleporting to nearest walkable tile`
           );
           this.transitionToIdle(bot);
           return true;
         }
-        // Bot has moved — reset checkpoint
+        // Bot has moved -- reset checkpoint
         bot.walkStartTime = now;
         bot.lastKnownX = bot.worldX;
         bot.lastKnownY = bot.worldY;
       }
     }
 
-    const dx = bot.targetX - bot.worldX;
-    const dy = bot.targetY - bot.worldY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Delegate movement to the engine
+    const result = engine.tick(
+      bot.worldX,
+      bot.worldY,
+      deltaMs,
+      BOT_SPEED,
+      TILE_SIZE
+    );
 
-    // Reached target
-    if (distance < 2) {
+    if (result.moved) {
+      bot.worldX = result.newWorldX;
+      bot.worldY = result.newWorldY;
+      bot.direction = result.direction;
+    }
+
+    if (result.reachedWaypoint) {
+      bot.currentWaypointIndex++;
+    }
+
+    if (result.reachedDestination) {
       this.transitionToIdle(bot);
       return true;
     }
 
-    // Move toward target
-    const speed = (BOT_SPEED * deltaMs) / 1000;
-    const ratio = Math.min(speed / distance, 1);
-    const newX = bot.worldX + dx * ratio;
-    const newY = bot.worldY + dy * ratio;
-
-    // Check walkability of new position
-    const tileX = Math.floor(newX / TILE_SIZE);
-    const tileY = Math.floor(newY / TILE_SIZE);
-    if (!this.isTileWalkable(tileX, tileY)) {
-      return this.startWander(bot);
-    }
-
-    const moved =
-      Math.abs(newX - bot.worldX) > 0.1 ||
-      Math.abs(newY - bot.worldY) > 0.1;
-
-    bot.worldX = newX;
-    bot.worldY = newY;
-    bot.direction = this.getDirection(dx, dy);
-
-    return moved;
+    return result.moved;
   }
 
   private startWander(bot: ServerBot): boolean {
@@ -439,22 +515,59 @@ export class BotManager {
       return true;
     }
 
-    // Only reset stuck timer when transitioning from IDLE to WALKING.
-    // When re-targeting while already walking (e.g. hit obstacle),
-    // keep the original timer so stuck detection still fires.
-    const wasIdle = bot.state === 'idle';
+    // Compute A* path to target
+    const waypoints = this.pathfinder.findPath(
+      centerTileX,
+      centerTileY,
+      target.tileX,
+      target.tileY
+    );
 
-    bot.state = 'walking';
-    bot.targetX = target.tileX * TILE_SIZE + TILE_SIZE / 2;
-    bot.targetY = target.tileY * TILE_SIZE + TILE_SIZE / 2;
-    bot.idleTicks = 0;
+    if (waypoints.length > 0) {
+      const engine = this.engines.get(bot.id);
+      if (!engine) {
+        this.transitionToIdle(bot);
+        return true;
+      }
 
-    if (wasIdle) {
+      bot.waypoints = waypoints;
+      bot.currentWaypointIndex = 0;
+      bot.routeComputedAt = Date.now();
+      bot.failedWanderAttempts = 0;
+      engine.setPath(waypoints);
+
+      bot.state = 'walking';
+      bot.targetX = target.tileX * TILE_SIZE + TILE_SIZE / 2;
+      bot.targetY = target.tileY * TILE_SIZE + TILE_SIZE / 2;
+      bot.idleTicks = 0;
       bot.walkStartTime = Date.now();
       bot.lastKnownX = bot.worldX;
       bot.lastKnownY = bot.worldY;
+
+      console.log(
+        `[BotManager] path computed for bot ${bot.id}: ${waypoints.length} waypoints`
+      );
+      return true;
     }
 
+    // No path found
+    bot.failedWanderAttempts++;
+    console.log(
+      `[BotManager] no path found for bot ${bot.id}, attempt ${bot.failedWanderAttempts}`
+    );
+
+    if (bot.failedWanderAttempts >= BOT_MAX_PATHFIND_FAILURES) {
+      bot.state = 'idle';
+      bot.idleTicks = BOT_WANDER_INTERVAL_TICKS - BOT_EXTENDED_IDLE_TICKS;
+      bot.failedWanderAttempts = 0;
+      console.log(
+        `[BotManager] bot ${bot.id} entering extended idle after ${BOT_MAX_PATHFIND_FAILURES} pathfind failures`
+      );
+      return true;
+    }
+
+    // Stay idle, will retry on next tickIdle trigger
+    this.transitionToIdle(bot);
     return true;
   }
 
@@ -464,6 +577,10 @@ export class BotManager {
     bot.targetY = null;
     bot.idleTicks = 0;
     bot.walkStartTime = null;
+    bot.waypoints = [];
+    bot.currentWaypointIndex = 0;
+    bot.routeComputedAt = 0;
+    this.engines.get(bot.id)?.clearPath();
   }
 
   private pickRandomWalkableTile(
@@ -480,10 +597,7 @@ export class BotManager {
       const tileX = centerTileX + offsetX;
       const tileY = centerTileY + offsetY;
 
-      if (
-        this.isTileWalkable(tileX, tileY) &&
-        this.hasLineOfSight(centerTileX, centerTileY, tileX, tileY)
-      ) {
+      if (this.isTileWalkable(tileX, tileY)) {
         return { tileX, tileY };
       }
     }
@@ -507,59 +621,12 @@ export class BotManager {
     return null;
   }
 
-  /**
-   * Check if there is a clear straight-line path between two tiles.
-   * Uses Bresenham's line algorithm to trace every tile along the path
-   * and verify each one is walkable.
-   */
-  private hasLineOfSight(
-    fromTileX: number,
-    fromTileY: number,
-    toTileX: number,
-    toTileY: number
-  ): boolean {
-    let x0 = fromTileX;
-    let y0 = fromTileY;
-    const x1 = toTileX;
-    const y1 = toTileY;
-
-    const dx = Math.abs(x1 - x0);
-    const dy = Math.abs(y1 - y0);
-    const sx = x0 < x1 ? 1 : -1;
-    const sy = y0 < y1 ? 1 : -1;
-    let err = dx - dy;
-
-    while (true) {
-      if (!this.isTileWalkable(x0, y0)) return false;
-      if (x0 === x1 && y0 === y1) break;
-
-      const e2 = 2 * err;
-      if (e2 > -dy) {
-        err -= dy;
-        x0 += sx;
-      }
-      if (e2 < dx) {
-        err += dx;
-        y0 += sy;
-      }
-    }
-
-    return true;
-  }
-
   private isTileWalkable(tileX: number, tileY: number): boolean {
     const { mapWalkable, mapWidth, mapHeight } = this.config;
     if (tileX < 0 || tileY < 0 || tileX >= mapWidth || tileY >= mapHeight) {
       return false;
     }
     return mapWalkable[tileY]?.[tileX] === true;
-  }
-
-  private getDirection(dx: number, dy: number): string {
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      return dx > 0 ? 'right' : 'left';
-    }
-    return dy > 0 ? 'down' : 'up';
   }
 
   private pickUniqueName(usedNames: Set<string>): string {

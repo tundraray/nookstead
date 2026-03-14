@@ -23,6 +23,7 @@ import { IdleState, WalkState } from './states';
 import { type Direction, animKey } from '../characters/frame-map';
 import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
+import type { Point } from '@nookstead/pathfinding';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
 import {
   CORRECTION_THRESHOLD,
@@ -48,6 +49,11 @@ export class Player extends Phaser.GameObjects.Sprite {
 
   /** Click-to-move target position, or null when inactive. */
   public moveTarget: { x: number; y: number } | null = null;
+
+  /** Active A* waypoint path. Empty when not following a path. */
+  public waypoints: Point[] = [];
+  /** Index into `waypoints` of the waypoint currently being targeted. */
+  public currentWaypointIndex = 0;
 
   // Prediction state (FR-16)
   /** Last authoritative X position received from the server. */
@@ -254,6 +260,26 @@ export class Player extends Phaser.GameObjects.Sprite {
    */
   clearMoveTarget(): void {
     this.moveTarget = null;
+  }
+
+  /**
+   * Set a new waypoint path and begin following it.
+   * Stores the array, resets index to 0, and transitions to walk if idle.
+   */
+  setWaypoints(waypoints: Point[]): void {
+    this.waypoints = waypoints;
+    this.currentWaypointIndex = 0;
+    if (waypoints.length > 0 && this.stateMachine.currentState === 'idle') {
+      this.stateMachine.setState('walk');
+    }
+  }
+
+  /**
+   * Clear the waypoint path and reset the index.
+   */
+  clearWaypoints(): void {
+    this.waypoints = [];
+    this.currentWaypointIndex = 0;
   }
 
   /**

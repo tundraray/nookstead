@@ -12,6 +12,7 @@ import type { Direction } from '../../characters/frame-map';
 import type { InputController } from '../../input/InputController';
 import type { StateMachine } from '../StateMachine';
 import type { Grid } from '@nookstead/shared';
+import type { Point } from '@nookstead/pathfinding';
 
 /**
  * Context interface that player states use to interact with the player entity.
@@ -51,4 +52,16 @@ export interface PlayerContext {
   setPosition(x: number, y: number): this;
   /** Clear the click-to-move target. */
   clearMoveTarget(): void;
+
+  /** Active waypoint path. Empty when not following a path. */
+  waypoints: Point[];
+  /** Index of the waypoint the player is currently moving toward. */
+  currentWaypointIndex: number;
+  /**
+   * Set a new waypoint path and begin following it.
+   * Stores the array, resets index to 0, and transitions to walk if idle.
+   */
+  setWaypoints(waypoints: Point[]): void;
+  /** Clear the waypoint path and reset the index. */
+  clearWaypoints(): void;
 }

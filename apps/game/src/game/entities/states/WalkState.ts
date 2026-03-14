@@ -18,8 +18,9 @@ import { animKey } from '../../characters/frame-map';
 import { calculateMovement } from '../../systems/movement';
 import { isMovementLocked } from '../../systems/dialogue-lock';
 import { getRoom } from '../../../services/colyseus';
-import { ClientMessage } from '@nookstead/shared';
+import { ClientMessage, PLAYER_WAYPOINT_THRESHOLD } from '@nookstead/shared';
 import type { PlayerContext } from './types';
+import type Phaser from 'phaser';
 
 /** Distance threshold (in pixels) to consider the player "arrived" at the move target. */
 const ARRIVAL_THRESHOLD = 8;
@@ -47,6 +48,8 @@ export class WalkState implements State {
 
   update(delta: number): void {
     if (isMovementLocked()) {
+      this.clearPathMarker();
+      this.context.clearWaypoints();
       this.context.clearMoveTarget();
       this.context.stateMachine.setState('idle');
       return;
@@ -56,18 +59,27 @@ export class WalkState implements State {
     const hasKeyboardInput = keyboardDir.x !== 0 || keyboardDir.y !== 0;
 
     if (hasKeyboardInput) {
-      // Keyboard takes priority -- clear any click-to-move target
+      // Keyboard takes priority -- clear any click-to-move target and waypoints
+      this.clearPathMarker();
+      this.context.clearWaypoints();
       this.context.clearMoveTarget();
       this.moveWithKeyboard(keyboardDir, delta);
       return;
     }
 
+    // Waypoint following (A* path from click-pathfinding system)
+    if (this.context.waypoints.length > 0) {
+      this.moveAlongWaypoints(delta);
+      return;
+    }
+
+    // Legacy straight-line click-to-move fallback
     if (this.context.moveTarget) {
       this.moveTowardTarget(delta);
       return;
     }
 
-    // No keyboard input and no moveTarget -- transition to idle
+    // No keyboard input, no waypoints, and no moveTarget -- transition to idle
     this.context.stateMachine.setState('idle');
   }
 
@@ -102,7 +114,8 @@ export class WalkState implements State {
    * Handle click-to-move movement toward the stored target.
    */
   private moveTowardTarget(delta: number): void {
-    const target = this.context.moveTarget!;
+    const target = this.context.moveTarget;
+    if (!target) return;
     const dx = target.x - this.context.x;
     const dy = target.y - this.context.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
@@ -118,6 +131,55 @@ export class WalkState implements State {
     const normalizedDir = { x: dx / dist, y: dy / dist };
 
     // Determine facing direction from movement direction
+    const newFacing = this.directionFromVector(normalizedDir);
+    if (newFacing !== this.context.facingDirection) {
+      this.context.facingDirection = newFacing;
+      const key = animKey(this.context.sheetKey, 'walk', newFacing);
+      this.context.play(key, true);
+    }
+
+    this.applyMovement(normalizedDir, delta);
+  }
+
+  /**
+   * Handle waypoint-based movement along an A* computed path.
+   *
+   * Moves toward the current waypoint (tile coords converted to pixel position).
+   * When within threshold, advances to the next waypoint. When all waypoints
+   * are exhausted, clears waypoints and transitions to idle.
+   */
+  private moveAlongWaypoints(delta: number): void {
+    const waypoint = this.context.waypoints[this.context.currentWaypointIndex];
+    const isLastWaypoint =
+      this.context.currentWaypointIndex === this.context.waypoints.length - 1;
+
+    // Convert tile coords to pixel position (feet-aligned: bottom edge of tile)
+    const targetPx = waypoint.x * this.context.tileSize + this.context.tileSize / 2;
+    const targetPy = (waypoint.y + 1) * this.context.tileSize;
+
+    const dx = targetPx - this.context.x;
+    const dy = targetPy - this.context.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Use arrival threshold for final waypoint, tight threshold for intermediates
+    const threshold = isLastWaypoint ? ARRIVAL_THRESHOLD : PLAYER_WAYPOINT_THRESHOLD;
+
+    if (dist <= threshold) {
+      if (isLastWaypoint) {
+        // Reached destination -- clear marker and waypoints
+        this.clearPathMarker();
+        this.context.clearWaypoints();
+        this.context.clearMoveTarget();
+        this.context.stateMachine.setState('idle');
+      } else {
+        // Advance to next waypoint
+        this.context.currentWaypointIndex += 1;
+      }
+      return;
+    }
+
+    const normalizedDir = { x: dx / dist, y: dy / dist };
+
     const newFacing = this.directionFromVector(normalizedDir);
     if (newFacing !== this.context.facingDirection) {
       this.context.facingDirection = newFacing;
@@ -174,5 +236,18 @@ export class WalkState implements State {
       return dir.x < 0 ? 'left' : 'right';
     }
     return dir.y < 0 ? 'up' : 'down';
+  }
+
+  /**
+   * Clear the click-pathfinding destination marker via the scene data registry.
+   *
+   * Retrieves the `clickPathClearMarker` callback registered by Game.ts.
+   * Defensive: silently does nothing if the context lacks a scene reference
+   * or the callback is not registered (e.g., during unit tests).
+   */
+  private clearPathMarker(): void {
+    const scene = (this.context as unknown as { scene?: Phaser.Scene }).scene;
+    const cb = scene?.data?.get('clickPathClearMarker') as (() => void) | undefined;
+    cb?.();
   }
 }

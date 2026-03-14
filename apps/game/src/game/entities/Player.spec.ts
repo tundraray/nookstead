@@ -207,6 +207,46 @@ describe('Player: Movement Prediction', () => {
     });
   });
 
+  describe('setWaypoints(): stores waypoints and transitions to walk', () => {
+    it('should store waypoints and reset currentWaypointIndex to 0', () => {
+      const waypoints = [{ x: 1, y: 0 }, { x: 2, y: 0 }];
+      player.setWaypoints(waypoints);
+
+      expect(player.waypoints).toEqual(waypoints);
+      expect(player.currentWaypointIndex).toBe(0);
+    });
+
+    it('should transition to walk state when idle and waypoints are non-empty', () => {
+      expect(player.stateMachine.currentState).toBe('idle');
+
+      player.setWaypoints([{ x: 1, y: 0 }]);
+
+      expect(player.stateMachine.currentState).toBe('walk');
+    });
+
+    it('should not transition when waypoints array is empty', () => {
+      expect(player.stateMachine.currentState).toBe('idle');
+
+      player.setWaypoints([]);
+
+      expect(player.stateMachine.currentState).toBe('idle');
+      expect(player.waypoints).toEqual([]);
+      expect(player.currentWaypointIndex).toBe(0);
+    });
+  });
+
+  describe('clearWaypoints(): empties waypoints and resets index', () => {
+    it('should empty waypoints and reset currentWaypointIndex to 0', () => {
+      player.setWaypoints([{ x: 1, y: 0 }, { x: 2, y: 0 }]);
+      player.currentWaypointIndex = 1;
+
+      player.clearWaypoints();
+
+      expect(player.waypoints).toEqual([]);
+      expect(player.currentWaypointIndex).toBe(0);
+    });
+  });
+
   describe('reconcile(): interpolation converges toward authoritative over frames', () => {
     it('should converge toward authoritative position over multiple frames', () => {
       // Setup: small delta of 5px (below CORRECTION_THRESHOLD of 8px)

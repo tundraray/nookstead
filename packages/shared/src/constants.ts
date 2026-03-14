@@ -141,3 +141,52 @@ export const BOT_NAMES: readonly string[] = [
   'Thistle',
   'Willow',
 ];
+
+// ─── A* Pathfinding Configuration ───────────────────────────────────────────
+
+/**
+ * Time-to-live in milliseconds for a computed A* route before it is
+ * considered stale and must be recalculated.
+ */
+export const BOT_ROUTE_CACHE_TTL_MS = 30_000;
+
+/**
+ * Maximum number of waypoints an A* path may contain.
+ * Paths exceeding this length are discarded and the bot idles.
+ */
+export const BOT_MAX_PATH_LENGTH = 100;
+
+/**
+ * Pixel distance threshold for considering a waypoint "reached".
+ * When the bot is within this many pixels of the current waypoint,
+ * it advances to the next waypoint in the path.
+ */
+export const BOT_WAYPOINT_THRESHOLD = 2;
+
+/**
+ * Maximum consecutive pathfinding failures before the bot enters
+ * an extended idle period instead of retrying immediately.
+ */
+export const BOT_MAX_PATHFIND_FAILURES = 3;
+
+/**
+ * Number of server ticks a bot waits in extended idle after hitting
+ * BOT_MAX_PATHFIND_FAILURES consecutive pathfinding failures.
+ */
+export const BOT_EXTENDED_IDLE_TICKS = 100;
+
+// ─── Player Click-to-Move Pathfinding Configuration ─────────────────────────
+
+/**
+ * Maximum number of waypoints an A* path may contain for player click-to-move.
+ * Paths exceeding this length are truncated. Higher than BOT_MAX_PATH_LENGTH
+ * because players may click far destinations.
+ */
+export const PLAYER_MAX_PATH_LENGTH = 200;
+
+/**
+ * Pixel distance threshold for considering an intermediate waypoint "reached"
+ * during player waypoint following. Uses a tight threshold (2px) to keep the
+ * player on the grid path without overshooting tile centers.
+ */
+export const PLAYER_WAYPOINT_THRESHOLD = 2;

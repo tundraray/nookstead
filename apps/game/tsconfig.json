@@ -51,13 +51,16 @@
       "path": "../../packages/shared"
     },
     {
+      "path": "../../packages/pathfinding"
+    },
+    {
+      "path": "../../packages/s3"
+    },
+    {
       "path": "../../packages/map-renderer"
     },
     {
       "path": "../../packages/map-lib"
-    },
-    {
-      "path": "../../packages/s3"
     },
     {
       "path": "../../packages/db"

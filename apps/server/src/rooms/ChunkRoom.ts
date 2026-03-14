@@ -435,6 +435,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
 
     // Store walkable grid and terrain grid for bot manager / hard reset access
+    // When object placement/removal mutates mapWalkable in the future,
+    // call this.notifyWalkabilityChanged(x, y, walkable) for each affected tile
+    // so that BotManager can recompute paths for walking bots.
     if (mapWalkable) {
       this.mapWalkable = mapWalkable;
     }
@@ -1216,5 +1219,29 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     schema.direction = bot.direction;
     schema.state = 'idle';
     this.state.bots.set(bot.id, schema);
+  }
+
+  /**
+   * Notify BotManager of a walkability grid change at a specific tile.
+   * Wrapped in try/catch so walkability updates are non-critical (fire-and-forget).
+   *
+   * Call this method when object placement/removal changes tile walkability,
+   * e.g. this.notifyWalkabilityChanged(tileX, tileY, false) when an object is placed.
+   */
+  private notifyWalkabilityChanged(
+    x: number,
+    y: number,
+    walkable: boolean
+  ): void {
+    try {
+      this.botManager.onWalkabilityChanged(x, y, walkable);
+    } catch (err) {
+      console.warn('[ChunkRoom] onWalkabilityChanged failed', {
+        x,
+        y,
+        walkable,
+        err,
+      });
+    }
   }
 }

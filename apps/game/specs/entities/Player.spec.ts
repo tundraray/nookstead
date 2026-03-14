@@ -3,7 +3,7 @@ import { StateMachine, type State } from '../../src/game/entities/StateMachine';
 import { InputController } from '../../src/game/input/InputController';
 import { IdleState } from '../../src/game/entities/states/IdleState';
 import { WalkState } from '../../src/game/entities/states/WalkState';
-import { getDefaultSkin, getActiveSkin } from '../../src/game/characters/skin-registry';
+import { getActiveSkin } from '../../src/game/characters/skin-registry';
 import {
   PLAYER_SPEED,
   MAP_WIDTH,

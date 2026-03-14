@@ -59,6 +59,10 @@ function createMockContext(
     play: jest.fn(),
     setPosition: jest.fn().mockReturnThis(),
     clearMoveTarget: jest.fn(),
+    waypoints: [],
+    currentWaypointIndex: 0,
+    setWaypoints: jest.fn(),
+    clearWaypoints: jest.fn(),
     ...overrides,
   };
 }
