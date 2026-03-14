@@ -24,7 +24,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCanvasBackground } from '@/hooks/use-canvas-background';
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts';
-import { useObjectEditor, type CollisionZone } from '@/hooks/use-object-editor';
+import { useObjectEditor } from '@/hooks/use-object-editor';
+import type { CollisionZone } from '@nookstead/db';
 import { toast } from 'sonner';
 
 interface AtlasFrame {
@@ -103,13 +104,21 @@ export default function ObjectEditPage() {
       .catch(() => {
         // Suggestions are non-critical; silently ignore fetch failures
       });
-    fetch('/api/objects/suggestions?field=objectType')
+  }, []);
+
+  // Refetch objectType suggestions when category changes
+  useEffect(() => {
+    const categoryValue = editor.category.trim();
+    const url = categoryValue
+      ? `/api/objects/suggestions?field=objectType&category=${encodeURIComponent(categoryValue)}`
+      : '/api/objects/suggestions?field=objectType';
+    fetch(url)
       .then((r) => r.json())
       .then(setTypeSuggestions)
       .catch(() => {
         // Suggestions are non-critical; silently ignore fetch failures
       });
-  }, []);
+  }, [editor.category]);
 
   useKeyboardShortcuts({
     onSave: () => {
@@ -431,7 +440,7 @@ export default function ObjectEditPage() {
                 onChange={(e) => editor.setCategory(e.target.value)}
                 onFocus={() => setShowCategorySuggestions(true)}
                 onBlur={() => setTimeout(() => setShowCategorySuggestions(false), 150)}
-                placeholder="e.g., building, decoration..."
+                placeholder="Select or type category..."
                 className="h-7 text-xs"
               />
               {showCategorySuggestions && filteredCategorySuggestions.length > 0 && (
@@ -461,7 +470,7 @@ export default function ObjectEditPage() {
                 onChange={(e) => editor.setObjectType(e.target.value)}
                 onFocus={() => setShowTypeSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowTypeSuggestions(false), 150)}
-                placeholder="e.g., static, interactive..."
+                placeholder="Select or type object type..."
                 className="h-7 text-xs"
               />
               {showTypeSuggestions && filteredTypeSuggestions.length > 0 && (

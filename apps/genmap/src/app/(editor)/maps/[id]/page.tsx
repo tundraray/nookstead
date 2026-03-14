@@ -38,6 +38,8 @@ import { useObjectRenderData } from '@/hooks/use-object-render-data';
 import { SIDEBAR_TABS } from '@nookstead/map-lib';
 import type { SidebarTab, PlacedObject, MaterialInfo } from '@nookstead/map-lib';
 import type { Camera } from '@/components/map-editor/canvas-renderer';
+import type { FencePlacementMode } from '@/components/map-editor/tools/fence-tool';
+import { FenceToolToolbar } from '@/components/map-editor/fence-tool-toolbar';
 import type { ZoneBounds, ZoneVertex, ZoneType } from '@nookstead/map-lib';
 
 export default function MapEditorPage() {
@@ -95,7 +97,7 @@ export default function MapEditorPage() {
         return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       const digit = parseInt(e.key);
-      if (digit >= 1 && digit <= 6) {
+      if (digit >= 1 && digit <= SIDEBAR_TABS.length) {
         const tab = SIDEBAR_TABS[digit - 1];
         setActiveTab((prev) => (prev === tab ? null : tab));
       }
@@ -111,6 +113,10 @@ export default function MapEditorPage() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [state.activeTool, dispatch]);
+
+  // Fence placement mode state
+  const [fencePlacementMode, setFencePlacementMode] =
+    useState<FencePlacementMode>('single');
 
   // Object placement state
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
@@ -522,6 +528,14 @@ export default function MapEditorPage() {
         onToggleGrid={toggleGrid}
         showWalkability={showWalkability}
         onToggleWalkability={toggleWalkability}
+        toolControls={
+          state.activeTool === 'fence' ? (
+            <FenceToolToolbar
+              activeMode={fencePlacementMode}
+              onModeChange={setFencePlacementMode}
+            />
+          ) : undefined
+        }
       />
 
       {/* Editor body: ActivityBar + Sidebar + Canvas */}
@@ -565,6 +579,7 @@ export default function MapEditorPage() {
               objectRenderData={objectRenderData}
               onCursorMove={setCursorPosition}
               selectedObjectId={selectedObjectId}
+              fencePlacementMode={fencePlacementMode}
             />
           )}
         </div>

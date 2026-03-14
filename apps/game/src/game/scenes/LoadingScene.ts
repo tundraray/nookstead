@@ -2,7 +2,7 @@ import { Scene } from 'phaser';
 import { EventBus } from '../EventBus';
 import { joinChunkRoom, leaveCurrentRoom } from '../../services/colyseus';
 import { ServerMessage, LOADING_TIMEOUT_MS } from '@nookstead/shared';
-import type { MapDataPayload } from '@nookstead/shared';
+import type { MapDataPayload, GameClockConfig } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 
 type LoadingState =
@@ -28,6 +28,7 @@ export class LoadingScene extends Scene {
   private state: LoadingState = 'CONNECTING';
   private room: Room | null = null;
   private mapData: MapDataPayload | null = null;
+  private clockConfig: GameClockConfig | null = null;
   private timeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -119,10 +120,18 @@ export class LoadingScene extends Scene {
       ServerMessage.MAP_DATA,
       (data: MapDataPayload) => {
         console.log('[LoadingScene] MAP_DATA received');
-        this.clearTimeoutHandle();
         this.mapData = data;
-        this.setState('LOADING_PLAYERS');
-        this.waitForPlayers();
+        this.tryProceed();
+      }
+    );
+
+    // Listen for CLOCK_CONFIG (sent immediately after MAP_DATA)
+    this.room.onMessage(
+      ServerMessage.CLOCK_CONFIG,
+      (data: GameClockConfig) => {
+        console.log('[LoadingScene] CLOCK_CONFIG received');
+        this.clockConfig = data;
+        this.tryProceed();
       }
     );
 
@@ -135,6 +144,17 @@ export class LoadingScene extends Scene {
         this.setState('ERROR', data.message);
       }
     );
+  }
+
+  /**
+   * Called after MAP_DATA or CLOCK_CONFIG arrives.
+   * Proceeds only when both are available.
+   */
+  private tryProceed(): void {
+    if (!this.mapData || !this.clockConfig) return;
+    this.clearTimeoutHandle();
+    this.setState('LOADING_PLAYERS');
+    this.waitForPlayers();
   }
 
   private waitForPlayers(): void {
@@ -179,8 +199,8 @@ export class LoadingScene extends Scene {
 
     console.log('[LoadingScene] State: READY, transitioning to Game');
 
-    // Pass mapData and room to Game scene via Phaser scene init data
-    this.scene.start('Game', { mapData: this.mapData, room: this.room });
+    // Pass mapData, room, and clockConfig to Game scene via Phaser scene init data
+    this.scene.start('Game', { mapData: this.mapData, room: this.room, clockConfig: this.clockConfig });
   }
 
   private handleRetry(): void {
@@ -196,6 +216,7 @@ export class LoadingScene extends Scene {
       this.room = null;
     }
     this.mapData = null;
+    this.clockConfig = null;
     this.clearTimeoutHandle();
 
     // Restart connection flow

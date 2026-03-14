@@ -190,3 +190,35 @@ export const PLAYER_MAX_PATH_LENGTH = 200;
  * player on the grid path without overshooting tile centers.
  */
 export const PLAYER_WAYPOINT_THRESHOLD = 2;
+
+// ─── Game Clock Configuration ───────────────────────────────────────────────
+
+/** Default real-time day duration (1:1 with UTC clock). */
+export const DEFAULT_DAY_DURATION_SECONDS = 86400;
+
+/** Default number of in-game days per season. */
+export const DEFAULT_SEASON_DURATION_DAYS = 7;
+
+/** Minimum allowed day duration in seconds (1 real minute = fastest supported speed). */
+export const MIN_DAY_DURATION_SECONDS = 60;
+
+/** Maximum allowed day duration in seconds (7 real days = slowest supported speed). */
+export const MAX_DAY_DURATION_SECONDS = 604800;
+
+/** Minimum season length in game days. */
+export const MIN_SEASON_DURATION_DAYS = 1;
+
+/** Maximum season length in game days. */
+export const MAX_SEASON_DURATION_DAYS = 365;
+
+/** Game hour at which the dawn period begins (inclusive). */
+export const TIME_PERIOD_DAWN_START = 5;
+
+/** Game hour at which the day period begins (inclusive). */
+export const TIME_PERIOD_DAY_START = 7;
+
+/** Game hour at which the dusk period begins (inclusive). */
+export const TIME_PERIOD_DUSK_START = 17;
+
+/** Game hour at which the night period begins (inclusive). */
+export const TIME_PERIOD_NIGHT_START = 19;

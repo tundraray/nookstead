@@ -7,6 +7,7 @@ import {
   Map,
   Frame,
   Gamepad2,
+  Fence,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -44,6 +45,12 @@ const TAB_CONFIG: Array<{
     icon: Gamepad2,
     label: 'Game Objects',
     shortcut: '6',
+  },
+  {
+    tab: 'fence-types',
+    icon: Fence,
+    label: 'Fence Types',
+    shortcut: '7',
   },
 ];
 

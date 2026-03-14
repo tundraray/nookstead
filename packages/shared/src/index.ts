@@ -26,6 +26,16 @@ export {
   DISPLACEMENT_RECONCILE_COOLDOWN_MS,
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
+  DEFAULT_DAY_DURATION_SECONDS,
+  DEFAULT_SEASON_DURATION_DAYS,
+  MIN_DAY_DURATION_SECONDS,
+  MAX_DAY_DURATION_SECONDS,
+  MIN_SEASON_DURATION_DAYS,
+  MAX_SEASON_DURATION_DAYS,
+  TIME_PERIOD_DAWN_START,
+  TIME_PERIOD_DAY_START,
+  TIME_PERIOD_DUSK_START,
+  TIME_PERIOD_NIGHT_START,
 } from './constants';
 export type { SkinKey, MapType } from './constants';
 // Spawn system
@@ -54,6 +64,24 @@ export type {
   SessionKickedPayload,
 } from './types/map';
 export { isTileLayer, isObjectLayer } from './types/map';
+// Fence types (from types/fence-layer.ts)
+export type {
+  FenceCellData,
+  SerializedGateData,
+  SerializedFenceLayer,
+} from './types/fence-layer';
+// Game object classification types (from types/game-object.ts)
+export {
+  GAME_OBJECT_CATEGORIES,
+  GAME_OBJECT_TYPES,
+  isGameObjectCategory,
+  isGameObjectType,
+  getAllGameObjectTypes,
+} from './types/game-object';
+export type {
+  GameObjectCategory,
+  GameObjectType,
+} from './types/game-object';
 // NPC types
 export type {
   BotAnimState,
@@ -87,3 +115,6 @@ export {
   PLAYER_MAX_PATH_LENGTH,
   PLAYER_WAYPOINT_THRESHOLD,
 } from './constants';
+// Game Clock
+export type { TimePeriod, Season, GameClockConfig, GameClockState } from './types/clock';
+export { computeGameClock } from './systems/game-clock';

@@ -1,3 +1,5 @@
+import type { SerializedFenceLayer } from './fence-layer';
+
 // ============================================================
 // Core map types (moved from apps/game/src/game/mapgen/types.ts)
 // ============================================================
@@ -138,6 +140,8 @@ export interface MapDataPayload {
   spawnX?: number;
   /** Server-computed spawn pixel Y. */
   spawnY?: number;
+  /** Fence layers for the map. Omitted or empty array if no fences. */
+  fenceLayers?: SerializedFenceLayer[];
   /** Server-computed spawn facing direction. */
   spawnDirection?: 'up' | 'down' | 'left' | 'right';
 }

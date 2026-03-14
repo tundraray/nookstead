@@ -19,6 +19,7 @@ export const ServerMessage = {
   DIALOGUE_START: 'dialogue_start',
   DIALOGUE_STREAM_CHUNK: 'dialogue_stream_chunk',
   DIALOGUE_END_TURN: 'dialogue_end_turn',
+  CLOCK_CONFIG: 'clock_config',
 } as const;
 
 export interface MovePayload {
