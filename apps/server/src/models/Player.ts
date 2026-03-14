@@ -15,7 +15,13 @@ export interface ServerPlayer {
   /** Current world Y coordinate */
   worldY: number;
 
-  /** Current chunk identifier (e.g., "city:capital") */
+  /**
+   * The chunk this player is currently in.
+   * Format:
+   * - 'map:{uuid}' — single-chunk map room (homestead or city)
+   * - 'world:{x}:{y}' — open-world spatial chunk room
+   * - 'city:capital' — well-known alias, resolved to 'map:{uuid}' by ChunkRoom
+   */
   chunkId: string;
 
   /** Current facing direction */

@@ -4,6 +4,7 @@ import { Press_Start_2P } from 'next/font/google';
 import { spriteNativeStyle } from '@/components/hud/sprite';
 import { SPRITES } from '@/components/hud/sprites';
 import { useHeaderState } from './useHeaderState';
+import { EventBus } from '@/game/EventBus';
 import type { Season, SpriteRect } from '@/components/hud/types';
 
 const pixelFont = Press_Start_2P({
@@ -71,6 +72,17 @@ export function GameHeader() {
           />
           <span className="game-header__gold-amount">{formattedGold}</span>
         </div>
+
+        {/* Reset Button */}
+        <button
+          className="game-header__reset-btn"
+          type="button"
+          aria-label="Teleport to spawn"
+          title="Hard Reset"
+          onClick={() => EventBus.emit('player:hard-reset')}
+        >
+          ↺
+        </button>
       </div>
     </header>
   );

@@ -128,18 +128,22 @@ export function isObjectLayer(
  * Contains all data needed to render the player's map.
  */
 export interface MapDataPayload {
+  /** UUID of the source map entity (maps table). */
+  mapId?: string;
   seed: number;
   width: number;
   height: number;
   grid: SerializedGrid;
   layers: SerializedLayer[];
   walkable: boolean[][];
-  /** Server-computed spawn pixel X (present for new players). */
+  /** Server-computed spawn pixel X. */
   spawnX?: number;
-  /** Server-computed spawn pixel Y (present for new players). */
+  /** Server-computed spawn pixel Y. */
   spawnY?: number;
   /** Fence layers for the map. Omitted or empty array if no fences. */
   fenceLayers?: SerializedFenceLayer[];
+  /** Server-computed spawn facing direction. */
+  spawnDirection?: 'up' | 'down' | 'left' | 'right';
 }
 
 // ============================================================

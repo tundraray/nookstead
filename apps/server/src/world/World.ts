@@ -1,6 +1,6 @@
 import type { ServerPlayer } from '../models/Player.js';
 import type { MoveResult } from '@nookstead/shared';
-import { CHUNK_SIZE, MAX_SPEED, WORLD_BOUNDS } from '@nookstead/shared';
+import { CHUNK_SIZE } from '@nookstead/shared';
 
 /**
  * Compute chunk ID from world coordinates.
@@ -64,8 +64,8 @@ export class World {
 
   /**
    * Move player by delta (dx, dy).
-   * Validates speed (clamps to MAX_SPEED), clamps to WORLD_BOUNDS,
-   * detects chunk changes, and derives facing direction.
+   * Movement validation is client-side; server trusts client deltas.
+   * Detects chunk changes and derives facing direction.
    *
    * Returns MoveResult with new position and chunk change information.
    * For unknown players, returns a no-op result without crashing.
@@ -82,37 +82,22 @@ export class World {
       };
     }
 
-    // Speed clamping: clamp magnitude to MAX_SPEED
-    let clampedDx = dx;
-    let clampedDy = dy;
-    const magnitude = Math.sqrt(dx * dx + dy * dy);
-    if (magnitude > MAX_SPEED) {
-      const scale = MAX_SPEED / magnitude;
-      clampedDx = dx * scale;
-      clampedDy = dy * scale;
-    }
+    // Movement validation is client-side only; server trusts client deltas.
+    const newWorldX = player.worldX + dx;
+    const newWorldY = player.worldY + dy;
 
-    // Compute new position
-    let newWorldX = player.worldX + clampedDx;
-    let newWorldY = player.worldY + clampedDy;
-
-    // Bounds clamping
-    newWorldX = Math.max(
-      WORLD_BOUNDS.minX,
-      Math.min(WORLD_BOUNDS.maxX, newWorldX)
-    );
-    newWorldY = Math.max(
-      WORLD_BOUNDS.minY,
-      Math.min(WORLD_BOUNDS.maxY, newWorldY)
-    );
-
-    // Compute new chunk
+    // Compute new chunk — only world:{x}:{y} chunks are positional.
+    // map:{mapId} (homesteads, cities) and city:capital are non-positional;
+    // no spatial chunk transitions occur inside them.
+    const isPositionalChunk = player.chunkId.startsWith('world:');
     const oldChunkId = player.chunkId;
-    const newChunkId = computeChunkId(newWorldX, newWorldY);
-    const chunkChanged = newChunkId !== oldChunkId;
+    const newChunkId = isPositionalChunk
+      ? computeChunkId(newWorldX, newWorldY)
+      : oldChunkId;
+    const chunkChanged = isPositionalChunk && newChunkId !== oldChunkId;
 
     // Derive direction from delta (keep current if no movement)
-    const newDirection = deriveDirection(clampedDx, clampedDy);
+    const newDirection = deriveDirection(dx, dy);
     if (newDirection) {
       player.direction = newDirection;
     }
@@ -149,6 +134,23 @@ export class World {
       }
     }
     return result;
+  }
+
+  /**
+   * Set a player's absolute position.
+   * Used for client-side displacement corrections that need to be
+   * reflected on the server.
+   *
+   * Returns true if the player was found and updated, false otherwise.
+   */
+  setPlayerPosition(playerId: string, x: number, y: number): boolean {
+    const player = this.players.get(playerId);
+    if (!player) {
+      return false;
+    }
+    player.worldX = x;
+    player.worldY = y;
+    return true;
   }
 
   /**

@@ -24,7 +24,14 @@ import { type Direction, animKey } from '../characters/frame-map';
 import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
-import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
+import {
+  CORRECTION_THRESHOLD,
+  INTERPOLATION_SPEED,
+  DISPLACEMENT_RECONCILE_COOLDOWN_MS,
+  ClientMessage,
+} from '@nookstead/shared';
+import { findNearestWalkable } from '../systems/displacement';
+import { getRoom } from '../../services/colyseus';
 
 export class Player extends Phaser.GameObjects.Sprite {
   public readonly sheetKey: string;
@@ -49,18 +56,23 @@ export class Player extends Phaser.GameObjects.Sprite {
   authoritativeY: number;
   /** Whether the player is currently interpolating toward the authoritative position. */
   private isInterpolating = false;
+  /** True while the player is displaced — suppresses repeated spiral searches. */
+  private displaced = false;
+  /** Timestamp of the last displacement correction (used for reconciliation cooldown). */
+  private displacedAt = 0;
 
   constructor(
     scene: Phaser.Scene,
     x: number,
     y: number,
     mapData: GeneratedMap,
+    initialDirection: Direction = 'down',
   ) {
     const skin = getActiveSkin();
     super(scene, x, y, skin.sheetKey);
 
     this.sheetKey = skin.sheetKey;
-    this.facingDirection = 'down';
+    this.facingDirection = initialDirection;
     this.mapData = mapData;
     this.speed = PLAYER_SPEED;
     this.mapWidth = MAP_WIDTH;
@@ -109,6 +121,50 @@ export class Player extends Phaser.GameObjects.Sprite {
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
 
+    // Displacement check: if on a non-walkable tile, relocate to nearest walkable
+    const tileX = Math.floor(this.x / TILE_SIZE);
+    const tileY = Math.floor((this.y - 1) / TILE_SIZE);
+    const walkable = this.mapData.walkable;
+    if (
+      walkable &&
+      (tileX < 0 ||
+        tileX >= MAP_WIDTH ||
+        tileY < 0 ||
+        tileY >= MAP_HEIGHT ||
+        !walkable[tileY]?.[tileX])
+    ) {
+      if (!this.displaced) {
+        const nearby = findNearestWalkable(
+          tileX,
+          tileY,
+          walkable,
+          MAP_WIDTH,
+          MAP_HEIGHT,
+        );
+        if (nearby) {
+          this.x = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
+          this.y = (nearby.tileY + 1) * TILE_SIZE;
+          // Sync authoritative position so reconcile() does not fight displacement
+          this.authoritativeX = this.x;
+          this.authoritativeY = this.y;
+          this.isInterpolating = false;
+          this.displacedAt = time;
+
+          // Notify server of corrected position
+          const room = getRoom();
+          if (room) {
+            room.send(ClientMessage.POSITION_UPDATE, {
+              x: this.x,
+              y: this.y,
+            });
+          }
+        }
+        this.displaced = true;
+      }
+    } else {
+      this.displaced = false;
+    }
+
     // Y-sorted depth: player renders in front of objects with lower y (AC-4.6)
     this.setDepth(this.y);
 
@@ -124,9 +180,12 @@ export class Player extends Phaser.GameObjects.Sprite {
         this.y = this.authoritativeY;
         this.isInterpolating = false;
       } else {
-        // Lerp toward authoritative position
-        this.x += dx * INTERPOLATION_SPEED;
-        this.y += dy * INTERPOLATION_SPEED;
+        // Frame-rate-independent exponential decay toward authoritative position.
+        // At 60fps (delta≈16.67): lerpFactor ≈ 0.2 (matches original behavior).
+        // At 30fps (delta≈33.33): lerpFactor ≈ 0.36 (converges at same wall-clock rate).
+        const lerpFactor = 1 - Math.pow(1 - INTERPOLATION_SPEED, delta / 16.67);
+        this.x += dx * lerpFactor;
+        this.y += dy * lerpFactor;
       }
     }
 
@@ -147,6 +206,15 @@ export class Player extends Phaser.GameObjects.Sprite {
    * Interpolation continues even when state transitions from Walk to Idle.
    */
   reconcile(serverX: number, serverY: number): void {
+    // Skip reconciliation during displacement cooldown to prevent the server
+    // from overwriting the corrected position before it receives POSITION_UPDATE.
+    if (
+      this.displacedAt > 0 &&
+      performance.now() - this.displacedAt < DISPLACEMENT_RECONCILE_COOLDOWN_MS
+    ) {
+      return;
+    }
+
     this.authoritativeX = serverX;
     this.authoritativeY = serverY;
 

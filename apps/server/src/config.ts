@@ -5,6 +5,7 @@ export interface ServerConfig {
   authSecret: string;
   databaseUrl: string;
   corsOrigin: string;
+  openaiApiKey: string;
 }
 
 export function loadConfig(): ServerConfig {
@@ -22,8 +23,15 @@ export function loadConfig(): ServerConfig {
     );
   }
 
+  const openaiApiKey = process.env['OPENAI_API_KEY'];
+  if (!openaiApiKey) {
+    throw new Error(
+      'OPENAI_API_KEY environment variable is required. Set it to your OpenAI API key.'
+    );
+  }
+
   const port = parseInt(process.env['COLYSEUS_PORT'] ?? '', 10) || COLYSEUS_PORT;
   const corsOrigin = process.env['CORS_ORIGIN'] ?? 'http://localhost:3000';
 
-  return { port, authSecret, databaseUrl, corsOrigin };
+  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey };
 }

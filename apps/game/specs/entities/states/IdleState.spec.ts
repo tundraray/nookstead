@@ -1,7 +1,15 @@
+// Mock dialogue-lock to avoid pulling in EventBus / Phaser
+jest.mock('../../../src/game/systems/dialogue-lock', () => ({
+  isMovementLocked: jest.fn().mockReturnValue(false),
+}));
+
+import { isMovementLocked } from '../../../src/game/systems/dialogue-lock';
 import { IdleState } from '../../../src/game/entities/states/IdleState';
 import type { PlayerContext } from '../../../src/game/entities/states/types';
 import type { StateMachine } from '../../../src/game/entities/StateMachine';
 import type { InputController } from '../../../src/game/input/InputController';
+
+const mockIsMovementLocked = isMovementLocked as jest.MockedFunction<typeof isMovementLocked>;
 
 /** Create a mock PlayerContext with jest.fn() stubs. */
 function createMockContext(
@@ -41,6 +49,10 @@ function createMockContext(
 }
 
 describe('IdleState', () => {
+  beforeEach(() => {
+    mockIsMovementLocked.mockReturnValue(false);
+  });
+
   // -----------------------------------------------------------
   // Construction
   // -----------------------------------------------------------
@@ -120,6 +132,27 @@ describe('IdleState', () => {
       state.update(16.67);
 
       expect(ctx.inputController.isMoving).toHaveBeenCalledTimes(3);
+    });
+
+    it('should skip walk transition when movement is locked', () => {
+      mockIsMovementLocked.mockReturnValue(true);
+      const ctx = createMockContext();
+      (ctx.inputController.isMoving as jest.Mock).mockReturnValue(true);
+      const state = new IdleState(ctx);
+
+      state.update(16.67);
+
+      expect(ctx.stateMachine.setState).not.toHaveBeenCalled();
+    });
+
+    it('should skip walk transition for moveTarget when movement is locked', () => {
+      mockIsMovementLocked.mockReturnValue(true);
+      const ctx = createMockContext({ moveTarget: { x: 100, y: 100 } });
+      const state = new IdleState(ctx);
+
+      state.update(16.67);
+
+      expect(ctx.stateMachine.setState).not.toHaveBeenCalled();
     });
   });
 });

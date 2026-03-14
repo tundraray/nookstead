@@ -1,6 +1,10 @@
 export const ClientMessage = {
   MOVE: 'move',
   POSITION_UPDATE: 'position_update',
+  NPC_INTERACT: 'npc_interact',
+  HARD_RESET: 'hard_reset',
+  DIALOGUE_MESSAGE: 'dialogue_message',
+  DIALOGUE_END: 'dialogue_end',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
@@ -11,6 +15,10 @@ export const ServerMessage = {
   MAP_DATA: 'map_data',
   SESSION_KICKED: 'session_kicked',
   ROOM_REDIRECT: 'room_redirect',
+  NPC_INTERACT_RESULT: 'npc_interact_result',
+  DIALOGUE_START: 'dialogue_start',
+  DIALOGUE_STREAM_CHUNK: 'dialogue_stream_chunk',
+  DIALOGUE_END_TURN: 'dialogue_end_turn',
 } as const;
 
 export interface MovePayload {

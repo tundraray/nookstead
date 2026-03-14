@@ -42,18 +42,22 @@ export class LoadingScene extends Scene {
     // Status text centered on screen
     this.statusText = this.add
       .text(width / 2, height / 2 - 20, STATUS_TEXT.CONNECTING, {
-        fontSize: '24px',
+        fontFamily: '"Press Start 2P"',
+        fontSize: '16px',
         color: '#ffffff',
+        resolution: 4,
       })
       .setOrigin(0.5);
 
     // Retry button (hidden initially)
     this.retryButton = this.add
       .text(width / 2, height / 2 + 40, 'Retry', {
-        fontSize: '20px',
+        fontFamily: '"Press Start 2P"',
+        fontSize: '14px',
         color: '#ffff00',
         backgroundColor: '#333333',
         padding: { x: 16, y: 8 },
+        resolution: 4,
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true })

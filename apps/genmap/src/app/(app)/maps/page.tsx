@@ -54,9 +54,9 @@ function mapTypeBadgeVariant(
   mapType: string
 ): 'default' | 'secondary' | 'outline' {
   switch (mapType) {
-    case 'player_homestead':
+    case 'homestead':
       return 'default';
-    case 'town_district':
+    case 'city':
       return 'secondary';
     case 'template':
       return 'outline';
@@ -181,8 +181,9 @@ export default function MapsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="player_homestead">Player Homestead</SelectItem>
-            <SelectItem value="town_district">Town District</SelectItem>
+            <SelectItem value="homestead">Homestead</SelectItem>
+            <SelectItem value="city">City</SelectItem>
+            <SelectItem value="open_world">Open World</SelectItem>
             <SelectItem value="template">Template</SelectItem>
           </SelectContent>
         </Select>

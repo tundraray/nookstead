@@ -81,7 +81,7 @@ const testZoneRecord = {
 const testEditorMap = {
   id: 'map-001',
   name: 'Test Map',
-  mapType: 'town_district',
+  mapType: 'city',
   width: 32,
   height: 32,
 };

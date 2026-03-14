@@ -1,13 +1,20 @@
+// Mock dialogue-lock to avoid pulling in EventBus / Phaser
+jest.mock('../../../src/game/systems/dialogue-lock', () => ({
+  isMovementLocked: jest.fn().mockReturnValue(false),
+}));
+
+jest.mock('../../../src/game/systems/movement', () => ({
+  calculateMovement: jest.fn().mockReturnValue({ x: 60, y: 60, blocked: { x: false, y: false } }),
+}));
+
+import { isMovementLocked } from '../../../src/game/systems/dialogue-lock';
 import { WalkState } from '../../../src/game/entities/states/WalkState';
 import type { PlayerContext } from '../../../src/game/entities/states/types';
 import type { StateMachine } from '../../../src/game/entities/StateMachine';
 import type { InputController } from '../../../src/game/input/InputController';
 import { calculateMovement } from '../../../src/game/systems/movement';
 
-jest.mock('../../../src/game/systems/movement', () => ({
-  calculateMovement: jest.fn().mockReturnValue({ x: 60, y: 60, blocked: { x: false, y: false } }),
-}));
-
+const mockIsMovementLocked = isMovementLocked as jest.MockedFunction<typeof isMovementLocked>;
 const mockCalculateMovement = calculateMovement as jest.MockedFunction<typeof calculateMovement>;
 
 /** Create a mock PlayerContext with jest.fn() stubs. */
@@ -59,6 +66,7 @@ function createMockContext(
 describe('WalkState', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsMovementLocked.mockReturnValue(false);
     mockCalculateMovement.mockReturnValue({ x: 60, y: 60, blocked: { x: false, y: false } });
   });
 
@@ -166,6 +174,7 @@ describe('WalkState', () => {
         mapWidth: 10,
         mapHeight: 10,
         tileSize: 16,
+        feetOffsetY: 1,
       });
     });
 
@@ -271,6 +280,7 @@ describe('WalkState', () => {
       expect(ctx.play).toHaveBeenCalledWith('char-scout_walk_right', true);
 
       jest.clearAllMocks();
+      mockIsMovementLocked.mockReturnValue(false);
       mockCalculateMovement.mockReturnValue({ x: 60, y: 60, blocked: { x: false, y: false } });
 
       // Frame 2: change to up
@@ -279,6 +289,42 @@ describe('WalkState', () => {
       state.update(16.67);
       expect(ctx.facingDirection).toBe('up');
       expect(ctx.play).toHaveBeenCalledWith('char-scout_walk_up', true);
+    });
+  });
+
+  // -----------------------------------------------------------
+  // update - movement lock
+  // -----------------------------------------------------------
+  describe('update - movement lock', () => {
+    it('should transition to idle when movement is locked', () => {
+      mockIsMovementLocked.mockReturnValue(true);
+      const ctx = createMockContext();
+      const state = new WalkState(ctx);
+
+      state.update(16.67);
+
+      expect(ctx.stateMachine.setState).toHaveBeenCalledTimes(1);
+      expect(ctx.stateMachine.setState).toHaveBeenCalledWith('idle');
+    });
+
+    it('should clear moveTarget when movement is locked', () => {
+      mockIsMovementLocked.mockReturnValue(true);
+      const ctx = createMockContext({ moveTarget: { x: 100, y: 100 } });
+      const state = new WalkState(ctx);
+
+      state.update(16.67);
+
+      expect(ctx.clearMoveTarget).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not call calculateMovement when movement is locked', () => {
+      mockIsMovementLocked.mockReturnValue(true);
+      const ctx = createMockContext();
+      const state = new WalkState(ctx);
+
+      state.update(16.67);
+
+      expect(mockCalculateMovement).not.toHaveBeenCalled();
     });
   });
 });

@@ -18,17 +18,16 @@ export {
   AVAILABLE_SKINS,
   CHUNK_SIZE,
   CHUNK_ROOM_NAME,
-  MAX_SPEED,
   DEFAULT_SPAWN,
-  WORLD_BOUNDS,
   CHUNK_TRANSITION_COOLDOWN_MS,
   LocationType,
   CORRECTION_THRESHOLD,
   INTERPOLATION_SPEED,
+  DISPLACEMENT_RECONCILE_COOLDOWN_MS,
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
 } from './constants';
-export type { SkinKey } from './constants';
+export type { SkinKey, MapType } from './constants';
 // Spawn system
 export type { SpawnTile } from './systems/spawn';
 export { findSpawnTile, isValidSpawn } from './systems/spawn';
@@ -73,3 +72,29 @@ export type {
   GameObjectCategory,
   GameObjectType,
 } from './types/game-object';
+// NPC types
+export type {
+  BotAnimState,
+  BotState,
+  NpcInteractPayload,
+  NpcBotData,
+  NpcInteractResult,
+} from './types/npc';
+// Dialogue types
+export type {
+  DialogueMessagePayload,
+  DialogueStartPayload,
+  DialogueStreamChunkPayload,
+} from './types/dialogue';
+// NPC / Bot constants
+export {
+  BOT_SPEED,
+  BOT_WANDER_RADIUS,
+  BOT_WANDER_INTERVAL_TICKS,
+  MAX_BOTS_PER_HOMESTEAD,
+  DEFAULT_BOT_COUNT,
+  BOT_INTERACTION_RADIUS,
+  BOT_STUCK_TIMEOUT_MS,
+  MAX_WANDER_TARGET_ATTEMPTS,
+  BOT_NAMES,
+} from './constants';

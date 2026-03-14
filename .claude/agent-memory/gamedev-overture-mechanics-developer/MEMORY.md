@@ -45,3 +45,7 @@
 - Materials table: walkable, speedModifier, swimRequired, damaging
 - Atlas frames: individual frame coords within sprite atlas images
 - Tilesets: S3 storage, from_material/to_material FKs
+
+## Project
+
+- [Economy system plan](./project_economy_system.md) - Plan for coins/economy, first gameplay system. 2026-03-14.

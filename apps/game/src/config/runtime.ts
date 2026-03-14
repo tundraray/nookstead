@@ -8,10 +8,12 @@
 
 export interface RuntimeConfig {
   colyseusUrl: string;
+  dayCycleMs: number;
 }
 
 const DEFAULT_CONFIG: RuntimeConfig = {
   colyseusUrl: 'ws://localhost:2567',
+  dayCycleMs: 3_600_000,
 };
 
 let config: RuntimeConfig = { ...DEFAULT_CONFIG };

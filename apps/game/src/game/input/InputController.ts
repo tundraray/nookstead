@@ -11,6 +11,26 @@
 
 import type { Direction } from '../characters/frame-map';
 
+const TEXT_INPUT_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+
+/**
+ * Check whether the currently focused element accepts text input.
+ *
+ * Uses `document.activeElement` directly instead of focus-event
+ * listeners, which eliminates race conditions when focus moves
+ * between elements (focusout fires before focusin on the next
+ * element, briefly re-enabling input).
+ */
+export function isTextInputFocused(): boolean {
+  const el = document.activeElement;
+  if (!el || el === document.body) return false;
+  if (TEXT_INPUT_TAGS.has(el.tagName)) return true;
+  const htmlEl = el as HTMLElement;
+  if (htmlEl.isContentEditable || htmlEl.contentEditable === 'true')
+    return true;
+  return false;
+}
+
 /**
  * InputController reads keyboard state from a Phaser Scene and
  * exposes directional input as a simple vector plus facing direction.
@@ -33,8 +53,12 @@ export class InputController {
         'InputController requires scene.input.keyboard to be available'
       );
     }
+    // Prevent Phaser from calling preventDefault() on keyboard events
+    // globally, so WASD/arrow keys still work in HTML inputs and textareas.
+    keyboard.disableGlobalCapture();
+
     this.cursors = keyboard.createCursorKeys();
-    this.wasd = keyboard.addKeys('W,A,S,D') as Record<
+    this.wasd = keyboard.addKeys('W,A,S,D', false) as Record<
       string,
       Phaser.Input.Keyboard.Key
     >;
@@ -44,10 +68,16 @@ export class InputController {
    * Read current key states and return a direction vector.
    *
    * Each axis is -1, 0, or 1. Opposing keys cancel out (e.g. W+S = 0).
+   * Returns {0, 0} when a text input element is focused so that
+   * typing in chat/forms doesn't move the character.
    *
    * @returns Direction vector with integer x and y components.
    */
   getDirection(): { x: number; y: number } {
+    if (isTextInputFocused()) {
+      return { x: 0, y: 0 };
+    }
+
     const up = this.wasd.W.isDown || this.cursors.up.isDown;
     const down = this.wasd.S.isDown || this.cursors.down.isDown;
     const left = this.wasd.A.isDown || this.cursors.left.isDown;
@@ -95,10 +125,10 @@ export class InputController {
   }
 
   /**
-   * Clean up resources. No-op for MVP since Phaser handles keyboard
-   * cleanup automatically when the scene is destroyed.
+   * Clean up resources. No-op since text-input detection uses
+   * document.activeElement polling instead of event listeners.
    */
   destroy(): void {
-    // No-op for MVP
+    // Intentionally empty — no listeners to remove.
   }
 }

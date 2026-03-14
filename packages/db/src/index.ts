@@ -14,8 +14,17 @@ export {
   type LoadPositionResult,
 } from './services/player';
 export {
+  createMap,
   saveMap,
   loadMap,
+  findMapByUser,
+  findMapByType,
+  listMapsByUser,
+  listMapsByUserAndType,
+  type MapType,
+  listAllMapsLite,
+  type MapLite,
+  type CreateMapData,
   type SaveMapData,
   type LoadMapResult,
 } from './services/map';
@@ -85,6 +94,7 @@ export {
   exportToPlayerMap,
   editPlayerMapDirect,
   savePlayerMapDirect,
+  type SavePlayerMapDirectData,
 } from './services/map-import-export';
 export * from './services/material';
 export * from './services/tileset';
@@ -99,3 +109,31 @@ export {
   validateFrameMapping,
   validateGateFrameMapping,
 } from './services/fence-type';
+export {
+  createBot,
+  createBotAdmin,
+  getBotById,
+  listAllBots,
+  updateBot,
+  deleteBot,
+  loadBots,
+  saveBotPositions,
+  type CreateBotData,
+  type AdminCreateBotData,
+  type UpdateBotData,
+  type BotPositionUpdate,
+} from './services/npc-bot';
+export {
+  createDialogueSession,
+  endDialogueSession,
+  addDialogueMessage,
+  getRecentDialogueHistory,
+  getDialogueSessionMessages,
+  getDialogueHistoryByUser,
+  getAdminDialogueSessions,
+  getSessionCountForPair,
+  type CreateSessionData,
+  type AddMessageData,
+  type DialogueSessionWithMessages,
+  type AdminDialogueSession,
+} from './services/dialogue';

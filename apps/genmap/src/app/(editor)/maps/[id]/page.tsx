@@ -218,9 +218,9 @@ export default function MapEditorPage() {
   // Export dialog state
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [playerMaps, setPlayerMaps] = useState<
-    Array<{ userId: string; userName: string | null; userEmail: string }>
+    Array<{ id: string; name: string | null; mapType: string | null; userId: string; userName: string | null; userEmail: string }>
   >([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedMapId, setSelectedMapId] = useState<string>('');
   const [isExporting, setIsExporting] = useState(false);
 
   const handleOpenExport = useCallback(async () => {
@@ -230,7 +230,7 @@ export default function MapEditorPage() {
       if (res.ok) {
         const data = await res.json();
         setPlayerMaps(data);
-        if (data.length > 0) setSelectedUserId(data[0].userId);
+        if (data.length > 0) setSelectedMapId(data[0].id);
       }
     } catch {
       toast.error('Failed to load player maps');
@@ -253,7 +253,7 @@ export default function MapEditorPage() {
         body: JSON.stringify({
           name: templateName || state.name,
           description: templateDesc || undefined,
-          mapType: state.mapType || 'player_homestead',
+          mapType: state.mapType || 'homestead',
           baseWidth: state.width,
           baseHeight: state.height,
           grid: state.grid,
@@ -293,13 +293,13 @@ export default function MapEditorPage() {
   ]);
 
   const handleExport = useCallback(async () => {
-    if (!state.mapId || !selectedUserId) return;
+    if (!state.mapId || !selectedMapId) return;
     setIsExporting(true);
     try {
       const res = await fetch(`/api/editor-maps/${state.mapId}/export`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selectedUserId }),
+        body: JSON.stringify({ mapId: selectedMapId }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -314,7 +314,7 @@ export default function MapEditorPage() {
     } finally {
       setIsExporting(false);
     }
-  }, [state.mapId, selectedUserId]);
+  }, [state.mapId, selectedMapId]);
 
   // Save status tracking for EditorStatusBar
   type SaveStatus = 'unsaved' | 'dirty' | 'saving' | 'saved';
@@ -662,16 +662,16 @@ export default function MapEditorPage() {
               <div className="space-y-1.5">
                 <Label className="text-sm">Target Player</Label>
                 <Select
-                  value={selectedUserId}
-                  onValueChange={setSelectedUserId}
+                  value={selectedMapId}
+                  onValueChange={setSelectedMapId}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a player" />
+                    <SelectValue placeholder="Select a player map" />
                   </SelectTrigger>
                   <SelectContent>
                     {playerMaps.map((pm) => (
-                      <SelectItem key={pm.userId} value={pm.userId}>
-                        {pm.userName || pm.userEmail}
+                      <SelectItem key={pm.id} value={pm.id}>
+                        {pm.userName || pm.userEmail} — {pm.name || pm.mapType || 'map'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -689,7 +689,7 @@ export default function MapEditorPage() {
             <Button
               onClick={handleExport}
               disabled={
-                !selectedUserId || isExporting || playerMaps.length === 0
+                !selectedMapId || isExporting || playerMaps.length === 0
               }
             >
               {isExporting ? 'Exporting...' : 'Export'}

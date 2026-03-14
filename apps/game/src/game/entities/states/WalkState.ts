@@ -16,6 +16,7 @@ import type { State } from '../StateMachine';
 import type { Direction } from '../../characters/frame-map';
 import { animKey } from '../../characters/frame-map';
 import { calculateMovement } from '../../systems/movement';
+import { isMovementLocked } from '../../systems/dialogue-lock';
 import { getRoom } from '../../../services/colyseus';
 import { ClientMessage } from '@nookstead/shared';
 import type { PlayerContext } from './types';
@@ -45,6 +46,12 @@ export class WalkState implements State {
   }
 
   update(delta: number): void {
+    if (isMovementLocked()) {
+      this.context.clearMoveTarget();
+      this.context.stateMachine.setState('idle');
+      return;
+    }
+
     const keyboardDir = this.context.inputController.getDirection();
     const hasKeyboardInput = keyboardDir.x !== 0 || keyboardDir.y !== 0;
 
@@ -141,6 +148,7 @@ export class WalkState implements State {
       mapWidth: this.context.mapWidth,
       mapHeight: this.context.mapHeight,
       tileSize: this.context.tileSize,
+      feetOffsetY: 1,
     });
 
     // Compute movement delta BEFORE updating position

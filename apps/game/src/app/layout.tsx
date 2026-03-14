@@ -39,13 +39,18 @@ export default async function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Press+Start+2P&display=swap"
           rel="stylesheet"
         />
       </head>
       <body>
         <RuntimeConfigProvider
           colyseusUrl={process.env['COLYSEUS_URL']}
+          dayCycleMs={
+            process.env['DAY_CYCLE_MS']
+              ? Number(process.env['DAY_CYCLE_MS'])
+              : undefined
+          }
         />
         <AuthProvider>{children}</AuthProvider>
       </body>

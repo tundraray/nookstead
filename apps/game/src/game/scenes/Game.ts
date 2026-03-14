@@ -16,12 +16,14 @@ import type {
   SerializedFenceLayer,
   FenceCellData,
 } from '@nookstead/shared';
-import { isTileLayer, isObjectLayer, findSpawnTile } from '@nookstead/shared';
+import { isTileLayer, isObjectLayer, findSpawnTile, ClientMessage } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
+import { isMovementLocked, setupMovementLock, teardownMovementLock } from '../systems/dialogue-lock';
 import type { GameObjectCache } from '../services/game-object-cache';
+import { findNearestWalkable } from '../systems/displacement';
 
 /**
  * Atlas frame coordinates resolved from the fence-types API.
@@ -109,6 +111,9 @@ export class Game extends Scene {
   private room: Room | null = null;
   private serverSpawnX: number | undefined;
   private serverSpawnY: number | undefined;
+  private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
+  private disconnectHandler?: () => void;
+  private hardResetHandler?: () => void;
 
   /**
    * Loaded fence layer data for the current map.
@@ -170,6 +175,7 @@ export class Game extends Scene {
     this.room = data.room ?? null;
     this.serverSpawnX = data.mapData.spawnX;
     this.serverSpawnY = data.mapData.spawnY;
+    this.serverSpawnDirection = data.mapData.spawnDirection;
 
     this.rawFenceLayers = data.mapData.fenceLayers ?? [];
   }
@@ -217,6 +223,34 @@ export class Game extends Scene {
     if (this.serverSpawnX != null && this.serverSpawnY != null) {
       spawnX = this.serverSpawnX;
       spawnY = this.serverSpawnY;
+
+      // Validate walkability: if saved position is now occupied/unwalkable, relocate
+      const tileX = Math.floor(spawnX / TILE_SIZE);
+      const tileY = Math.floor(spawnY / TILE_SIZE) - 1; // -1: spawnY is feet (bottom edge)
+      const walkable = this.mapData.walkable;
+      if (
+        walkable &&
+        (tileX < 0 || tileX >= MAP_WIDTH ||
+         tileY < 0 || tileY >= MAP_HEIGHT ||
+         !walkable[tileY]?.[tileX])
+      ) {
+        // Saved position is unwalkable — find nearest walkable tile
+        const nearby = findNearestWalkable(tileX, tileY, walkable, MAP_WIDTH, MAP_HEIGHT);
+        if (nearby) {
+          spawnX = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
+          spawnY = (nearby.tileY + 1) * TILE_SIZE;
+        } else {
+          // Last resort: use findSpawnTile
+          const spawn = findSpawnTile(
+            this.mapData.walkable,
+            this.mapData.grid,
+            MAP_WIDTH,
+            MAP_HEIGHT,
+          );
+          spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
+          spawnY = (spawn.tileY + 1) * TILE_SIZE;
+        }
+      }
     } else {
       const spawn = findSpawnTile(
         this.mapData.walkable,
@@ -227,7 +261,7 @@ export class Game extends Scene {
       spawnX = spawn.tileX * TILE_SIZE + TILE_SIZE / 2;
       spawnY = (spawn.tileY + 1) * TILE_SIZE;
     }
-    this.player = new Player(this, spawnX, spawnY, this.mapData);
+    this.player = new Player(this, spawnX, spawnY, this.mapData, this.serverSpawnDirection);
 
     // Enable Arcade Physics on the player for collision detection
     this.physics.add.existing(this.player);
@@ -283,6 +317,9 @@ export class Game extends Scene {
       },
     );
 
+    // Movement lock: listen for dialogue lock/unlock events
+    setupMovementLock();
+
     // Click-to-move: track pointer down position to distinguish clicks from drags
     let pointerDownX = 0;
     let pointerDownY = 0;
@@ -291,6 +328,8 @@ export class Game extends Scene {
       pointerDownY = pointer.y;
     });
     this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
+      if (isMovementLocked()) return;
+
       const dx = pointer.x - pointerDownX;
       const dy = pointer.y - pointerDownY;
       if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD) return;
@@ -344,6 +383,22 @@ export class Game extends Scene {
         await this.renderFenceLayers(data);
       }
     });
+
+    // Return to LoadingScene (which has retry logic) on unexpected server disconnect
+    this.disconnectHandler = () => {
+      console.log('[Game] Server disconnected, returning to LoadingScene');
+      this.scene.start('Loading');
+    };
+    EventBus.on('multiplayer:disconnected', this.disconnectHandler);
+
+    // Hard reset: teleport player to spawn via server
+    this.hardResetHandler = () => {
+      if (this.room) {
+        this.player.clearMoveTarget();
+        this.room.send(ClientMessage.HARD_RESET);
+      }
+    };
+    EventBus.on('player:hard-reset', this.hardResetHandler);
 
     EventBus.emit('current-scene-ready', this);
   }
@@ -868,6 +923,15 @@ export class Game extends Scene {
   }
 
   shutdown(): void {
+    teardownMovementLock();
+    if (this.disconnectHandler) {
+      EventBus.off('multiplayer:disconnected', this.disconnectHandler);
+      this.disconnectHandler = undefined;
+    }
+    if (this.hardResetHandler) {
+      EventBus.off('player:hard-reset', this.hardResetHandler);
+      this.hardResetHandler = undefined;
+    }
     this.playerManager.destroy();
     this.objectRenderer?.destroy();
     if (this.fenceStamp) {

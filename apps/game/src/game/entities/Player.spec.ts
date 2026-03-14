@@ -48,15 +48,28 @@ jest.mock('phaser', () => {
     }
   }
 
+  // Minimal EventEmitter mock for EventBus (pulled in by dialogue-lock)
+  class MockEventEmitter {
+    on() { return this; }
+    off() { return this; }
+    emit() { return this; }
+  }
+
   return {
     __esModule: true,
     default: {
       GameObjects: {
         Sprite: MockSprite,
       },
+      Events: {
+        EventEmitter: MockEventEmitter,
+      },
     },
     GameObjects: {
       Sprite: MockSprite,
+    },
+    Events: {
+      EventEmitter: MockEventEmitter,
     },
   };
 });
@@ -82,6 +95,9 @@ function createMockScene(): any {
     },
     input: {
       keyboard: {
+        enabled: true,
+        disableGlobalCapture: jest.fn(),
+        resetKeys: jest.fn(),
         createCursorKeys: jest.fn(() => ({
           up: { ...mockKey },
           down: { ...mockKey },
@@ -102,17 +118,27 @@ function createMockScene(): any {
 }
 
 /**
- * Create a minimal GeneratedMap for Player construction.
- * Single walkable tile is sufficient for reconcile tests.
+ * Create a mock GeneratedMap large enough for reconcile tests.
+ * The walkable grid must cover all pixel positions used in tests
+ * (up to ~200px → tile 12 at TILE_SIZE=16) so the displacement
+ * check in preUpdate() doesn't relocate the player.
  */
 function createMockMapData(): GeneratedMap {
+  const size = 20;
+  const row = () => Array.from({ length: size }, () => true);
+  const gridRow = () =>
+    Array.from({ length: size }, () => ({
+      terrain: 'grass',
+      elevation: 1,
+      meta: {},
+    }));
   return {
-    width: 1,
-    height: 1,
+    width: size,
+    height: size,
     seed: 42,
-    grid: [[{ terrain: 'grass', elevation: 1, meta: {} }]],
+    grid: Array.from({ length: size }, gridRow),
     layers: [],
-    walkable: [[true]],
+    walkable: Array.from({ length: size }, row),
   };
 }
 
@@ -148,7 +174,6 @@ describe('Player: Movement Prediction', () => {
       player.preUpdate(0, 16);
 
       // x should have moved toward serverX but not reached it
-      // step = smallDelta * INTERPOLATION_SPEED = 3 * 0.2 = 0.6
       expect(player.x).toBeGreaterThan(100);
       expect(player.x).toBeLessThan(serverX);
     });
@@ -208,16 +233,15 @@ describe('Player: Movement Prediction', () => {
         expect(positions[i]).toBeGreaterThanOrEqual(positions[i - 1]);
       }
 
-      // After 10 frames at INTERPOLATION_SPEED per frame:
-      // remaining = initialDelta * (1 - INTERPOLATION_SPEED)^frameCount
-      //           = 5 * (1 - 0.2)^10
-      //           = 5 * 0.8^10
-      //           ~ 0.537
-      // Expected position ~ targetX - remaining ~ 104.463
+      // After 10 frames with delta-time interpolation:
+      // Per-frame factor = 1 - (1 - INTERPOLATION_SPEED)^(delta/16.67)
+      // With delta=16: factor ≈ 0.1927, retention = 1 - factor ≈ 0.8073
+      // remaining = initialDelta * retention^frameCount
       // The lerp also has a 0.5px snap threshold in preUpdate, so if remaining
       // drops below 0.5, the position snaps to authoritative.
-      const remaining =
-        initialDelta * Math.pow(1 - INTERPOLATION_SPEED, frameCount);
+      const frameDelta = 16;
+      const retention = Math.pow(1 - INTERPOLATION_SPEED, frameDelta / 16.67);
+      const remaining = initialDelta * Math.pow(retention, frameCount);
       const expectedMin = targetX - remaining - 0.01;
 
       expect(player.x).toBeGreaterThan(expectedMin);

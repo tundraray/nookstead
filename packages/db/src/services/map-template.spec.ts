@@ -68,7 +68,7 @@ function createMockDb() {
 const testData: CreateTemplateData = {
   name: 'Farm Template',
   description: 'A basic farm layout',
-  mapType: 'player_homestead',
+  mapType: 'homestead',
   baseWidth: 64,
   baseHeight: 64,
   grid: [[{ terrain: 'grass' }]],
@@ -221,7 +221,7 @@ describe('MapTemplateService', () => {
         orderBy: jest.fn().mockResolvedValue([published]),
       });
 
-      const result = await getPublishedTemplates(db, 'player_homestead');
+      const result = await getPublishedTemplates(db, 'homestead');
 
       expect(mocks.selectFrom).toHaveBeenCalledWith(mapTemplates);
       expect(result).toEqual([published]);

@@ -52,6 +52,24 @@
 - If map-lib typecheck fails (e.g., legacy code errors), declarations are NOT generated and genmap gets "has no exported member" errors
 - Fix: resolve map-lib type errors first, then run `pnpm nx typecheck map-lib` to regenerate declarations
 
+## Drizzle Migrations (packages/db)
+- drizzle.config.ts is at `packages/db/drizzle.config.ts`
+- Migration output directory: `packages/db/src/migrations/` (NOT `packages/db/drizzle/`)
+- Generate command: `cd packages/db && pnpm db:generate` (runs `drizzle-kit generate`)
+- Validate command: `cd packages/db && pnpm db:check` (runs `drizzle-kit check`)
+- Migrations use sequential numbering: `0000_name.sql`, `0001_name.sql`, etc.
+- drizzle-kit generate diffs schema against snapshots in `src/migrations/meta/`, does NOT require DB connection
+- As of 2026-03-07, 16 migrations exist (0000 through 0015)
+
+## AI Dialogue Integration (plan-021)
+- AI SDK v6 (`ai@^6.0.105`): `streamText()` returns `StreamTextResult` synchronously (NOT a Promise)
+- Use `maxOutputTokens` (NOT `maxTokens`) in AI SDK v6 -- the old name was removed
+- `openai.chat(modelId)` for Chat Completions API; `openai(modelId)` uses Responses API
+- `createOpenAI({ apiKey })` from `@ai-sdk/openai` creates the provider
+- `result.textStream` is `AsyncIterableStream<string>` -- use `for await` to consume
+- Server typecheck: `pnpm nx typecheck server` (NOT standalone tsc)
+- Pre-existing BotManager test fixture errors after persona columns added (Task 2) -- not blocking DialogueService
+
 ## Canvas Coordinate Conversion
 - `pixelToTile` function in map-editor-canvas.tsx already handles screen->tile conversion
 - Uses `Math.floor(worldCoord / TILE_SIZE)` which produces integer tile coords

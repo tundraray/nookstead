@@ -1,4 +1,5 @@
 // Chunk-Based Room Architecture E2E Test - Design Doc: design-005-chunk-based-room-architecture.md
+// Updated for map entity model refactor (plan-009): chunkId format is now 'map:{uuid}'
 // Generated: 2026-02-17 | Budget Used: 2/2 E2E
 // Test Type: End-to-End Test
 // Implementation Timing: After all feature implementations complete
@@ -6,13 +7,16 @@
 // Prerequisites:
 //   - Game server running on port 2567 with ChunkRoom registered
 //   - Next.js game client running on port 3000 with Colyseus connection
-//   - PostgreSQL database accessible with player_positions table
+//   - PostgreSQL database accessible with maps table and player_positions
 //   - Two authenticated user sessions available
 //
 // Note: These E2E tests verify the complete user journey through the browser.
 // They require the full system stack (client + server + DB) to be running.
 // The Playwright webServer config starts the game client; the game server
 // must be started separately or via a test setup script.
+//
+// chunkId format: 'map:{uuid}' (LocationType.MAP) or 'world:{x}:{y}' (LocationType.WORLD)
+// See packages/shared/src/constants.ts for LocationType enum.
 
 import { test } from '@playwright/test';
 
@@ -23,9 +27,10 @@ import { test } from '@playwright/test';
 /* ================================================================ */
 
 // User Journey: Client A and Client B connect and authenticate ->
-//   both join the same chunk room -> Client A sends a move input ->
-//   Client B observes Client A's updated position -> Client A moves
-//   across a chunk boundary -> Client A transitions to new room ->
+//   both join the same chunk room (chunkId: 'map:{uuid}') ->
+//   Client A sends a move input -> Client B observes Client A's
+//   updated position -> Client A moves across a map boundary ->
+//   Client A transitions to a new room (different map:{uuid}) ->
 //   Client B no longer sees Client A in the chunk
 //
 // Covers:
@@ -54,7 +59,7 @@ test.describe('Two-client movement visibility and chunk transition', () => {
     //   - Both contexts navigate to the game page
     //   - Both players authenticate and connect to the Colyseus game server
     //   - Wait for both players to appear in the same chunk room
-    //     (both at default spawn or same starting position)
+    //     (both at default spawn or same starting map:{uuid})
     //   - Verify both clients show 2 players in the chunk (snapshot)
     //
     // Act - Phase 1 (Movement within chunk):
@@ -67,21 +72,21 @@ test.describe('Two-client movement visibility and chunk transition', () => {
     //     (worldX has increased from the starting position)
     //   - Player A's own view shows their position updated (move-ack)
     //
-    // Act - Phase 2 (Chunk transition):
-    //   - Move Player A repeatedly toward a chunk boundary
-    //     (e.g., move right until worldX crosses CHUNK_SIZE * N boundary)
-    //   - Wait for chunk transition to complete
+    // Act - Phase 2 (Map transition):
+    //   - Move Player A toward a map exit boundary
+    //     (e.g., move to the edge of the current map to trigger transition)
+    //   - Wait for map transition to complete (new chunkId: 'map:{new-uuid}')
     //
     // Verify - Phase 2:
-    //   - Client A is now in a different chunk room
-    //   - Client B no longer sees Player A in their chunk
+    //   - Client A is now in a different chunk room (chunkId matches /^map:[0-9a-f-]{36}$/)
+    //   - Client B no longer sees Player A in their map
     //     (player count in Client B's view decreased)
-    //   - Client A sees the new chunk's player list (snapshot)
+    //   - Client A sees the new map's player list (snapshot)
     //
     // Pass criteria:
     //   - Movement is server-authoritative (Client B sees server-computed position)
-    //   - Chunk transition is seamless (Player A transitions without error)
-    //   - Spatial partitioning works (Player B stops seeing Player A after transition)
+    //   - Map transition is seamless (Player A transitions without error)
+    //   - Map-based partitioning works (Player B stops seeing Player A after transition)
   });
 });
 
@@ -97,7 +102,7 @@ test.describe('Two-client movement visibility and chunk transition', () => {
 //
 // Covers:
 //   AC FR-9: "When a player disconnects, the system shall save their worldX,
-//     worldY, chunkId, and direction to the database"
+//     worldY, chunkId (map:{uuid} format), and direction to the database"
 //   AC FR-9: "When a player reconnects, the system shall restore their position
 //     from the database"
 //   AC FR-5: "When a returning player connects, the system shall load their
@@ -136,7 +141,8 @@ test.describe('Disconnect and reconnect position persistence', () => {
     //   - The player's position after reconnect matches the position
     //     recorded before disconnect (worldX and worldY within small tolerance)
     //   - The player is NOT at the default spawn position (proving DB restore worked)
-    //   - The player is in the correct chunk for their restored position
+    //   - The player is in the correct map room for their restored position
+    //     (chunkId matches /^map:[0-9a-f-]{36}$/)
     //
     // Pass criteria:
     //   - Position persistence roundtrip: move -> disconnect -> save -> reconnect -> restore

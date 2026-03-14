@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import { World, computeChunkId } from './World.js';
 import { createServerPlayer } from '../models/Player.js';
-import { CHUNK_SIZE, MAX_SPEED, WORLD_BOUNDS } from '@nookstead/shared';
+import { CHUNK_SIZE } from '@nookstead/shared';
 
 describe('World', () => {
   let world: World;
@@ -73,7 +73,7 @@ describe('World', () => {
     });
   });
 
-  describe('Movement validation', () => {
+  describe('Movement', () => {
     it('should move player correctly with basic movement (dx=3, dy=0)', () => {
       const player = createServerPlayer({
         id: 'player-4',
@@ -94,7 +94,7 @@ describe('World', () => {
       expect(result.chunkChanged).toBe(false);
     });
 
-    it('should clamp speed to MAX_SPEED when input exceeds limit', () => {
+    it('should apply large deltas without clamping (client-side validation)', () => {
       const player = createServerPlayer({
         id: 'player-5',
         userId: 'user-5',
@@ -103,40 +103,14 @@ describe('World', () => {
         chunkId: computeChunkId(100, 100),
         direction: 'down',
         skin: 'default',
-        name: 'SpeedTest',
+        name: 'NoClamping',
       });
 
       world.addPlayer(player);
 
-      // Attempt to move dx=100 (way over MAX_SPEED)
       const result = world.movePlayer('player-5', 100, 0);
-
-      // Movement should be clamped to MAX_SPEED magnitude
-      const distance = Math.sqrt(
-        (result.worldX - 100) ** 2 + (result.worldY - 100) ** 2
-      );
-      expect(distance).toBeLessThanOrEqual(MAX_SPEED + 0.001); // floating point tolerance
-    });
-
-    it('should clamp position to WORLD_BOUNDS when exceeding boundaries', () => {
-      const player = createServerPlayer({
-        id: 'player-6',
-        userId: 'user-6',
-        worldX: WORLD_BOUNDS.maxX - 1,
-        worldY: 100,
-        chunkId: computeChunkId(WORLD_BOUNDS.maxX - 1, 100),
-        direction: 'down',
-        skin: 'default',
-        name: 'BoundsTest',
-      });
-
-      world.addPlayer(player);
-
-      // Attempt to move beyond boundary
-      const result = world.movePlayer('player-6', 10, 0);
-
-      // Should be clamped to maxX
-      expect(result.worldX).toBe(WORLD_BOUNDS.maxX);
+      expect(result.worldX).toBe(200);
+      expect(result.worldY).toBe(100);
     });
   });
 
@@ -220,6 +194,76 @@ describe('World', () => {
     });
   });
 
+  describe('Non-positional chunk behavior (map: prefix)', () => {
+    it('should NOT trigger chunk change for map:{uuid} chunks', () => {
+      const player = createServerPlayer({
+        id: 'player-map-1',
+        userId: 'user-map-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:some-uuid-here',
+        direction: 'down',
+        skin: 'default',
+        name: 'MapChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      // Move within a map: chunk — should never trigger chunk change
+      const result = world.movePlayer('player-map-1', 3, 0);
+
+      expect(result.chunkChanged).toBe(false);
+      expect(result.oldChunkId).toBeUndefined();
+      expect(result.newChunkId).toBeUndefined();
+      // Player should keep original map: chunkId
+      expect(world.getPlayer('player-map-1')?.chunkId).toBe(
+        'map:some-uuid-here'
+      );
+    });
+
+    it('should NOT trigger chunk change for city:capital alias', () => {
+      const player = createServerPlayer({
+        id: 'player-city-1',
+        userId: 'user-city-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'city:capital',
+        direction: 'down',
+        skin: 'default',
+        name: 'CityChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.movePlayer('player-city-1', 5, 0);
+
+      expect(result.chunkChanged).toBe(false);
+      expect(world.getPlayer('player-city-1')?.chunkId).toBe('city:capital');
+    });
+
+    it('should trigger chunk change for world:{x}:{y} chunks when crossing boundary', () => {
+      const startX = CHUNK_SIZE - 1;
+      const player = createServerPlayer({
+        id: 'player-world-1',
+        userId: 'user-world-1',
+        worldX: startX,
+        worldY: 0,
+        chunkId: computeChunkId(startX, 0),
+        direction: 'down',
+        skin: 'default',
+        name: 'WorldChunkTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.movePlayer('player-world-1', 2, 0);
+
+      expect(result.chunkChanged).toBe(true);
+      expect(result.oldChunkId).toBe(computeChunkId(startX, 0));
+      expect(result.newChunkId).toBe(computeChunkId(startX + 2, 0));
+    });
+  });
+
   describe('Error handling', () => {
     it('should return no-op result for unknown player', () => {
       const result = world.movePlayer('unknown-player', 5, 5);
@@ -228,6 +272,55 @@ describe('World', () => {
       expect(result.worldX).toBe(0);
       expect(result.worldY).toBe(0);
       expect(result.chunkChanged).toBe(false);
+    });
+  });
+
+  describe('setPlayerPosition', () => {
+    it('should update player position and return true', () => {
+      const player = createServerPlayer({
+        id: 'player-pos-1',
+        userId: 'user-pos-1',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:test-map',
+        direction: 'down',
+        skin: 'default',
+        name: 'PosTest',
+      });
+
+      world.addPlayer(player);
+
+      const result = world.setPlayerPosition('player-pos-1', 200, 300);
+      expect(result).toBe(true);
+
+      const updated = world.getPlayer('player-pos-1');
+      expect(updated?.worldX).toBe(200);
+      expect(updated?.worldY).toBe(300);
+    });
+
+    it('should return false for unknown player', () => {
+      const result = world.setPlayerPosition('unknown', 50, 50);
+      expect(result).toBe(false);
+    });
+
+    it('should not affect direction or chunkId', () => {
+      const player = createServerPlayer({
+        id: 'player-pos-2',
+        userId: 'user-pos-2',
+        worldX: 100,
+        worldY: 100,
+        chunkId: 'map:test-map',
+        direction: 'left',
+        skin: 'default',
+        name: 'PosTest2',
+      });
+
+      world.addPlayer(player);
+      world.setPlayerPosition('player-pos-2', 200, 300);
+
+      const updated = world.getPlayer('player-pos-2');
+      expect(updated?.direction).toBe('left');
+      expect(updated?.chunkId).toBe('map:test-map');
     });
   });
 

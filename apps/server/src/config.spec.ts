@@ -18,6 +18,7 @@ describe('config', () => {
     it('should throw descriptive error when AUTH_SECRET is missing', () => {
       delete process.env.AUTH_SECRET;
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
 
       expect(() => loadConfig()).toThrow(
         'AUTH_SECRET environment variable is required'
@@ -27,9 +28,20 @@ describe('config', () => {
     it('should throw descriptive error when DATABASE_URL is missing', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       delete process.env.DATABASE_URL;
+      process.env.OPENAI_API_KEY = 'sk-test-key';
 
       expect(() => loadConfig()).toThrow(
         'DATABASE_URL environment variable is required'
+      );
+    });
+
+    it('should throw descriptive error when OPENAI_API_KEY is missing', () => {
+      process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
+      process.env.DATABASE_URL = 'postgresql://localhost/test';
+      delete process.env.OPENAI_API_KEY;
+
+      expect(() => loadConfig()).toThrow(
+        'OPENAI_API_KEY environment variable is required'
       );
     });
   });
@@ -38,6 +50,7 @@ describe('config', () => {
     it('should default COLYSEUS_PORT to 2567 when not set', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
       delete process.env.COLYSEUS_PORT;
 
       const config = loadConfig();
@@ -48,6 +61,7 @@ describe('config', () => {
     it('should default CORS_ORIGIN to http://localhost:3000 when not set', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
       delete process.env.CORS_ORIGIN;
 
       const config = loadConfig();
@@ -60,6 +74,7 @@ describe('config', () => {
     it('should use custom COLYSEUS_PORT when set', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
       process.env.COLYSEUS_PORT = '3000';
 
       const config = loadConfig();
@@ -70,6 +85,7 @@ describe('config', () => {
     it('should use custom CORS_ORIGIN when set', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
       process.env.CORS_ORIGIN = 'https://example.com';
 
       const config = loadConfig();
@@ -82,6 +98,7 @@ describe('config', () => {
     it('should return complete ServerConfig when all variables set', () => {
       process.env.AUTH_SECRET = 'test-secret-32-chars-minimum!!';
       process.env.DATABASE_URL = 'postgresql://localhost/test';
+      process.env.OPENAI_API_KEY = 'sk-test-key';
       process.env.COLYSEUS_PORT = '2567';
       process.env.CORS_ORIGIN = 'http://localhost:3000';
 
@@ -90,6 +107,7 @@ describe('config', () => {
       expect(config).toEqual({
         authSecret: 'test-secret-32-chars-minimum!!',
         databaseUrl: 'postgresql://localhost/test',
+        openaiApiKey: 'sk-test-key',
         port: 2567,
         corsOrigin: 'http://localhost:3000',
       });
@@ -100,6 +118,7 @@ describe('config', () => {
     it('should not expose AUTH_SECRET in error messages', () => {
       process.env.AUTH_SECRET = 'super-secret-value-should-not-appear';
       delete process.env.DATABASE_URL;
+      process.env.OPENAI_API_KEY = 'sk-test-key';
 
       try {
         loadConfig();
