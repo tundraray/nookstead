@@ -1247,27 +1247,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     this.state.bots.set(bot.id, schema);
   }
 
-  /**
-   * Notify BotManager of a walkability grid change at a specific tile.
-   * Wrapped in try/catch so walkability updates are non-critical (fire-and-forget).
-   *
-   * Call this method when object placement/removal changes tile walkability,
-   * e.g. this.notifyWalkabilityChanged(tileX, tileY, false) when an object is placed.
-   */
-  private notifyWalkabilityChanged(
-    x: number,
-    y: number,
-    walkable: boolean
-  ): void {
-    try {
-      this.botManager.onWalkabilityChanged(x, y, walkable);
-    } catch (err) {
-      console.warn('[ChunkRoom] onWalkabilityChanged failed', {
-        x,
-        y,
-        walkable,
-        err,
-      });
-    }
-  }
+  // When object placement/removal changes tile walkability, notify BotManager:
+  //   try {
+  //     this.botManager.onWalkabilityChanged(tileX, tileY, false);
+  //   } catch (err) {
+  //     console.warn('[ChunkRoom] onWalkabilityChanged failed', { err });
+  //   }
 }
