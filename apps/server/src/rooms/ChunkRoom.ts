@@ -110,6 +110,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     }
   >();
   private dialogueService: DialogueService | null = null;
+  private serverEpoch!: number;
+  private clockConfig!: { dayDurationSeconds: number; seasonDurationDays: number };
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -124,6 +126,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     this.dialogueService = new DialogueService({
       apiKey: config.openaiApiKey,
     });
+
+    // Capture clock configuration for CLOCK_CONFIG messages sent on player join
+    this.serverEpoch = Date.now();
+    this.clockConfig = {
+      dayDurationSeconds: config.dayDurationSeconds,
+      seasonDurationDays: config.seasonDurationDays,
+    };
 
     // Register with ChunkManager
     chunkManager.registerRoom(this.chunkId, this);
@@ -527,6 +536,20 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // 7. Send map data to client
     client.send(ServerMessage.MAP_DATA, mapPayload);
     console.log(`[ChunkRoom] MAP_DATA sent: userId=${userId}, mapId=${mapId}`);
+
+    // Send clock configuration for client-side time computation
+    client.send(ServerMessage.CLOCK_CONFIG, {
+      serverEpoch: this.serverEpoch,
+      dayDurationSeconds: this.clockConfig.dayDurationSeconds,
+      seasonDurationDays: this.clockConfig.seasonDurationDays,
+    });
+    console.log(
+      '[ChunkRoom] CLOCK_CONFIG sent: sessionId=%s, serverEpoch=%d, dayDuration=%ds, seasonDuration=%dd',
+      client.sessionId,
+      this.serverEpoch,
+      this.clockConfig.dayDurationSeconds,
+      this.clockConfig.seasonDurationDays
+    );
 
     console.log(
       `[ChunkRoom] Player joined: sessionId=${client.sessionId}, userId=${userId}, chunk=${this.chunkId}`

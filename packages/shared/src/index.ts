@@ -26,6 +26,16 @@ export {
   DISPLACEMENT_RECONCILE_COOLDOWN_MS,
   LOADING_TIMEOUT_MS,
   TILE_SIZE,
+  DEFAULT_DAY_DURATION_SECONDS,
+  DEFAULT_SEASON_DURATION_DAYS,
+  MIN_DAY_DURATION_SECONDS,
+  MAX_DAY_DURATION_SECONDS,
+  MIN_SEASON_DURATION_DAYS,
+  MAX_SEASON_DURATION_DAYS,
+  TIME_PERIOD_DAWN_START,
+  TIME_PERIOD_DAY_START,
+  TIME_PERIOD_DUSK_START,
+  TIME_PERIOD_NIGHT_START,
 } from './constants';
 export type { SkinKey, MapType } from './constants';
 // Spawn system
@@ -98,3 +108,6 @@ export {
   MAX_WANDER_TARGET_ATTEMPTS,
   BOT_NAMES,
 } from './constants';
+// Game Clock
+export type { TimePeriod, Season, GameClockConfig, GameClockState } from './types/clock';
+export { computeGameClock } from './systems/game-clock';

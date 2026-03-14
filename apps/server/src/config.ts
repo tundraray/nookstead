@@ -1,4 +1,12 @@
-import { COLYSEUS_PORT } from '@nookstead/shared';
+import {
+  COLYSEUS_PORT,
+  DEFAULT_DAY_DURATION_SECONDS,
+  DEFAULT_SEASON_DURATION_DAYS,
+  MIN_DAY_DURATION_SECONDS,
+  MAX_DAY_DURATION_SECONDS,
+  MIN_SEASON_DURATION_DAYS,
+  MAX_SEASON_DURATION_DAYS,
+} from '@nookstead/shared';
 
 export interface ServerConfig {
   port: number;
@@ -6,6 +14,8 @@ export interface ServerConfig {
   databaseUrl: string;
   corsOrigin: string;
   openaiApiKey: string;
+  dayDurationSeconds: number;
+  seasonDurationDays: number;
 }
 
 export function loadConfig(): ServerConfig {
@@ -33,5 +43,23 @@ export function loadConfig(): ServerConfig {
   const port = parseInt(process.env['COLYSEUS_PORT'] ?? '', 10) || COLYSEUS_PORT;
   const corsOrigin = process.env['CORS_ORIGIN'] ?? 'http://localhost:3000';
 
-  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey };
+  const rawDayDuration = parseInt(process.env['GAME_DAY_DURATION_SECONDS'] ?? '', 10);
+  const dayDurationSeconds = Math.min(
+    MAX_DAY_DURATION_SECONDS,
+    Math.max(
+      MIN_DAY_DURATION_SECONDS,
+      isNaN(rawDayDuration) ? DEFAULT_DAY_DURATION_SECONDS : rawDayDuration
+    )
+  );
+
+  const rawSeasonDuration = parseInt(process.env['GAME_SEASON_DURATION_DAYS'] ?? '', 10);
+  const seasonDurationDays = Math.min(
+    MAX_SEASON_DURATION_DAYS,
+    Math.max(
+      MIN_SEASON_DURATION_DAYS,
+      isNaN(rawSeasonDuration) ? DEFAULT_SEASON_DURATION_DAYS : rawSeasonDuration
+    )
+  );
+
+  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey, dayDurationSeconds, seasonDurationDays };
 }

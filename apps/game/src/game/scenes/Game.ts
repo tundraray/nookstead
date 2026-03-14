@@ -16,12 +16,14 @@ import type {
   SerializedFenceLayer,
   FenceCellData,
 } from '@nookstead/shared';
-import { isTileLayer, isObjectLayer, findSpawnTile, ClientMessage } from '@nookstead/shared';
+import { isTileLayer, isObjectLayer, findSpawnTile, ClientMessage, ServerMessage } from '@nookstead/shared';
+import type { GameClockConfig } from '@nookstead/shared';
 import type { Room } from '@colyseus/sdk';
 import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
 import { isMovementLocked, setupMovementLock, teardownMovementLock } from '../systems/dialogue-lock';
+import { GameClockClient } from '../systems/GameClockClient';
 import type { GameObjectCache } from '../services/game-object-cache';
 import { findNearestWalkable } from '../systems/displacement';
 
@@ -114,6 +116,7 @@ export class Game extends Scene {
   private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
   private disconnectHandler?: () => void;
   private hardResetHandler?: () => void;
+  private gameClock: GameClockClient | null = null;
 
   /**
    * Loaded fence layer data for the current map.
@@ -365,6 +368,16 @@ export class Game extends Scene {
     this.playerManager = new PlayerManager(this);
     this.playerManager.setLocalPlayer(this.player);
     this.playerManager.connect(this.room ?? undefined);
+
+    // Game Clock — receive server epoch and create the client clock
+    this.room?.onMessage(ServerMessage.CLOCK_CONFIG, (data: GameClockConfig) => {
+      console.log('[Game] CLOCK_CONFIG received:', data);
+      // Destroy existing clock on reconnect/redirect to prevent interval leak
+      if (this.gameClock) {
+        this.gameClock.destroy();
+      }
+      this.gameClock = new GameClockClient(data);
+    });
 
     // Register server confirmation handler for gate state changes.
     // The client does NOT toggle gates locally — it sends a request and
@@ -931,6 +944,10 @@ export class Game extends Scene {
     if (this.hardResetHandler) {
       EventBus.off('player:hard-reset', this.hardResetHandler);
       this.hardResetHandler = undefined;
+    }
+    if (this.gameClock) {
+      this.gameClock.destroy();
+      this.gameClock = null;
     }
     this.playerManager.destroy();
     this.objectRenderer?.destroy();

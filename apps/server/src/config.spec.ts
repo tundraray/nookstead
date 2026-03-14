@@ -110,7 +110,95 @@ describe('config', () => {
         openaiApiKey: 'sk-test-key',
         port: 2567,
         corsOrigin: 'http://localhost:3000',
+        dayDurationSeconds: 86400,
+        seasonDurationDays: 7,
       });
+    });
+  });
+
+  describe('clock configuration', () => {
+    const REQUIRED = {
+      AUTH_SECRET: 'test-secret-32-chars-minimum!!',
+      DATABASE_URL: 'postgresql://localhost/test',
+      OPENAI_API_KEY: 'sk-test-key',
+    };
+
+    function setRequired() {
+      Object.entries(REQUIRED).forEach(([k, v]) => {
+        process.env[k] = v;
+      });
+    }
+
+    it('should default GAME_DAY_DURATION_SECONDS to 86400 when not set (AC-1)', () => {
+      setRequired();
+      delete process.env.GAME_DAY_DURATION_SECONDS;
+
+      const config = loadConfig();
+
+      expect(config.dayDurationSeconds).toBe(86400);
+    });
+
+    it('should default GAME_SEASON_DURATION_DAYS to 7 when not set (AC-1)', () => {
+      setRequired();
+      delete process.env.GAME_SEASON_DURATION_DAYS;
+
+      const config = loadConfig();
+
+      expect(config.seasonDurationDays).toBe(7);
+    });
+
+    it('should use custom GAME_DAY_DURATION_SECONDS when set to valid value', () => {
+      setRequired();
+      process.env.GAME_DAY_DURATION_SECONDS = '1440';
+
+      const config = loadConfig();
+
+      expect(config.dayDurationSeconds).toBe(1440);
+    });
+
+    it('should clamp GAME_DAY_DURATION_SECONDS=0 to minimum 60 (AC-1.1)', () => {
+      setRequired();
+      process.env.GAME_DAY_DURATION_SECONDS = '0';
+
+      const config = loadConfig();
+
+      expect(config.dayDurationSeconds).toBe(60);
+    });
+
+    it('should clamp GAME_DAY_DURATION_SECONDS=999999 to maximum 604800 (AC-1.1)', () => {
+      setRequired();
+      process.env.GAME_DAY_DURATION_SECONDS = '999999';
+
+      const config = loadConfig();
+
+      expect(config.dayDurationSeconds).toBe(604800);
+    });
+
+    it('should clamp GAME_SEASON_DURATION_DAYS=0 to minimum 1 (AC-1.2)', () => {
+      setRequired();
+      process.env.GAME_SEASON_DURATION_DAYS = '0';
+
+      const config = loadConfig();
+
+      expect(config.seasonDurationDays).toBe(1);
+    });
+
+    it('should clamp GAME_SEASON_DURATION_DAYS=999 to maximum 365 (AC-1.2)', () => {
+      setRequired();
+      process.env.GAME_SEASON_DURATION_DAYS = '999';
+
+      const config = loadConfig();
+
+      expect(config.seasonDurationDays).toBe(365);
+    });
+
+    it('should use default 86400 when GAME_DAY_DURATION_SECONDS is non-numeric (AC-1)', () => {
+      setRequired();
+      process.env.GAME_DAY_DURATION_SECONDS = 'abc';
+
+      const config = loadConfig();
+
+      expect(config.dayDurationSeconds).toBe(86400);
     });
   });
 
