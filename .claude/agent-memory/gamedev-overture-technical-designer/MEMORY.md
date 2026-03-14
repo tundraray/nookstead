@@ -22,3 +22,6 @@
 - Always verify mask computations step by step (raw -> gated -> FRAME_TABLE lookup)
 - Always verify routing table entries via BFS traversal of compat graph
 - Check render graph DIRECTION for tileset existence (A_B != B_A)
+
+## NPC Responsive World (Design-012)
+- [project_responsive_world.md](./project_responsive_world.md) — 4 new subsystems for "world that notices you"

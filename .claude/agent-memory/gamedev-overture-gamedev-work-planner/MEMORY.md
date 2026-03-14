@@ -26,3 +26,6 @@
 - Tool files that import PaintCommand/FillCommand: brush-tool.ts, fill-tool.ts, eraser-tool.ts, rectangle-tool.ts
 - use-map-editor.ts reducer handles LOAD_MAP (recompute) and PUSH_COMMAND (delegated to command.execute)
 - canvas-renderer.ts reads layer.frames[y][x] and layer.tilesetKeys[y][x] -- unchanged by routing work
+
+## Nookstead Feature Roadmap
+- [project_feature_roadmap_v4.md](./project_feature_roadmap_v4.md) - Feature roadmap v4 with 80+ features, detailed Phase 1 specs
