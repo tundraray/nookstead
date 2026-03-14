@@ -17,6 +17,7 @@ import { MapPropertiesPanel } from './map-properties-panel';
 import { ZonePanel } from './zone-panel';
 import { FramesPanel } from './frames-panel';
 import { GameObjectsPanel } from './game-objects-panel';
+import { FencePalette } from './fence-palette';
 
 /** Human-readable labels for each sidebar tab. */
 const TAB_LABELS: Record<SidebarTab, string> = {
@@ -26,6 +27,7 @@ const TAB_LABELS: Record<SidebarTab, string> = {
   zones: 'Zones',
   frames: 'Frames',
   'game-objects': 'Game Objects',
+  'fence-types': 'Fence Types',
 };
 
 /** Sidebar width in pixels when open. */
@@ -158,6 +160,8 @@ export function EditorSidebar({
         return <FramesPanel />;
       case 'game-objects':
         return <GameObjectsPanel onObjectSelect={onObjectSelect} />;
+      case 'fence-types':
+        return <FencePalette state={state} dispatch={dispatch} />;
       default:
         return null;
     }

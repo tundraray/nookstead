@@ -5,6 +5,7 @@ import {
   createGameObject,
   validateFrameReferences,
 } from '@nookstead/db';
+import { isGameObjectCategory, isGameObjectType } from '@nookstead/shared';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -12,7 +13,23 @@ export async function GET(request: NextRequest) {
   const limitParam = searchParams.get('limit');
   const offsetParam = searchParams.get('offset');
 
-  const params: { limit?: number; offset?: number } = {};
+  const categoryParam = searchParams.get('category');
+  const objectTypeParam = searchParams.get('objectType');
+
+  const params: {
+    limit?: number;
+    offset?: number;
+    category?: string;
+    objectType?: string;
+  } = {};
+
+  if (categoryParam !== null && categoryParam.trim() !== '') {
+    params.category = categoryParam.trim().toLowerCase();
+  }
+
+  if (objectTypeParam !== null && objectTypeParam.trim() !== '') {
+    params.objectType = objectTypeParam.trim().toLowerCase();
+  }
 
   if (limitParam !== null) {
     const limit = parseInt(limitParam, 10);
@@ -97,16 +114,38 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const normalizedCategory = category?.trim().toLowerCase() || null;
+  const normalizedObjectType = objectType?.trim().toLowerCase() || null;
+
   const obj = await createGameObject(db, {
     name: name.trim(),
     description: description ?? null,
-    category: category ?? null,
-    objectType: objectType ?? null,
+    category: normalizedCategory,
+    objectType: normalizedObjectType,
     layers,
     collisionZones: collisionZones ?? [],
     tags: tags ?? null,
     metadata: metadata ?? null,
   });
+
+  if (obj.category && !isGameObjectCategory(obj.category)) {
+    console.warn('Non-standard game object category used', {
+      category: obj.category,
+      objectId: obj.id,
+    });
+  }
+  if (
+    obj.objectType &&
+    obj.category &&
+    isGameObjectCategory(obj.category) &&
+    !isGameObjectType(obj.category, obj.objectType)
+  ) {
+    console.warn('Non-standard game object type used', {
+      objectType: obj.objectType,
+      category: obj.category,
+      objectId: obj.id,
+    });
+  }
 
   return NextResponse.json(obj, { status: 201 });
 }

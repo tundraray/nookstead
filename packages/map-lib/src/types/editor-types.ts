@@ -1,6 +1,7 @@
 import type { Cell } from '@nookstead/shared';
 import type { MapType, ZoneData } from './map-types';
 import type { TilesetInfo, MaterialInfo } from './material-types';
+import type { FenceCellData } from '@nookstead/shared';
 
 /** Brush shape for the brush and eraser tools. */
 export type BrushShape = 'circle' | 'square';
@@ -13,7 +14,9 @@ export type EditorTool =
   | 'eraser'
   | 'zone-rect'
   | 'zone-poly'
-  | 'object-place';
+  | 'object-place'
+  | 'fence'
+  | 'fence-eraser';
 
 /** Sidebar tab identifiers. */
 export type SidebarTab =
@@ -22,7 +25,8 @@ export type SidebarTab =
   | 'properties'
   | 'zones'
   | 'frames'
-  | 'game-objects';
+  | 'game-objects'
+  | 'fence-types';
 
 /** All sidebar tab values as a runtime-accessible constant array. */
 export const SIDEBAR_TABS: SidebarTab[] = [
@@ -32,6 +36,7 @@ export const SIDEBAR_TABS: SidebarTab[] = [
   'zones',
   'frames',
   'game-objects',
+  'fence-types',
 ];
 
 /** Common fields shared by all layer types. */
@@ -48,6 +53,8 @@ export interface TileLayer extends BaseLayer {
   terrainKey: string;
   /** 2D array of autotile frame indices matching the map dimensions [y][x]. */
   frames: number[][];
+  /** Per-cell tileset key for rendering, determined by material pair at transition boundary [y][x]. */
+  tilesetKeys?: string[][];
 }
 
 /** An object representing a game object placed on the map. */
@@ -69,14 +76,40 @@ export interface ObjectLayer extends BaseLayer {
 }
 
 /**
+ * A fence layer with per-cell connection data and derived frame indices.
+ * Design Doc Section 4.2: Each fence layer is associated with exactly one
+ * fence type (identified by fenceTypeKey). Connection detection operates
+ * within a single layer -- cells from different fence layers do not interact.
+ */
+export interface FenceLayer extends BaseLayer {
+  type: 'fence';
+  /** Programmatic fence type key (e.g., "wooden_fence") */
+  fenceTypeKey: string;
+  /** [y][x] authoritative cell data. null = empty cell. */
+  cells: (FenceCellData | null)[][];
+  /** [y][x] derived frame indices. 0 = empty (FENCE_EMPTY_FRAME). */
+  frames: number[][];
+}
+
+/**
+ * Discriminated union of all editor layer types.
+ *
+ * Narrowing via the `type` field:
+ * - `'tile'`   -> TileLayer
+ * - `'object'` -> ObjectLayer
+ * - `'fence'`  -> FenceLayer
+ */
+export type EditorLayerUnion = TileLayer | ObjectLayer | FenceLayer;
+
+/**
  * A single tile layer in the editor (backward-compatible flat structure).
  *
  * Existing code that only works with tile layers can continue to use
  * EditorLayer directly. The discriminated union allows narrowing via
  * the `type` field when both layer kinds need to be handled.
  *
- * Backward compatibility: layers loaded from the DB without a `type`
- * field are normalized to TileLayer in the LOAD_MAP handler.
+ * Layers loaded from the DB without a `type` field are normalized
+ * to TileLayer in the LOAD_MAP handler.
  */
 export interface EditorLayer {
   id: string;
@@ -118,7 +151,7 @@ export interface MapEditorState {
   height: number;
   seed: number;
   grid: Cell[][];
-  layers: EditorLayer[];
+  layers: EditorLayerUnion[];
   walkable: boolean[][];
 
   // Tileset / material runtime config (used by autotile computation)
@@ -129,6 +162,7 @@ export interface MapEditorState {
   activeLayerIndex: number;
   activeTool: EditorTool;
   activeMaterialKey: string;
+  activeFenceTypeKey: string;
   brushSize: number;
   brushShape: BrushShape;
 
@@ -187,6 +221,21 @@ export type MapEditorAction =
       gridY: number;
     }
 
+  // Fence layer actions
+  | { type: 'ADD_FENCE_LAYER'; name: string; fenceTypeKey: string }
+  | {
+      type: 'PLACE_FENCE';
+      layerIndex: number;
+      positions: { x: number; y: number }[];
+    }
+  | {
+      type: 'ERASE_FENCE';
+      layerIndex: number;
+      positions: { x: number; y: number }[];
+    }
+  | { type: 'TOGGLE_GATE'; layerIndex: number; x: number; y: number }
+  | { type: 'SET_FENCE_TYPE'; fenceTypeKey: string }
+
   // Undo/redo
   | { type: 'UNDO' }
   | { type: 'REDO' }
@@ -221,4 +270,6 @@ export interface LoadMapPayload {
   walkable: boolean[][];
   metadata?: unknown;
   zones?: ZoneData[];
+  /** Fence layers from persisted map data. Empty array if no fences. */
+  fenceLayers: unknown[];
 }

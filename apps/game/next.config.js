@@ -10,7 +10,7 @@ const nextConfig = {
   // See: https://nx.dev/recipes/next/next-config-setup
   nx: {},
   output: 'standalone',
-  transpilePackages: ['@nookstead/db'],
+  transpilePackages: ['@nookstead/db', '@nookstead/s3'],
 };
 
 const plugins = [

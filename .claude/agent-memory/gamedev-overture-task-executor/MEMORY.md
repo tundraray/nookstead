@@ -39,6 +39,12 @@
 - `autotile-utils.ts` still imports TERRAINS for terrain-key-to-name mapping (legitimate autotile dependency)
 - SOLID_FRAME constant replaced with literal 47 in terrain-palette.tsx
 
+## map-lib Package
+- Jest config created at `packages/map-lib/jest.config.ts` (follows db package pattern)
+- Jest uses `--testPathPatterns` (plural) not `--testPathPattern` (singular) in this repo's Jest version
+- Fence autotile engine at `packages/map-lib/src/core/fence-autotile.ts` - pure functions, zero imports
+- Exports added to `packages/map-lib/src/index.ts` (no core/index.ts barrel file)
+
 ## Map-lib Declaration Generation
 - Genmap's tsconfig.json uses project references (`references: [{ path: "../../packages/map-lib" }]`)
 - With project references, tsc resolves `@nookstead/map-lib` via `dist/*.d.ts` declarations, NOT source files

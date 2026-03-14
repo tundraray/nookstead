@@ -1,4 +1,5 @@
-export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+import type { Season } from '@nookstead/shared';
+export type { Season };
 export type SpriteRect = [x: number, y: number, w: number, h: number];
 
 export interface HeaderState {

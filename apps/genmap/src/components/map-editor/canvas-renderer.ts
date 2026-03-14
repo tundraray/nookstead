@@ -1,5 +1,5 @@
 import { FRAMES_PER_TERRAIN, EMPTY_FRAME, stampCells } from '@nookstead/map-lib';
-import type { MapEditorState, PlacedObject, BrushShape } from '@nookstead/map-lib';
+import type { MapEditorState, BrushShape, FenceLayer } from '@nookstead/map-lib';
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -21,6 +21,15 @@ export interface PreviewRect {
   y: number;
   width: number;
   height: number;
+}
+
+/**
+ * Map of fence type keys to their generated virtual tileset images.
+ * Each fence type has a single tileset image (4-column layout, 16x16 frames).
+ * Keys are fenceTypeKey values (e.g., "wooden_fence").
+ */
+export interface FenceTilesetMap {
+  [fenceTypeKey: string]: HTMLCanvasElement | HTMLImageElement;
 }
 
 /** Brush preview configuration for multi-cell cursor. */
@@ -62,6 +71,7 @@ export function renderMapCanvas(
   previewRect: PreviewRect | null,
   objectRenderData?: Map<string, ObjectRenderEntry>,
   brushPreview?: BrushPreview,
+  fenceTilesets?: FenceTilesetMap
 ): void {
   const { tileSize } = config;
   const canvasWidth = ctx.canvas.width;
@@ -98,16 +108,12 @@ export function renderMapCanvas(
   ctx.fillStyle = '#16213e';
   ctx.fillRect(0, 0, state.width * tileSize, state.height * tileSize);
 
-  // Render each visible layer (supports both tile and object layers)
+  // Render each visible layer (supports tile, object, and fence layers)
   for (const layer of state.layers) {
     if (!layer.visible) continue;
     ctx.globalAlpha = layer.opacity;
 
-    // Determine layer type: layers without a `type` field are treated as tile layers
-    // for backward compatibility with maps saved before the discriminated union was added.
-    const layerType = (layer as { type?: string }).type ?? 'tile';
-
-    if (layerType === 'tile') {
+    if (layer.type === 'tile') {
       // TileLayer rendering — per-cell tileset lookup via material baseTilesetKey
       const TILESET_COLS = FRAMES_PER_TERRAIN / 4; // 12
       const TILE_PX = 16;
@@ -140,12 +146,11 @@ export function renderMapCanvas(
           );
         }
       }
-    } else if (layerType === 'object' && objectRenderData) {
+    } else if (layer.type === 'object' && objectRenderData) {
       // ObjectLayer rendering: draw each placed object using its sprite data
-      const objects = (layer as { objects?: PlacedObject[] }).objects;
-      if (!objects) continue;
+      if (!layer.objects) continue;
 
-      for (const obj of objects) {
+      for (const obj of layer.objects) {
         const entry = objectRenderData.get(obj.objectId);
         if (!entry || entry.layers.length === 0) continue;
 
@@ -161,6 +166,38 @@ export function renderMapCanvas(
             obj.gridY * tileSize + rl.yOffset,
             rl.frameW,
             rl.frameH
+          );
+        }
+      }
+    } else if (layer.type === 'fence' && fenceTilesets) {
+      // Fence layer rendering (Design Doc Section 4.4):
+      // Renders above terrain layers, below object layers (layer ordering in
+      // state.layers determines relative order among mixed layer types).
+      const fenceLayer = layer as FenceLayer;
+      const tilesetImage = fenceTilesets[fenceLayer.fenceTypeKey];
+      if (!tilesetImage) continue; // tileset not yet generated
+
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          const frame = fenceLayer.frames[y][x];
+          if (frame === 0) continue; // FENCE_EMPTY_FRAME: skip empty cells
+
+          // Source rectangle formula (Design Doc Section 1.2 / 6.4):
+          // idx = frameIndex - 1 (0-based into image, frame 0 = empty sentinel)
+          const idx = frame - 1;
+          const srcX = (idx % 4) * 16;
+          const srcY = Math.floor(idx / 4) * 16;
+
+          ctx.drawImage(
+            tilesetImage,
+            srcX,
+            srcY,
+            16,
+            16,
+            x * tileSize,
+            y * tileSize,
+            tileSize,
+            tileSize
           );
         }
       }

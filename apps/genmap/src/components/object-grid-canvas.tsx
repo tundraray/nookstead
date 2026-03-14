@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { CanvasBackground } from '@/lib/canvas-utils';
-import type { CollisionZone } from '@/hooks/use-object-editor';
+import type { CollisionZone } from '@nookstead/db';
 
 /**
  * A single frame layer in the object composition canvas.

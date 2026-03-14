@@ -8,6 +8,7 @@ import {
   useCallback,
   memo,
 } from 'react';
+import type { CollisionZone } from '@nookstead/db';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -21,17 +22,6 @@ interface GameObjectLayer {
   xOffset: number;
   yOffset: number;
   layerOrder: number;
-}
-
-interface CollisionZone {
-  id: string;
-  label: string;
-  type: 'collision' | 'walkable';
-  shape: 'rectangle';
-  x: number;
-  y: number;
-  width: number;
-  height: number;
 }
 
 interface GameObject {
