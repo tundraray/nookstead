@@ -173,7 +173,7 @@ export class Game extends Scene {
    * Called by Phaser before create() with data from scene.start().
    * Receives mapData and room from LoadingScene.
    */
-  init(data: { mapData: MapDataPayload; room?: Room }): void {
+  init(data: { mapData: MapDataPayload; room?: Room; clockConfig?: GameClockConfig | null }): void {
     this.rawMapData = data.mapData;
     this.room = data.room ?? null;
     this.serverSpawnX = data.mapData.spawnX;
@@ -181,6 +181,14 @@ export class Game extends Scene {
     this.serverSpawnDirection = data.mapData.spawnDirection;
 
     this.rawFenceLayers = data.mapData.fenceLayers ?? [];
+
+    // Initialize game clock from config received during loading
+    if (data.clockConfig) {
+      if (this.gameClock) {
+        this.gameClock.destroy();
+      }
+      this.gameClock = new GameClockClient(data.clockConfig);
+    }
   }
 
   create() {

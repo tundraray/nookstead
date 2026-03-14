@@ -110,6 +110,7 @@ describe('config', () => {
         openaiApiKey: 'sk-test-key',
         port: 2567,
         corsOrigin: 'http://localhost:3000',
+        gameEpoch: 0,
         dayDurationSeconds: 86400,
         seasonDurationDays: 7,
       });

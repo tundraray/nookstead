@@ -127,8 +127,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       apiKey: config.openaiApiKey,
     });
 
-    // Capture clock configuration for CLOCK_CONFIG messages sent on player join
-    this.serverEpoch = Date.now();
+    // Capture clock configuration for CLOCK_CONFIG messages sent on player join.
+    // serverEpoch from GAME_EPOCH env var (Unix seconds → milliseconds).
+    // Default 0 = Unix epoch, so at dayDuration=86400s game time equals UTC.
+    // Set to a specific timestamp to define Day 1 of the game world.
+    this.serverEpoch = config.gameEpoch * 1000;
     this.clockConfig = {
       dayDurationSeconds: config.dayDurationSeconds,
       seasonDurationDays: config.seasonDurationDays,

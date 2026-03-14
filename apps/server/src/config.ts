@@ -14,6 +14,7 @@ export interface ServerConfig {
   databaseUrl: string;
   corsOrigin: string;
   openaiApiKey: string;
+  gameEpoch: number;
   dayDurationSeconds: number;
   seasonDurationDays: number;
 }
@@ -43,6 +44,12 @@ export function loadConfig(): ServerConfig {
   const port = parseInt(process.env['COLYSEUS_PORT'] ?? '', 10) || COLYSEUS_PORT;
   const corsOrigin = process.env['CORS_ORIGIN'] ?? 'http://localhost:3000';
 
+  // GAME_EPOCH: Unix timestamp (seconds) marking Day 1 00:00 of the game world.
+  // Default 0 = Unix epoch, so at default dayDuration (86400s) game time = UTC time.
+  // Example: 1773439200 = some future date, days/time count from that moment.
+  const rawGameEpoch = parseInt(process.env['GAME_EPOCH'] ?? '', 10);
+  const gameEpoch = isNaN(rawGameEpoch) ? 0 : rawGameEpoch;
+
   const rawDayDuration = parseInt(process.env['GAME_DAY_DURATION_SECONDS'] ?? '', 10);
   const dayDurationSeconds = Math.min(
     MAX_DAY_DURATION_SECONDS,
@@ -61,5 +68,5 @@ export function loadConfig(): ServerConfig {
     )
   );
 
-  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey, dayDurationSeconds, seasonDurationDays };
+  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey, gameEpoch, dayDurationSeconds, seasonDurationDays };
 }
