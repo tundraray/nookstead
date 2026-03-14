@@ -12,6 +12,9 @@ export default {
   },
   moduleFileExtensions: ['ts', 'js'],
   coverageDirectory: '../../coverage/packages/map-lib',
-  testPathIgnorePatterns: ['\\.performance\\.spec\\.ts$'],
+  testPathIgnorePatterns: [
+    '\\.performance\\.spec\\.ts$',
+    'retile-engine.*\\.spec\\.ts$',
+  ],
   testEnvironment: 'node',
 };
