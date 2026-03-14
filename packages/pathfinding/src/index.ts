@@ -1,2 +1,2 @@
-export { Pathfinder } from './Pathfinder.js';
-export type { Point } from './Pathfinder.js';
+export { Pathfinder } from './Pathfinder';
+export type { Point } from './Pathfinder';
