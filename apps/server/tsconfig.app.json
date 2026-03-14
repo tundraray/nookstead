@@ -15,6 +15,9 @@
       "path": "../../packages/shared/tsconfig.lib.json"
     },
     {
+      "path": "../../packages/pathfinding/tsconfig.lib.json"
+    },
+    {
       "path": "../../packages/map-lib/tsconfig.lib.json"
     },
     {

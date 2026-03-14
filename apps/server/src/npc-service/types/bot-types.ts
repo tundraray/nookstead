@@ -45,6 +45,14 @@ export interface ServerBot {
   fears: string[] | null;
   /** NPC interests array (nullable, from DB). */
   interests: string[] | null;
+  /** Ordered list of A* waypoints the bot is currently following. */
+  waypoints: Array<{ x: number; y: number }>;
+  /** Index into `waypoints` of the next waypoint to walk toward. */
+  currentWaypointIndex: number;
+  /** Timestamp (Date.now()) when the current route was computed. 0 = no active route. */
+  routeComputedAt: number;
+  /** Consecutive wander pathfinding failures since the last successful path. */
+  failedWanderAttempts: number;
 }
 
 /**
@@ -121,5 +129,9 @@ export function createServerBot(record: NpcBot): ServerBot {
     goals: (record.goals as string[] | null) ?? null,
     fears: (record.fears as string[] | null) ?? null,
     interests: (record.interests as string[] | null) ?? null,
+    waypoints: [],
+    currentWaypointIndex: 0,
+    routeComputedAt: 0,
+    failedWanderAttempts: 0,
   };
 }

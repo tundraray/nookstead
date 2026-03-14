@@ -23,6 +23,7 @@ import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
 import { isMovementLocked, setupMovementLock, teardownMovementLock } from '../systems/dialogue-lock';
+import { createClickPathfindingSystem, type ClickPathfindingSystem } from '../systems/click-pathfinding';
 import { GameClockClient } from '../systems/GameClockClient';
 import type { GameObjectCache } from '../services/game-object-cache';
 import { findNearestWalkable } from '../systems/displacement';
@@ -114,6 +115,7 @@ export class Game extends Scene {
   private serverSpawnX: number | undefined;
   private serverSpawnY: number | undefined;
   private serverSpawnDirection: 'up' | 'down' | 'left' | 'right' | undefined;
+  private clickPathSystem!: ClickPathfindingSystem;
   private disconnectHandler?: () => void;
   private hardResetHandler?: () => void;
   private gameClock: GameClockClient | null = null;
@@ -331,6 +333,17 @@ export class Game extends Scene {
     // Movement lock: listen for dialogue lock/unlock events
     setupMovementLock();
 
+    // Click-to-move pathfinding system (A* path computation + visual feedback)
+    this.clickPathSystem = createClickPathfindingSystem(
+      this,
+      this.mapData.walkable,
+      TILE_SIZE,
+    );
+
+    // Expose clearMarker via scene data so WalkState can clear the destination
+    // marker on arrival or keyboard cancel without a direct import dependency.
+    this.data.set('clickPathClearMarker', () => this.clickPathSystem.clearMarker());
+
     // Click-to-move: track pointer down position to distinguish clicks from drags
     let pointerDownX = 0;
     let pointerDownY = 0;
@@ -345,16 +358,8 @@ export class Game extends Scene {
       const dy = pointer.y - pointerDownY;
       if (Math.sqrt(dx * dx + dy * dy) > CLICK_THRESHOLD) return;
 
-      const tileX = Math.floor(pointer.worldX / TILE_SIZE);
-      const tileY = Math.floor(pointer.worldY / TILE_SIZE);
-      if (tileX < 0 || tileX >= MAP_WIDTH || tileY < 0 || tileY >= MAP_HEIGHT) return;
-
-      // Calculate pixel target (center of tile, bottom edge for feet alignment)
-      const targetX = tileX * TILE_SIZE + TILE_SIZE / 2;
-      const targetY = (tileY + 1) * TILE_SIZE;
-
-      // Move local player toward the clicked tile
-      this.player.setMoveTarget(targetX, targetY);
+      // Delegate to the pathfinding system (handles bounds, walkability, path computation)
+      this.clickPathSystem.handleClick(pointer.worldX, pointer.worldY, this.player);
     });
 
     // Re-fit camera when the canvas resizes
@@ -945,6 +950,8 @@ export class Game extends Scene {
 
   shutdown(): void {
     teardownMovementLock();
+    this.data.remove('clickPathClearMarker');
+    this.clickPathSystem?.destroy();
     if (this.disconnectHandler) {
       EventBus.off('multiplayer:disconnected', this.disconnectHandler);
       this.disconnectHandler = undefined;

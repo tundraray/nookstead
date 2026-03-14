@@ -107,6 +107,13 @@ export {
   BOT_STUCK_TIMEOUT_MS,
   MAX_WANDER_TARGET_ATTEMPTS,
   BOT_NAMES,
+  BOT_ROUTE_CACHE_TTL_MS,
+  BOT_MAX_PATH_LENGTH,
+  BOT_WAYPOINT_THRESHOLD,
+  BOT_MAX_PATHFIND_FAILURES,
+  BOT_EXTENDED_IDLE_TICKS,
+  PLAYER_MAX_PATH_LENGTH,
+  PLAYER_WAYPOINT_THRESHOLD,
 } from './constants';
 // Game Clock
 export type { TimePeriod, Season, GameClockConfig, GameClockState } from './types/clock';

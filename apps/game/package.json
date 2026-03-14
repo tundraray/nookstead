@@ -9,6 +9,7 @@
     "@nookstead/map-lib": "workspace:*",
     "@nookstead/map-renderer": "workspace:*",
     "@nookstead/s3": "workspace:*",
+    "@nookstead/pathfinding": "workspace:*",
     "@nookstead/shared": "workspace:*",
     "ai": "^6.0.105",
     "alea": "^1.0.1",
