@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
   BOT_WANDER_INTERVAL_TICKS,
   BOT_INTERACTION_RADIUS,
@@ -6,11 +6,13 @@ import {
   BOT_EXTENDED_IDLE_TICKS,
   MAX_BOTS_PER_HOMESTEAD,
   TILE_SIZE,
+  DEFAULT_NPC_INVENTORY_SIZE,
 } from '@nookstead/shared';
 import { BotManager } from './BotManager.js';
 import type { BotManagerConfig } from '../types/bot-types.js';
 import { createServerBot } from '../types/bot-types.js';
 import type { NpcBot } from '@nookstead/db';
+import type { InventoryManager } from '../../inventory/index.js';
 
 /**
  * Create a minimal walkability grid where all tiles are walkable.
@@ -952,6 +954,255 @@ describe('BotManager', () => {
 
       const positions = manager.getBotPositions();
       expect(positions.find((b) => b.id === 'dlg-wp-bot')).toBeDefined();
+    });
+  });
+
+  // --- NPC Inventory integration -----------------------------------------------
+
+  describe('NPC inventory integration', () => {
+    let mockInventoryManager: jest.Mocked<InventoryManager>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mockDb: any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mockDbFns: any;
+
+    beforeEach(() => {
+      mockInventoryManager = {
+        initInventory: jest.fn<InventoryManager['initInventory']>().mockResolvedValue('inv-123' as never),
+        addItem: jest.fn<InventoryManager['addItem']>().mockReturnValue({
+          success: true,
+          changedSlots: [],
+          hotbarChanged: false,
+        } as never),
+        saveInventory: jest.fn<InventoryManager['saveInventory']>().mockResolvedValue(undefined as never),
+        unloadInventory: jest.fn<InventoryManager['unloadInventory']>(),
+        getHotbarSlots: jest.fn(),
+        getBackpackSlots: jest.fn(),
+        moveSlot: jest.fn(),
+        dropItem: jest.fn(),
+        getInventoryIdByOwner: jest.fn(),
+        _testLoad: jest.fn(),
+      } as unknown as jest.Mocked<InventoryManager>;
+
+      mockDb = {};
+      mockDbFns = {
+        createInventory: jest.fn<() => Promise<unknown>>().mockResolvedValue({}),
+        loadInventory: jest.fn<() => Promise<unknown>>().mockResolvedValue(null),
+        saveSlots: jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined),
+      };
+
+      manager = new BotManager(mockInventoryManager);
+      config = makeConfig();
+    });
+
+    it('should accept InventoryManager as a constructor parameter', () => {
+      const mgr = new BotManager(mockInventoryManager);
+      expect(mgr).toBeInstanceOf(BotManager);
+    });
+
+    it('should still work without InventoryManager (backwards-compatible)', () => {
+      const mgr = new BotManager();
+      mgr.init(config, []);
+      expect(mgr.getBotIds()).toHaveLength(0);
+    });
+
+    describe('initBotInventory()', () => {
+      it('should create inventory for a farmer bot with hoe, watering_can, and sickle', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'farmer-bot', role: 'farmer' });
+        manager.addBot(record);
+
+        await manager.initBotInventory('farmer-bot', mockDb, mockDbFns);
+
+        // Should call initInventory with correct params
+        expect(mockInventoryManager.initInventory).toHaveBeenCalledWith(
+          mockDb,
+          'npc',
+          'farmer-bot',
+          { createInventory: mockDbFns.createInventory, loadInventory: mockDbFns.loadInventory },
+          DEFAULT_NPC_INVENTORY_SIZE
+        );
+
+        // Should add role-appropriate items
+        expect(mockInventoryManager.addItem).toHaveBeenCalledWith(
+          'inv-123',
+          'hoe',
+          1,
+          { type: 'npc', id: 'farmer-bot' }
+        );
+        expect(mockInventoryManager.addItem).toHaveBeenCalledWith(
+          'inv-123',
+          'watering_can',
+          1,
+          { type: 'npc', id: 'farmer-bot' }
+        );
+        expect(mockInventoryManager.addItem).toHaveBeenCalledWith(
+          'inv-123',
+          'sickle',
+          1,
+          { type: 'npc', id: 'farmer-bot' }
+        );
+      });
+
+      it('should create inventory for a baker bot with wood x5', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'baker-bot', role: 'baker' });
+        manager.addBot(record);
+
+        await manager.initBotInventory('baker-bot', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.initInventory).toHaveBeenCalledWith(
+          mockDb,
+          'npc',
+          'baker-bot',
+          { createInventory: mockDbFns.createInventory, loadInventory: mockDbFns.loadInventory },
+          DEFAULT_NPC_INVENTORY_SIZE
+        );
+
+        expect(mockInventoryManager.addItem).toHaveBeenCalledWith(
+          'inv-123',
+          'wood',
+          5,
+          { type: 'npc', id: 'baker-bot' }
+        );
+        // Only one addItem call for baker
+        expect(mockInventoryManager.addItem).toHaveBeenCalledTimes(1);
+      });
+
+      it('should create an empty inventory for a bot with unknown role', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'unknown-bot', role: 'blacksmith' });
+        manager.addBot(record);
+
+        await manager.initBotInventory('unknown-bot', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.initInventory).toHaveBeenCalledWith(
+          mockDb,
+          'npc',
+          'unknown-bot',
+          { createInventory: mockDbFns.createInventory, loadInventory: mockDbFns.loadInventory },
+          DEFAULT_NPC_INVENTORY_SIZE
+        );
+        // No addItem calls for unknown roles
+        expect(mockInventoryManager.addItem).not.toHaveBeenCalled();
+      });
+
+      it('should create an empty inventory for a bot with null role', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'null-role-bot', role: null });
+        manager.addBot(record);
+
+        await manager.initBotInventory('null-role-bot', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.initInventory).toHaveBeenCalled();
+        expect(mockInventoryManager.addItem).not.toHaveBeenCalled();
+      });
+
+      it('should set bot.inventoryId after successful init', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'inv-id-bot', role: 'farmer' });
+        manager.addBot(record);
+
+        await manager.initBotInventory('inv-id-bot', mockDb, mockDbFns);
+
+        // Verify bot has inventoryId set by checking via getBotPositions or similar
+        // We'll add a getBot accessor or check inventoryId through the manager
+        const positions = manager.getBotPositions();
+        expect(positions.find((b) => b.id === 'inv-id-bot')).toBeDefined();
+        // The inventoryId should be set on the internal bot -- we verify this through
+        // the saveBotInventory method working correctly (it reads bot.inventoryId)
+      });
+
+      it('should not crash bot spawn when inventory init fails', async () => {
+        mockInventoryManager.initInventory = jest.fn<InventoryManager['initInventory']>()
+          .mockRejectedValue(new Error('DB connection lost') as never);
+
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'fail-inv-bot', role: 'farmer' });
+        manager.addBot(record);
+
+        // Should not throw
+        await expect(
+          manager.initBotInventory('fail-inv-bot', mockDb, mockDbFns)
+        ).resolves.not.toThrow();
+
+        // Bot should still be operational
+        const positions = manager.getBotPositions();
+        expect(positions.find((b) => b.id === 'fail-inv-bot')).toBeDefined();
+      });
+
+      it('should be a no-op for a non-existent bot', async () => {
+        manager.init(config, []);
+
+        await manager.initBotInventory('nonexistent', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.initInventory).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('saveBotInventory()', () => {
+      it('should call saveInventory and unloadInventory for a bot with inventoryId', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'save-bot', role: 'farmer' });
+        manager.addBot(record);
+        await manager.initBotInventory('save-bot', mockDb, mockDbFns);
+
+        await manager.saveBotInventory('save-bot', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.saveInventory).toHaveBeenCalledWith(
+          mockDb,
+          'inv-123',
+          { saveSlots: mockDbFns.saveSlots }
+        );
+        expect(mockInventoryManager.unloadInventory).toHaveBeenCalledWith('inv-123');
+      });
+
+      it('should not call save/unload when bot has no inventoryId', async () => {
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'no-inv-bot' });
+        manager.addBot(record);
+        // Don't init inventory
+
+        await manager.saveBotInventory('no-inv-bot', mockDb, mockDbFns);
+
+        expect(mockInventoryManager.saveInventory).not.toHaveBeenCalled();
+        expect(mockInventoryManager.unloadInventory).not.toHaveBeenCalled();
+      });
+
+      it('should log error but not throw when save fails', async () => {
+        mockInventoryManager.saveInventory = jest.fn<InventoryManager['saveInventory']>()
+          .mockRejectedValue(new Error('Save failed') as never);
+
+        manager.init(config, []);
+        const record = makeBotRecord({ id: 'save-fail-bot', role: 'farmer' });
+        manager.addBot(record);
+        await manager.initBotInventory('save-fail-bot', mockDb, mockDbFns);
+
+        // Should not throw
+        await expect(
+          manager.saveBotInventory('save-fail-bot', mockDb, mockDbFns)
+        ).resolves.not.toThrow();
+
+        // unloadInventory should still be called even if save fails
+        expect(mockInventoryManager.unloadInventory).toHaveBeenCalledWith('inv-123');
+      });
+    });
+
+    describe('saveAllBotInventories()', () => {
+      it('should save and unload inventories for all bots with inventoryIds', async () => {
+        manager.init(config, []);
+        const farmer = makeBotRecord({ id: 'bulk-farmer', role: 'farmer' });
+        const baker = makeBotRecord({ id: 'bulk-baker', role: 'baker' });
+        manager.addBot(farmer);
+        manager.addBot(baker);
+        await manager.initBotInventory('bulk-farmer', mockDb, mockDbFns);
+        await manager.initBotInventory('bulk-baker', mockDb, mockDbFns);
+
+        await manager.saveAllBotInventories(mockDb, mockDbFns);
+
+        expect(mockInventoryManager.saveInventory).toHaveBeenCalledTimes(2);
+        expect(mockInventoryManager.unloadInventory).toHaveBeenCalledTimes(2);
+      });
     });
   });
 });

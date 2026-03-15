@@ -1,8 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { spriteCSSStyle } from './sprite';
 import { SLOT_NORMAL, SLOT_SELECTED } from './sprites';
 import { NineSlicePanel } from './NineSlicePanel';
+import { ItemTooltip } from './ItemTooltip';
 import type { HotbarItem } from './types';
 
 interface HotbarSlotProps {
@@ -18,6 +20,7 @@ export function HotbarSlot({
   isSelected,
   onClick,
 }: HotbarSlotProps) {
+  const [hovered, setHovered] = useState(false);
   const keyLabel = index === 9 ? '0' : String(index + 1);
 
   return (
@@ -28,6 +31,8 @@ export function HotbarSlot({
       <button
         className="hotbar-slot__button"
         onClick={onClick}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         aria-label={`Slot ${keyLabel}${item ? `: ${item.id}` : ': empty'}`}
         aria-pressed={isSelected}
         data-interactive="true"
@@ -52,6 +57,7 @@ export function HotbarSlot({
           </div>
         </NineSlicePanel>
       </button>
+      {hovered && item && <ItemTooltip itemType={item.id} position="above" />}
     </div>
   );
 }

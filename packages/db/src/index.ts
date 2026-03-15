@@ -137,3 +137,10 @@ export {
   type DialogueSessionWithMessages,
   type AdminDialogueSession,
 } from './services/dialogue';
+export {
+  createInventory,
+  loadInventory,
+  saveSlots,
+  findEmptySlot,
+  deleteInventory,
+} from './services/inventory';

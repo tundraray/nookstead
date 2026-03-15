@@ -1,30 +1,151 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Callbacks } from '@colyseus/sdk';
 import { EventBus } from '@/game/EventBus';
 import { isTextInputFocused } from '@/game/input/InputController';
 import { getRoom } from '@/services/colyseus';
-import { ClientMessage } from '@nookstead/shared';
+import { ClientMessage, HOTBAR_SLOT_COUNT } from '@nookstead/shared';
 import { ColyseusTransport } from '@/services/ColyseusTransport';
 import { Hotbar } from './Hotbar';
 import { GameModal } from './GameModal';
 import { ChatModal } from './ChatModal';
+import { InventoryPanel } from './InventoryPanel';
 import { MenuButton } from './MenuButton';
-import type { HUDState } from './types';
+import type { HotbarItem, SpriteRect } from './types';
 
 interface HUDProps {
   uiScale: number;
 }
 
-const DEFAULT_HUD_STATE: Omit<HUDState, 'day' | 'time' | 'season' | 'gold'> = {
-  hotbarItems: Array(10).fill(null),
-  selectedSlot: 0,
-};
+const EMPTY_HOTBAR: (HotbarItem | null)[] = Array(HOTBAR_SLOT_COUNT).fill(null);
+
+/**
+ * Convert a Colyseus InventorySlotSchema to a HotbarItem or null.
+ * Empty slots (itemType === '') map to null.
+ */
+function schemaToHotbarItem(slot: {
+  itemType: string;
+  quantity: number;
+  spriteX: number;
+  spriteY: number;
+  spriteW: number;
+  spriteH: number;
+}): HotbarItem | null {
+  if (!slot.itemType || slot.itemType === '') return null;
+  return {
+    id: slot.itemType,
+    spriteRect: [slot.spriteX, slot.spriteY, slot.spriteW, slot.spriteH] as SpriteRect,
+    quantity: slot.quantity,
+  };
+}
 
 export function HUD({ uiScale }: HUDProps) {
-  const [hotbarItems] = useState(DEFAULT_HUD_STATE.hotbarItems);
-  const [selectedSlot, setSelectedSlot] = useState(DEFAULT_HUD_STATE.selectedSlot);
+  const [hotbarItems, setHotbarItems] = useState<(HotbarItem | null)[]>(EMPTY_HOTBAR);
+  const [selectedSlot, setSelectedSlot] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+
+  // Subscribe to Colyseus hotbar state
+  useEffect(() => {
+    const detachCallbacks: (() => void)[] = [];
+
+    /**
+     * Read the current hotbar from the player schema and convert
+     * each InventorySlotSchema to HotbarItem | null.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function readHotbar(player: any): (HotbarItem | null)[] {
+      if (!player?.hotbar) return EMPTY_HOTBAR;
+      return Array.from({ length: HOTBAR_SLOT_COUNT }, (_, i) => {
+        const slot = player.hotbar[i];
+        if (!slot) return null;
+        return schemaToHotbarItem(slot);
+      });
+    }
+
+    /**
+     * Subscribe to onChange on each slot within the player's hotbar
+     * ArraySchema so that individual slot mutations trigger re-renders.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function subscribeToHotbar(room: any, player: any) {
+      if (!player?.hotbar) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const $ = Callbacks.get(room as any);
+
+      // Listen for changes on the hotbar ArraySchema itself
+      const detachHotbar = $.onChange(player.hotbar, () => {
+        setHotbarItems(readHotbar(player));
+      });
+      detachCallbacks.push(detachHotbar);
+
+      // Also listen for changes on individual slot schemas
+      for (let i = 0; i < HOTBAR_SLOT_COUNT; i++) {
+        const slot = player.hotbar[i];
+        if (slot) {
+          const detachSlot = $.onChange(slot, () => {
+            setHotbarItems(readHotbar(player));
+          });
+          detachCallbacks.push(detachSlot);
+        }
+      }
+    }
+
+    function attach() {
+      const room = getRoom();
+      if (!room) return;
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = room.state as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const $ = Callbacks.get(room as any);
+
+      // Listen for this player being added (handles initial state + reconnects)
+      const detachAdd = $.onAdd(
+        'players' as never,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (player: any, sessionId: any) => {
+          if (sessionId === room.sessionId) {
+            setHotbarItems(readHotbar(player));
+            subscribeToHotbar(room, player);
+          }
+        },
+        true // immediate -- fire for players already in state
+      );
+      detachCallbacks.push(detachAdd);
+
+      // Also check if player is already available (race condition guard)
+      const localPlayer = state.players?.get(room.sessionId);
+      if (localPlayer) {
+        setHotbarItems(readHotbar(localPlayer));
+        subscribeToHotbar(room, localPlayer);
+      }
+    }
+
+    // Try attaching immediately in case room is already connected
+    attach();
+
+    // Also listen for the multiplayer:connected event in case room connects later
+    function onConnected() {
+      // Clean up any previous subscriptions before re-attaching
+      for (const detach of detachCallbacks) {
+        detach();
+      }
+      detachCallbacks.length = 0;
+      attach();
+    }
+    EventBus.on('multiplayer:connected', onConnected);
+
+    return () => {
+      EventBus.off('multiplayer:connected', onConnected);
+      for (const detach of detachCallbacks) {
+        detach();
+      }
+      detachCallbacks.length = 0;
+    };
+  }, []);
 
   // Dialogue chat state
   const [chatOpen, setChatOpen] = useState(false);
@@ -51,6 +172,32 @@ export function HUD({ uiScale }: HUDProps) {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
+
+  // Keyboard: toggle inventory panel (E/I to open/close, Esc to close)
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (isTextInputFocused()) return;
+      if (chatOpen) return; // Don't toggle inventory while chatting
+
+      if (e.key === 'e' || e.key === 'E' || e.key === 'i' || e.key === 'I') {
+        setInventoryOpen((prev) => !prev);
+      }
+      if (e.key === 'Escape' && inventoryOpen) {
+        setInventoryOpen(false);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [inventoryOpen, chatOpen]);
+
+  // Movement lock/unlock when inventory panel opens/closes
+  useEffect(() => {
+    if (inventoryOpen) {
+      EventBus.emit('dialogue:lock-movement');
+    } else {
+      EventBus.emit('dialogue:unlock-movement');
+    }
+  }, [inventoryOpen]);
 
   // Listen for dialogue:start EventBus event from PlayerManager
   useEffect(() => {
@@ -128,6 +275,13 @@ export function HUD({ uiScale }: HUDProps) {
           botId={chatBotId}
           botName={chatBotName}
           transport={chatTransport}
+        />
+      )}
+      {inventoryOpen && (
+        <InventoryPanel
+          room={getRoom()}
+          hotbarItems={hotbarItems}
+          onClose={() => setInventoryOpen(false)}
         />
       )}
     </div>

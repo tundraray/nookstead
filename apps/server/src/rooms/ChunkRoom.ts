@@ -1,6 +1,7 @@
 import { Room, Client, type AuthContext } from 'colyseus';
 import { ChunkRoomState, ChunkPlayer, ChunkBot } from './ChunkRoomState';
 import { BotManager } from '../npc-service';
+import { InventoryManager } from '../inventory';
 import { verifyNextAuthToken } from '../auth/verifyToken';
 import { loadConfig } from '../config';
 import { world } from '../world/World';
@@ -26,6 +27,9 @@ import {
   getRecentDialogueHistory,
   getSessionCountForPair,
   updateBot,
+  createInventory,
+  loadInventory,
+  saveSlots,
 } from '@nookstead/db';
 import {
   PATCH_RATE_MS,
@@ -33,10 +37,12 @@ import {
   DEFAULT_SPAWN,
   TILE_SIZE,
   DEFAULT_BOT_COUNT,
+  HOTBAR_SLOT_COUNT,
   ClientMessage,
   ServerMessage,
   findSpawnTile,
   isObjectLayer,
+  getItemDefinition,
   type MovePayload,
   type PositionUpdatePayload,
   type AuthData,
@@ -47,6 +53,10 @@ import {
   type CollisionZoneDef,
   type DialogueMessagePayload,
   type DialogueStartPayload,
+  type InventorySlotData,
+  type InventoryMovePayload,
+  type InventoryAddPayload,
+  type InventoryDropPayload,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
@@ -94,7 +104,10 @@ async function resolveAlias(
 
 export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private chunkId!: string;
-  private botManager = new BotManager();
+  private inventoryManager = new InventoryManager();
+  private botManager = new BotManager(this.inventoryManager);
+  /** Maps sessionId -> inventoryId for players with loaded inventories */
+  private playerInventories = new Map<string, string>();
 
   private mapWalkable: boolean[][] = [];
   private mapGrid: Grid | null = null;
@@ -169,6 +182,24 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
 
     this.onMessage(ClientMessage.DIALOGUE_END, (client) => {
       this.handleDialogueEnd(client as Client, 'close');
+    });
+
+    // ── Inventory message handlers ──────────────────────────────────────────────
+
+    this.onMessage(ClientMessage.INVENTORY_REQUEST, (client) => {
+      this.handleInventoryRequest(client as Client);
+    });
+
+    this.onMessage(ClientMessage.INVENTORY_MOVE, (client, payload: unknown) => {
+      this.handleInventoryMove(client as Client, payload);
+    });
+
+    this.onMessage(ClientMessage.INVENTORY_ADD, (client, payload: unknown) => {
+      this.handleInventoryAdd(client as Client, payload);
+    });
+
+    this.onMessage(ClientMessage.INVENTORY_DROP, (client, payload: unknown) => {
+      this.handleInventoryDrop(client as Client, payload);
     });
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
@@ -557,6 +588,24 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       this.clockConfig.seasonDurationDays
     );
 
+    // ── Inventory: load or create ────────────────────────────────────────────
+    try {
+      const inventoryId = await this.inventoryManager.initInventory(
+        db,
+        'player',
+        userId,
+        { createInventory, loadInventory }
+      );
+      this.playerInventories.set(client.sessionId, inventoryId);
+      const hotbarSlots = this.inventoryManager.getHotbarSlots(inventoryId);
+      this.syncHotbarToSchema(chunkPlayer, hotbarSlots);
+    } catch (err) {
+      console.error(
+        `[ChunkRoom] Inventory init failed: userId=${userId}`,
+        err
+      );
+    }
+
     console.log(
       `[ChunkRoom] Player joined: sessionId=${client.sessionId}, userId=${userId}, chunk=${this.chunkId}`
     );
@@ -584,6 +633,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           for (const bot of existingBots) {
             this.addBotToState(bot);
           }
+          // Initialize NPC inventories (load from DB or create)
+          for (const bot of existingBots) {
+            await this.botManager.initBotInventory(bot.id, db, {
+              createInventory,
+              loadInventory,
+            });
+          }
           console.log(
             `[ChunkRoom] Bots loaded from DB: ${existingBots.length}`
           );
@@ -608,6 +664,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
               });
               this.botManager.addBot(record);
               this.addBotToState(record);
+              await this.botManager.initBotInventory(record.id, db, {
+                createInventory,
+                loadInventory,
+              });
               createdBots.push(record);
             } catch (createErr) {
               console.error(
@@ -703,6 +763,22 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
     }
 
+    // ── Inventory: save and unload ──────────────────────────────────────────
+    const inventoryId = this.playerInventories.get(client.sessionId);
+    if (inventoryId) {
+      try {
+        const db = getGameDb();
+        await this.inventoryManager.saveInventory(db, inventoryId, { saveSlots });
+      } catch (err) {
+        console.error(
+          `[ChunkRoom] Inventory save failed on leave: sessionId=${client.sessionId}`,
+          err
+        );
+      }
+      this.inventoryManager.unloadInventory(inventoryId);
+      this.playerInventories.delete(client.sessionId);
+    }
+
     // Remove from schema
     this.state.players.delete(client.sessionId);
 
@@ -724,6 +800,14 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
             err
           );
         }
+      }
+
+      // Save NPC inventories before cleanup
+      try {
+        const saveDb = getGameDb();
+        await this.botManager.saveAllBotInventories(saveDb, { saveSlots });
+      } catch (err) {
+        console.error('[ChunkRoom] Failed to save bot inventories:', err);
       }
 
       // Clear bots from Colyseus state
@@ -1163,6 +1247,151 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     console.log(
       `[ChunkRoom] Hard reset: sessionId=${client.sessionId}, teleported to (${spawnX}, ${spawnY})`
     );
+  }
+
+  // ── Inventory message handler implementations ───────────────────────────────
+
+  private handleInventoryRequest(client: Client): void {
+    const inventoryId = this.playerInventories.get(client.sessionId);
+    if (!inventoryId) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: 'Inventory not loaded' });
+      return;
+    }
+    const slots = this.inventoryManager.getBackpackSlots(inventoryId);
+    client.send(ServerMessage.INVENTORY_DATA, { inventoryId, slots });
+  }
+
+  private handleInventoryMove(client: Client, payload: unknown): void {
+    const inventoryId = this.playerInventories.get(client.sessionId);
+    if (!inventoryId) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: 'Inventory not loaded' });
+      return;
+    }
+    const data = payload as InventoryMovePayload;
+    const result = this.inventoryManager.moveSlot(
+      inventoryId,
+      data.fromSlot,
+      data.toSlot,
+      data.quantity
+    );
+    if (!result.success) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: result.error });
+      return;
+    }
+    if (result.hotbarChanged) {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.syncHotbarToSchema(player, this.inventoryManager.getHotbarSlots(inventoryId));
+      }
+    }
+    this.inventoryManager
+      .saveInventory(getGameDb(), inventoryId, { saveSlots })
+      .catch((err) =>
+        console.error('[ChunkRoom] Inventory save error after move:', err)
+      );
+    client.send(ServerMessage.INVENTORY_UPDATE, {
+      success: true,
+      updatedSlots: result.changedSlots,
+    });
+  }
+
+  private handleInventoryAdd(client: Client, payload: unknown): void {
+    const inventoryId = this.playerInventories.get(client.sessionId);
+    if (!inventoryId) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: 'Inventory not loaded' });
+      return;
+    }
+    const data = payload as InventoryAddPayload;
+    const result = this.inventoryManager.addItem(
+      inventoryId,
+      data.itemType,
+      data.quantity ?? 1,
+      undefined,
+      data.slotIndex
+    );
+    if (!result.success) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: result.error });
+      return;
+    }
+    if (result.hotbarChanged) {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.syncHotbarToSchema(player, this.inventoryManager.getHotbarSlots(inventoryId));
+      }
+    }
+    this.inventoryManager
+      .saveInventory(getGameDb(), inventoryId, { saveSlots })
+      .catch((err) =>
+        console.error('[ChunkRoom] Inventory save error after add:', err)
+      );
+    client.send(ServerMessage.INVENTORY_UPDATE, {
+      success: true,
+      updatedSlots: result.changedSlots,
+    });
+  }
+
+  private handleInventoryDrop(client: Client, payload: unknown): void {
+    const inventoryId = this.playerInventories.get(client.sessionId);
+    if (!inventoryId) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: 'Inventory not loaded' });
+      return;
+    }
+    const data = payload as InventoryDropPayload;
+    const result = this.inventoryManager.dropItem(
+      inventoryId,
+      data.slotIndex,
+      data.quantity
+    );
+    if (!result.success) {
+      client.send(ServerMessage.INVENTORY_ERROR, { error: result.error });
+      return;
+    }
+    if (result.hotbarChanged) {
+      const player = this.state.players.get(client.sessionId);
+      if (player) {
+        this.syncHotbarToSchema(player, this.inventoryManager.getHotbarSlots(inventoryId));
+      }
+    }
+    this.inventoryManager
+      .saveInventory(getGameDb(), inventoryId, { saveSlots })
+      .catch((err) =>
+        console.error('[ChunkRoom] Inventory save error after drop:', err)
+      );
+    client.send(ServerMessage.INVENTORY_UPDATE, {
+      success: true,
+      updatedSlots: result.changedSlots,
+    });
+  }
+
+  /**
+   * Synchronize InventorySlotData[] to the ChunkPlayer hotbar ArraySchema.
+   * Maps null itemType to '' for Colyseus schema compatibility and
+   * looks up sprite coordinates from ITEM_DEFINITIONS.
+   */
+  private syncHotbarToSchema(
+    player: ChunkPlayer,
+    slots: InventorySlotData[]
+  ): void {
+    for (let i = 0; i < HOTBAR_SLOT_COUNT; i++) {
+      const slot = slots.find((s) => s.slotIndex === i);
+      const schemaSlot = player.hotbar[i];
+      if (!slot || !slot.itemType) {
+        schemaSlot.itemType = '';
+        schemaSlot.quantity = 0;
+        schemaSlot.spriteX = 0;
+        schemaSlot.spriteY = 0;
+        schemaSlot.spriteW = 16;
+        schemaSlot.spriteH = 16;
+      } else {
+        const def = getItemDefinition(slot.itemType);
+        schemaSlot.itemType = slot.itemType;
+        schemaSlot.quantity = slot.quantity;
+        schemaSlot.spriteX = def?.spriteRect[0] ?? 0;
+        schemaSlot.spriteY = def?.spriteRect[1] ?? 0;
+        schemaSlot.spriteW = def?.spriteRect[2] ?? 16;
+        schemaSlot.spriteH = def?.spriteRect[3] ?? 16;
+      }
+    }
   }
 
   /**
