@@ -171,3 +171,10 @@ export {
   cleanupExpiredStatuses,
   listActiveStatusesForBot,
 } from './services/npc-player-status';
+export {
+  createInventory,
+  loadInventory,
+  saveSlots,
+  findEmptySlot,
+  deleteInventory,
+} from './services/inventory';

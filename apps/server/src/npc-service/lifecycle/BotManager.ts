@@ -11,6 +11,7 @@ import {
   BOT_NAMES,
   MAX_BOTS_PER_HOMESTEAD,
   AVAILABLE_SKINS,
+  DEFAULT_NPC_INVENTORY_SIZE,
 } from '@nookstead/shared';
 import type {
   ServerBot,
@@ -20,9 +21,41 @@ import type {
   BotManagerConfig,
 } from '../types/bot-types.js';
 import { createServerBot } from '../types/bot-types.js';
-import type { NpcBot } from '@nookstead/db';
+import type { NpcBot, DrizzleClient } from '@nookstead/db';
 import type { SeedPersona } from '../ai/DialogueService.js';
 import { Pathfinder, NPCMovementEngine } from '../movement/index.js';
+import type { InventoryManager } from '../../inventory/index.js';
+
+/**
+ * DB function interfaces for inventory operations (dependency injection).
+ * Uses generic function signatures to accept the concrete DB functions
+ * from @nookstead/db without importing Drizzle-specific types.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface InitDbFunctions {
+  createInventory: (...args: any[]) => Promise<any>;
+  loadInventory: (...args: any[]) => Promise<any>;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+interface SaveDbFunctions {
+  saveSlots: (...args: any[]) => Promise<any>;
+}
+
+/**
+ * Mapping of NPC roles to their starting inventory items.
+ * Used to populate NPC inventories when bots are first spawned.
+ */
+const NPC_ROLE_STARTING_ITEMS: Record<string, Array<{ itemType: string; quantity: number }>> = {
+  farmer: [
+    { itemType: 'hoe', quantity: 1 },
+    { itemType: 'watering_can', quantity: 1 },
+    { itemType: 'sickle', quantity: 1 },
+  ],
+  baker: [
+    { itemType: 'wood', quantity: 5 },
+  ],
+};
 
 /**
  * Manages all NPC bot companions for a single homestead (ChunkRoom instance).
@@ -46,6 +79,15 @@ export class BotManager {
   private config!: BotManagerConfig;
   private pathfinder!: Pathfinder;
   private engines = new Map<string, NPCMovementEngine>();
+  private inventoryManager: InventoryManager | null;
+
+  /**
+   * @param inventoryManager - Optional InventoryManager for NPC inventory lifecycle.
+   *   When provided, BotManager can create/save/unload NPC inventories.
+   */
+  constructor(inventoryManager?: InventoryManager) {
+    this.inventoryManager = inventoryManager ?? null;
+  }
 
   /**
    * Initialize BotManager with map config and populate bots from DB records.
@@ -407,6 +449,94 @@ export class BotManager {
           }
         }
       }
+    }
+  }
+
+  /**
+   * Initialize inventory for a single bot.
+   * Creates an inventory via InventoryManager, populates it with role-appropriate
+   * starting items, and sets bot.inventoryId.
+   *
+   * Catches and logs errors without crashing -- bot spawn continues even if
+   * inventory initialization fails.
+   *
+   * @param botId - ID of the bot to initialize inventory for
+   * @param db - Database client
+   * @param dbFns - DB functions for inventory operations (createInventory, loadInventory)
+   */
+  async initBotInventory(
+    botId: string,
+    db: unknown,
+    dbFns: InitDbFunctions & Partial<SaveDbFunctions>
+  ): Promise<void> {
+    const bot = this.bots.get(botId);
+    if (!bot || !this.inventoryManager) return;
+
+    try {
+      const inventoryId = await this.inventoryManager.initInventory(
+        db as DrizzleClient,
+        'npc',
+        bot.id,
+        { createInventory: dbFns.createInventory, loadInventory: dbFns.loadInventory } as never,
+        DEFAULT_NPC_INVENTORY_SIZE
+      );
+      bot.inventoryId = inventoryId;
+
+      const startingItems = NPC_ROLE_STARTING_ITEMS[bot.role ?? ''] ?? [];
+      for (const { itemType, quantity } of startingItems) {
+        this.inventoryManager.addItem(inventoryId, itemType, quantity, {
+          type: 'npc',
+          id: bot.id,
+        });
+      }
+    } catch (err) {
+      console.error('[Inventory] Error: operation=npc_init, error=', err);
+      // Do not block bot spawn on inventory failure
+    }
+  }
+
+  /**
+   * Save and unload a single bot's inventory.
+   * Called on bot despawn.
+   * Catches and logs errors without crashing.
+   *
+   * @param botId - ID of the bot whose inventory to save
+   * @param db - Database client
+   * @param dbFns - DB functions for inventory operations (saveSlots)
+   */
+  async saveBotInventory(
+    botId: string,
+    db: unknown,
+    dbFns: Partial<InitDbFunctions> & SaveDbFunctions
+  ): Promise<void> {
+    const bot = this.bots.get(botId);
+    if (!bot || !bot.inventoryId || !this.inventoryManager) return;
+
+    try {
+      await this.inventoryManager.saveInventory(
+        db as DrizzleClient,
+        bot.inventoryId,
+        { saveSlots: dbFns.saveSlots } as never
+      );
+    } catch (err) {
+      console.error('[Inventory] Error: operation=npc_save, error=', err);
+    }
+    this.inventoryManager.unloadInventory(bot.inventoryId);
+  }
+
+  /**
+   * Save and unload inventories for all bots.
+   * Called when room is cleaning up (last player leaves).
+   *
+   * @param db - Database client
+   * @param dbFns - DB functions for inventory operations (saveSlots)
+   */
+  async saveAllBotInventories(
+    db: unknown,
+    dbFns: Partial<InitDbFunctions> & SaveDbFunctions
+  ): Promise<void> {
+    for (const botId of this.bots.keys()) {
+      await this.saveBotInventory(botId, db, dbFns);
     }
   }
 

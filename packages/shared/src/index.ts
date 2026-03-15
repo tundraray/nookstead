@@ -82,6 +82,16 @@ export type {
   GameObjectCategory,
   GameObjectType,
 } from './types/game-object';
+// Item type system (from types/item.ts)
+export {
+  ITEM_CATEGORIES,
+  ITEM_TYPES,
+  ITEM_DEFINITIONS,
+  isItemCategory,
+  isItemType,
+  getItemDefinition,
+} from './types/item';
+export type { ItemCategory, ItemType, ItemDefinition } from './types/item';
 // NPC types
 export type {
   BotAnimState,
@@ -126,6 +136,16 @@ export type {
   DialogueScoreChangePayload,
   DialogueEmotionPayload,
 } from './types/dialogue';
+// Inventory types (from types/inventory.ts)
+export type {
+  OwnerType,
+  InventorySlotData,
+  InventoryData,
+  InventoryMovePayload,
+  InventoryAddPayload,
+  InventoryDropPayload,
+  InventoryUpdatePayload,
+} from './types/inventory';
 // NPC / Bot constants
 export {
   BOT_SPEED,
@@ -144,6 +164,10 @@ export {
   BOT_EXTENDED_IDLE_TICKS,
   PLAYER_MAX_PATH_LENGTH,
   PLAYER_WAYPOINT_THRESHOLD,
+  DEFAULT_PLAYER_INVENTORY_SIZE,
+  HOTBAR_SLOT_COUNT,
+  DEFAULT_NPC_INVENTORY_SIZE,
+  MAX_INVENTORY_SIZE,
 } from './constants';
 // Game Clock
 export type { TimePeriod, Season, GameClockConfig, GameClockState } from './types/clock';

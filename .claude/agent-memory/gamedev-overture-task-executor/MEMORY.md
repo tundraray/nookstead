@@ -70,6 +70,9 @@
 - Server typecheck: `pnpm nx typecheck server` (NOT standalone tsc)
 - Pre-existing BotManager test fixture errors after persona columns added (Task 2) -- not blocking DialogueService
 
+## Colyseus Schema v4 Internals
+- [project_colyseus_v4_schema.md](./project_colyseus_v4_schema.md) - Field metadata access, decorator behavior differences from older versions
+
 ## Canvas Coordinate Conversion
 - `pixelToTile` function in map-editor-canvas.tsx already handles screen->tile conversion
 - Uses `Math.floor(worldCoord / TILE_SIZE)` which produces integer tile coords

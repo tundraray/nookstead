@@ -19,3 +19,5 @@ export * from './npc-memories';
 export * from './memory-stream-config';
 export * from './npc-relationships';
 export * from './npc-player-statuses';
+export * from './inventories';
+export * from './inventory-slots';

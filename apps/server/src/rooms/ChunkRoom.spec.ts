@@ -3,8 +3,8 @@
 // Test Strategy:
 //   - ChunkRoom is the integration point wiring World (state authority),
 //     PlayerPositionService (DB persistence), ChunkRoomState (Colyseus schema),
-//     and verifyNextAuthToken (auth).
-//   - Mock boundaries: World, ChunkManager, colyseus Room, verifyToken, config, DB, map-lib
+//     verifyNextAuthToken (auth), and InventoryManager (inventory lifecycle).
+//   - Mock boundaries: World, ChunkManager, colyseus Room, verifyToken, config, DB, map-lib, InventoryManager
 //   - Real components: ChunkRoom itself (the system under test)
 //   - Pattern: follows existing jest.mock pattern
 
@@ -128,6 +128,11 @@ const mockCreateBot = jest.fn<(db: unknown, data: unknown) => Promise<unknown>>(
 const mockSaveBotPositions = jest.fn<(db: unknown, positions: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
 const mockGetGameObject = jest.fn<(db: unknown, id: string) => Promise<unknown>>().mockResolvedValue(null);
 
+// DB inventory function mocks (passed to InventoryManager via DI)
+const mockCreateInventoryDb = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ id: 'inv-db-001', ownerType: 'player', ownerId: 'test', maxSlots: 20 });
+const mockLoadInventoryDb = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(null);
+const mockSaveSlotsDb = jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined);
+
 jest.mock('@nookstead/db', () => ({
   __esModule: true,
   savePosition: mockSavePosition,
@@ -141,6 +146,15 @@ jest.mock('@nookstead/db', () => ({
   createBot: mockCreateBot,
   saveBotPositions: mockSaveBotPositions,
   getGameObject: mockGetGameObject,
+  createInventory: mockCreateInventoryDb,
+  loadInventory: mockLoadInventoryDb,
+  saveSlots: mockSaveSlotsDb,
+  updateBot: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(null),
+  createDialogueSession: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ id: 'dialogue-session-001' }),
+  endDialogueSession: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+  addDialogueMessage: jest.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+  getRecentDialogueHistory: jest.fn<(...args: unknown[]) => Promise<unknown[]>>().mockResolvedValue([]),
+  getSessionCountForPair: jest.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValue(0),
 }));
 
 jest.mock('@nookstead/db/adapters/colyseus', () => ({
@@ -168,13 +182,54 @@ jest.mock('../sessions', () => ({
   sessionTracker: mockSessionTracker,
 }));
 
+// Mock InventoryManager
+const mockInitInventory = jest.fn<(...args: unknown[]) => Promise<string>>();
+const mockSaveInventory = jest.fn<(...args: unknown[]) => Promise<void>>();
+const mockUnloadInventory = jest.fn<(inventoryId: string) => void>();
+const mockGetHotbarSlots = jest.fn<(inventoryId: string) => unknown[]>();
+const mockGetBackpackSlots = jest.fn<(inventoryId: string) => unknown[]>();
+const mockMoveSlot = jest.fn<(...args: unknown[]) => unknown>();
+const mockAddItem = jest.fn<(...args: unknown[]) => unknown>();
+const mockDropItem = jest.fn<(...args: unknown[]) => unknown>();
+const mockGetInventoryIdByOwner = jest.fn<(ownerType: string, ownerId: string) => string | undefined>();
+
+jest.mock('../inventory', () => ({
+  __esModule: true,
+  InventoryManager: jest.fn().mockImplementation(() => ({
+    initInventory: mockInitInventory,
+    saveInventory: mockSaveInventory,
+    unloadInventory: mockUnloadInventory,
+    getHotbarSlots: mockGetHotbarSlots,
+    getBackpackSlots: mockGetBackpackSlots,
+    moveSlot: mockMoveSlot,
+    addItem: mockAddItem,
+    dropItem: mockDropItem,
+    getInventoryIdByOwner: mockGetInventoryIdByOwner,
+  })),
+}));
+
+// Mock @nookstead/ai (imported by ChunkRoom)
+jest.mock('@nookstead/ai', () => ({
+  __esModule: true,
+  generateNpcCharacter: jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({}),
+}));
+
+// Mock DialogueService (imported by ChunkRoom)
+jest.mock('../npc-service/ai/DialogueService', () => ({
+  __esModule: true,
+  DialogueService: jest.fn().mockImplementation(() => ({
+    streamResponse: jest.fn(),
+  })),
+}));
+
 /* ------------------------------------------------------------------ */
 /*  Imports (resolved after mocks are applied)                        */
 /* ------------------------------------------------------------------ */
 import { ChunkRoom } from './ChunkRoom';
 import { verifyNextAuthToken } from '../auth/verifyToken';
 import type { AuthData } from '@nookstead/shared';
-import { ServerMessage } from '@nookstead/shared';
+import { ClientMessage, ServerMessage } from '@nookstead/shared';
+import type { InventorySlotData } from '@nookstead/shared';
 
 /* ------------------------------------------------------------------ */
 /*  Type aliases for readability                                      */
@@ -263,6 +318,16 @@ describe('ChunkRoom', () => {
     mockGetPublishedTemplates.mockResolvedValue([buildTemplate()]);
     mockGetGameObject.mockResolvedValue(null);
     mockSessionTracker.checkAndKick.mockResolvedValue(undefined);
+
+    // Default inventory mock behaviors
+    mockInitInventory.mockResolvedValue('inv-uuid-001');
+    mockSaveInventory.mockResolvedValue(undefined);
+    mockGetHotbarSlots.mockReturnValue([]);
+    mockGetBackpackSlots.mockReturnValue([]);
+    mockGetInventoryIdByOwner.mockReturnValue(undefined);
+    mockMoveSlot.mockReturnValue({ success: true, changedSlots: [], hotbarChanged: false });
+    mockAddItem.mockReturnValue({ success: true, changedSlots: [], hotbarChanged: false });
+    mockDropItem.mockReturnValue({ success: true, changedSlots: [], hotbarChanged: false });
   });
 
   afterEach(() => {
@@ -897,6 +962,476 @@ describe('ChunkRoom', () => {
       expect(authData).toBeDefined();
       expect(authData.userId).toBe('user-dup-session');
       expect(authData.email).toBe('dup@test.com');
+    });
+  });
+
+  /* ================================================================ */
+  /*  Inventory Integration                                           */
+  /* ================================================================ */
+
+  /**
+   * Helper to join a player and return the mock client for inventory tests.
+   * Sets up all necessary mocks for a successful join flow.
+   */
+  async function joinPlayerForInventory(
+    testRoom: ChunkRoom,
+    client: MockClient,
+    mapId: string,
+    userId: string
+  ): Promise<void> {
+    const mapRecord = buildMapRecord({ id: mapId, userId });
+    mockLoadPosition.mockResolvedValue({
+      worldX: 100,
+      worldY: 200,
+      chunkId: `map:${mapId}`,
+      direction: 'down',
+    });
+    mockLoadMap.mockResolvedValue(mapRecord);
+    mockWorld.getPlayer.mockReturnValue({
+      id: client.sessionId,
+      sessionId: client.sessionId,
+      userId,
+      worldX: 100,
+      worldY: 200,
+      chunkId: `map:${mapId}`,
+      direction: 'down',
+      skin: 'scout_1',
+      name: userId,
+    });
+
+    const authData: AuthData = { userId, email: `${userId}@test.com` };
+    await testRoom.onJoin(client as never, {}, authData);
+  }
+
+  describe('Inventory: onJoin', () => {
+    it('should call initInventory with db, ownerType, ownerId, and dbFns', async () => {
+      // Arrange
+      const mapId = 'inv-join-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+
+      // Act
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-join');
+
+      // Assert: initInventory was called with correct arguments for the player
+      // (NPC bots may also trigger initInventory calls via BotManager)
+      const playerInitCalls = mockInitInventory.mock.calls.filter(
+        (args) => args[1] === 'player'
+      );
+      expect(playerInitCalls).toHaveLength(1);
+      const args = playerInitCalls[0];
+      // arg0 = db, arg1 = 'player', arg2 = userId, arg3 = dbFns object
+      expect(args[0]).toBeDefined(); // db instance
+      expect(args[1]).toBe('player');
+      expect(args[2]).toBe('user-inv-join');
+      expect(args[3]).toBeDefined(); // dbFns
+    });
+
+    it('should call getHotbarSlots with the returned inventoryId and populate hotbar schema', async () => {
+      // Arrange
+      const mapId = 'inv-hotbar-map';
+      const inventoryId = 'inv-uuid-hotbar';
+      mockInitInventory.mockResolvedValue(inventoryId);
+
+      const hotbarSlots: InventorySlotData[] = [
+        { slotIndex: 0, itemType: 'wooden_hoe', quantity: 1, ownedByType: 'player', ownedById: 'user-inv-hotbar' },
+        { slotIndex: 1, itemType: null, quantity: 0, ownedByType: null, ownedById: null },
+      ];
+      mockGetHotbarSlots.mockReturnValue(hotbarSlots);
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+
+      // Act
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-hotbar');
+
+      // Assert: getHotbarSlots was called with inventoryId
+      expect(mockGetHotbarSlots).toHaveBeenCalledWith(inventoryId);
+
+      // Assert: hotbar schema is populated
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer).toBeDefined();
+      // Slot 0 should have 'wooden_hoe'
+      expect(chunkPlayer!.hotbar[0].itemType).toBe('wooden_hoe');
+      expect(chunkPlayer!.hotbar[0].quantity).toBe(1);
+      // Slot 1 should be empty
+      expect(chunkPlayer!.hotbar[1].itemType).toBe('');
+      expect(chunkPlayer!.hotbar[1].quantity).toBe(0);
+    });
+
+    it('should not throw when initInventory fails, still completes join', async () => {
+      // Arrange
+      const mapId = 'inv-fail-init-map';
+      mockInitInventory.mockRejectedValue(new Error('DB connection failed'));
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => { /* suppress */ });
+
+      // Act: join should complete without throwing
+      await expect(
+        joinPlayerForInventory(room, mockClient, mapId, 'user-inv-fail')
+      ).resolves.not.toThrow();
+
+      // Assert: player still joined (schema exists)
+      expect(room.state.players.has(mockClient.sessionId)).toBe(true);
+
+      // Assert: error was logged
+      expect(consoleErrorSpy).toHaveBeenCalled();
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Inventory: onLeave', () => {
+    it('should call saveInventory and unloadInventory on leave', async () => {
+      // Arrange
+      const mapId = 'inv-leave-map';
+      const inventoryId = 'inv-uuid-leave';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-leave');
+
+      // Act
+      await room.onLeave(mockClient as never);
+
+      // Assert: saveInventory was called for the player's inventory
+      // (NPC bot inventories may also trigger saveInventory calls via
+      // BotManager.saveAllBotInventories on last-player leave)
+      const playerSaveCalls = mockSaveInventory.mock.calls.filter(
+        (args) => args[1] === inventoryId
+      );
+      expect(playerSaveCalls.length).toBeGreaterThanOrEqual(1);
+      const saveArgs = playerSaveCalls[0];
+      expect(saveArgs[0]).toBeDefined(); // db
+      expect(saveArgs[1]).toBe(inventoryId);
+
+      // Assert: unloadInventory was called for the player's inventory
+      expect(mockUnloadInventory).toHaveBeenCalledWith(inventoryId);
+    });
+
+    it('should not throw when saveInventory rejects', async () => {
+      // Arrange
+      const mapId = 'inv-leave-err-map';
+      const inventoryId = 'inv-uuid-leave-err';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      mockSaveInventory.mockRejectedValue(new Error('DB write failed'));
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-leave-err');
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => { /* suppress */ });
+
+      // Act: onLeave should not throw
+      await expect(
+        room.onLeave(mockClient as never)
+      ).resolves.not.toThrow();
+
+      // Assert: unloadInventory was still called (save errors don't block unload)
+      expect(mockUnloadInventory).toHaveBeenCalledWith(inventoryId);
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Inventory: INVENTORY_REQUEST handler', () => {
+    it('should send INVENTORY_DATA with backpack slots to the requesting client', async () => {
+      // Arrange
+      const mapId = 'inv-req-map';
+      const inventoryId = 'inv-uuid-req';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      const backpackSlots: InventorySlotData[] = [
+        { slotIndex: 10, itemType: 'wheat_seeds', quantity: 5, ownedByType: 'player', ownedById: 'user-inv-req' },
+      ];
+      mockGetBackpackSlots.mockReturnValue(backpackSlots);
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-req');
+      mockClient.send.mockClear();
+
+      // Act: trigger INVENTORY_REQUEST
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_REQUEST);
+      expect(handler).toBeDefined();
+      handler!(mockClient, undefined);
+
+      // Assert: client received INVENTORY_DATA with backpack slots
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_DATA,
+        expect.objectContaining({ inventoryId, slots: backpackSlots })
+      );
+    });
+
+    it('should send INVENTORY_ERROR when player has no inventory', async () => {
+      // Arrange: join player but clear the inventory mapping
+      const mapId = 'inv-req-nomap';
+      mockInitInventory.mockRejectedValue(new Error('init failed'));
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => { /* suppress */ });
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-req-no');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_REQUEST);
+      expect(handler).toBeDefined();
+      handler!(mockClient, undefined);
+
+      // Assert: INVENTORY_ERROR sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_ERROR,
+        expect.objectContaining({ error: expect.any(String) })
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Inventory: INVENTORY_MOVE handler', () => {
+    it('should call moveSlot and send INVENTORY_UPDATE on success', async () => {
+      // Arrange
+      const mapId = 'inv-move-map';
+      const inventoryId = 'inv-uuid-move';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      const changedSlots: InventorySlotData[] = [
+        { slotIndex: 0, itemType: null, quantity: 0, ownedByType: null, ownedById: null },
+        { slotIndex: 5, itemType: 'wooden_hoe', quantity: 1, ownedByType: 'player', ownedById: 'user-inv-move' },
+      ];
+      mockMoveSlot.mockReturnValue({
+        success: true,
+        changedSlots,
+        hotbarChanged: false,
+      });
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-move');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_MOVE);
+      expect(handler).toBeDefined();
+      handler!(mockClient, { fromSlot: 0, toSlot: 5 });
+
+      // Assert: moveSlot was called with correct args
+      expect(mockMoveSlot).toHaveBeenCalledWith(inventoryId, 0, 5, undefined);
+
+      // Assert: INVENTORY_UPDATE sent to client
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_UPDATE,
+        expect.objectContaining({ success: true, updatedSlots: changedSlots })
+      );
+    });
+
+    it('should update hotbar schema when hotbarChanged is true', async () => {
+      // Arrange
+      const mapId = 'inv-move-hotbar-map';
+      const inventoryId = 'inv-uuid-move-hotbar';
+      mockInitInventory.mockResolvedValue(inventoryId);
+
+      const changedSlots: InventorySlotData[] = [
+        { slotIndex: 0, itemType: 'wheat_seeds', quantity: 5, ownedByType: 'player', ownedById: 'u' },
+      ];
+      mockMoveSlot.mockReturnValue({
+        success: true,
+        changedSlots,
+        hotbarChanged: true,
+      });
+
+      // getHotbarSlots returns the updated hotbar after the move
+      const hotbarAfterMove: InventorySlotData[] = [
+        { slotIndex: 0, itemType: 'wheat_seeds', quantity: 5, ownedByType: 'player', ownedById: 'u' },
+      ];
+      // First call is during join (empty), second call is after move
+      mockGetHotbarSlots.mockReturnValueOnce([]).mockReturnValueOnce(hotbarAfterMove);
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-move-hb');
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_MOVE);
+      handler!(mockClient, { fromSlot: 10, toSlot: 0 });
+
+      // Assert: getHotbarSlots was called a second time (for sync)
+      expect(mockGetHotbarSlots).toHaveBeenCalledTimes(2);
+    });
+
+    it('should send INVENTORY_ERROR when moveSlot fails', async () => {
+      // Arrange
+      const mapId = 'inv-move-fail-map';
+      const inventoryId = 'inv-uuid-move-fail';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      mockMoveSlot.mockReturnValue({
+        success: false,
+        error: 'Slot index out of range',
+        changedSlots: [],
+        hotbarChanged: false,
+      });
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-move-fail');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_MOVE);
+      handler!(mockClient, { fromSlot: 0, toSlot: 99 });
+
+      // Assert: INVENTORY_ERROR sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_ERROR,
+        expect.objectContaining({ error: 'Slot index out of range' })
+      );
+    });
+  });
+
+  describe('Inventory: INVENTORY_ADD handler', () => {
+    it('should call addItem and send INVENTORY_UPDATE on success', async () => {
+      // Arrange
+      const mapId = 'inv-add-map';
+      const inventoryId = 'inv-uuid-add';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      const changedSlots: InventorySlotData[] = [
+        { slotIndex: 0, itemType: 'wooden_hoe', quantity: 1, ownedByType: 'player', ownedById: 'user-inv-add' },
+      ];
+      mockAddItem.mockReturnValue({
+        success: true,
+        changedSlots,
+        hotbarChanged: true,
+      });
+      mockGetHotbarSlots.mockReturnValue([]);
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-add');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_ADD);
+      expect(handler).toBeDefined();
+      handler!(mockClient, { itemType: 'wooden_hoe', quantity: 1 });
+
+      // Assert: addItem was called
+      expect(mockAddItem).toHaveBeenCalledWith(
+        inventoryId,
+        'wooden_hoe',
+        1,
+        undefined,
+        undefined
+      );
+
+      // Assert: INVENTORY_UPDATE sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_UPDATE,
+        expect.objectContaining({ success: true, updatedSlots: changedSlots })
+      );
+    });
+
+    it('should send INVENTORY_ERROR when addItem fails', async () => {
+      // Arrange
+      const mapId = 'inv-add-fail-map';
+      const inventoryId = 'inv-uuid-add-fail';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      mockAddItem.mockReturnValue({
+        success: false,
+        error: 'Inventory full',
+        changedSlots: [],
+        hotbarChanged: false,
+      });
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-add-fail');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_ADD);
+      handler!(mockClient, { itemType: 'wooden_hoe', quantity: 999 });
+
+      // Assert
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_ERROR,
+        expect.objectContaining({ error: 'Inventory full' })
+      );
+    });
+  });
+
+  describe('Inventory: INVENTORY_DROP handler', () => {
+    it('should call dropItem and send INVENTORY_UPDATE on success', async () => {
+      // Arrange
+      const mapId = 'inv-drop-map';
+      const inventoryId = 'inv-uuid-drop';
+      mockInitInventory.mockResolvedValue(inventoryId);
+      const changedSlots: InventorySlotData[] = [
+        { slotIndex: 3, itemType: null, quantity: 0, ownedByType: null, ownedById: null },
+      ];
+      mockDropItem.mockReturnValue({
+        success: true,
+        changedSlots,
+        hotbarChanged: true,
+      });
+      mockGetHotbarSlots.mockReturnValue([]);
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-drop');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_DROP);
+      expect(handler).toBeDefined();
+      handler!(mockClient, { slotIndex: 3, quantity: 1 });
+
+      // Assert: dropItem was called
+      expect(mockDropItem).toHaveBeenCalledWith(inventoryId, 3, 1);
+
+      // Assert: INVENTORY_UPDATE sent
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_UPDATE,
+        expect.objectContaining({ success: true, updatedSlots: changedSlots })
+      );
+    });
+
+    it('should send INVENTORY_ERROR when player has no inventory', async () => {
+      // Arrange: join player but init fails
+      const mapId = 'inv-drop-noinv-map';
+      mockInitInventory.mockRejectedValue(new Error('init failed'));
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => { /* suppress */ });
+
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForInventory(room, mockClient, mapId, 'user-inv-drop-no');
+      mockClient.send.mockClear();
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.INVENTORY_DROP);
+      handler!(mockClient, { slotIndex: 0 });
+
+      // Assert
+      expect(mockClient.send).toHaveBeenCalledWith(
+        ServerMessage.INVENTORY_ERROR,
+        expect.objectContaining({ error: expect.any(String) })
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Inventory: message handler registration', () => {
+    it('should register all 4 inventory message handlers in onCreate', () => {
+      // Arrange + Act
+      room.onCreate({ chunkId: 'map:test-map' });
+
+      // Assert: all 4 handlers are registered
+      expect(messageHandlers.has(ClientMessage.INVENTORY_REQUEST)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.INVENTORY_MOVE)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.INVENTORY_ADD)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.INVENTORY_DROP)).toBe(true);
+    });
+
+    it('should preserve existing message handlers', () => {
+      // Arrange + Act
+      room.onCreate({ chunkId: 'map:test-map' });
+
+      // Assert: existing handlers still present
+      expect(messageHandlers.has(ClientMessage.MOVE)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.POSITION_UPDATE)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.NPC_INTERACT)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.HARD_RESET)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.DIALOGUE_MESSAGE)).toBe(true);
+      expect(messageHandlers.has(ClientMessage.DIALOGUE_END)).toBe(true);
     });
   });
 });

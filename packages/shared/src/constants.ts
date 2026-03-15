@@ -222,3 +222,17 @@ export const TIME_PERIOD_DUSK_START = 17;
 
 /** Game hour at which the night period begins (inclusive). */
 export const TIME_PERIOD_NIGHT_START = 19;
+
+// ─── Inventory Configuration ────────────────────────────────────────────────
+
+/** Default number of inventory slots for players (10 hotbar + 10 backpack). */
+export const DEFAULT_PLAYER_INVENTORY_SIZE = 20;
+
+/** Number of hotbar slots (always the first N slots of an inventory, indices 0 to N-1). */
+export const HOTBAR_SLOT_COUNT = 10;
+
+/** Default number of inventory slots for NPCs. */
+export const DEFAULT_NPC_INVENTORY_SIZE = 10;
+
+/** Hard cap on inventory size. No inventory may exceed this. */
+export const MAX_INVENTORY_SIZE = 40;

@@ -6,6 +6,11 @@ export const ClientMessage = {
   DIALOGUE_MESSAGE: 'dialogue_message',
   DIALOGUE_END: 'dialogue_end',
   DIALOGUE_ACTION: 'dialogue_action',
+  // Inventory operations
+  INVENTORY_REQUEST: 'inventory_request',
+  INVENTORY_MOVE: 'inventory_move',
+  INVENTORY_ADD: 'inventory_add', // debug/admin use only
+  INVENTORY_DROP: 'inventory_drop',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
@@ -24,6 +29,10 @@ export const ServerMessage = {
   DIALOGUE_SCORE_CHANGE: 'dialogue_score_change',
   DIALOGUE_EMOTION: 'dialogue_emotion',
   CLOCK_CONFIG: 'clock_config',
+  // Inventory responses
+  INVENTORY_DATA: 'inventory_data',
+  INVENTORY_UPDATE: 'inventory_update',
+  INVENTORY_ERROR: 'inventory_error',
 } as const;
 
 export interface MovePayload {

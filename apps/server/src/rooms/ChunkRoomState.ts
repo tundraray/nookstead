@@ -1,4 +1,6 @@
-import { Schema, MapSchema, type } from '@colyseus/schema';
+import { ArraySchema, Schema, MapSchema, type } from '@colyseus/schema';
+import { HOTBAR_SLOT_COUNT } from '@nookstead/shared';
+import { InventorySlotSchema } from './InventorySlotSchema.js';
 
 /**
  * Per-player state synchronized to clients.
@@ -11,6 +13,9 @@ export class ChunkPlayer extends Schema {
   @type('string') direction!: string;
   @type('string') skin!: string;
   @type('string') name!: string;
+  @type([InventorySlotSchema]) hotbar = new ArraySchema<InventorySlotSchema>(
+    ...Array.from({ length: HOTBAR_SLOT_COUNT }, () => new InventorySlotSchema())
+  );
 }
 
 /**

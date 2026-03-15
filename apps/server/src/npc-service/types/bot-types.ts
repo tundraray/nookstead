@@ -53,6 +53,11 @@ export interface ServerBot {
   routeComputedAt: number;
   /** Consecutive wander pathfinding failures since the last successful path. */
   failedWanderAttempts: number;
+  /**
+   * UUID of this NPC's loaded inventory (managed by InventoryManager).
+   * Null until the inventory is initialized by BotManager.
+   */
+  inventoryId: string | null;
 }
 
 /**
@@ -133,5 +138,6 @@ export function createServerBot(record: NpcBot): ServerBot {
     currentWaypointIndex: 0,
     routeComputedAt: 0,
     failedWanderAttempts: 0,
+    inventoryId: null,
   };
 }
