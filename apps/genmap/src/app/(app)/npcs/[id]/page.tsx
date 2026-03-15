@@ -321,6 +321,30 @@ export default function NpcEditPage() {
 
         <TabsContent value="details">
           <div className="space-y-4 mt-4">
+            {/* NPC Mood Status */}
+            {npc && (npc.mood || npc.moodIntensity) && (
+              <div className="border rounded-lg p-3 bg-muted/30">
+                <Label className="text-sm font-semibold">Current Mood</Label>
+                <div className="flex items-center gap-3 mt-1">
+                  <Badge variant={
+                    npc.mood === 'angry' || npc.mood === 'annoyed' ? 'destructive' :
+                    npc.mood === 'happy' || npc.mood === 'grateful' ? 'default' :
+                    'secondary'
+                  }>
+                    {npc.mood ?? 'neutral'}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Intensity: {npc.moodIntensity ?? 0}/10
+                  </span>
+                  {npc.moodUpdatedAt && (
+                    <span className="text-xs text-muted-foreground">
+                      Updated: {new Date(npc.moodUpdatedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div>
               <Label htmlFor="npc-name">
                 Name <span className="text-destructive">*</span>

@@ -311,10 +311,13 @@ describe('getAvailableActions', () => {
 });
 
 describe('exported constants', () => {
-  it('SCORE_DELTAS has expected values', () => {
-    expect(SCORE_DELTAS.normalDialogue).toBe(2);
+  it('SCORE_DELTAS has hire and dismiss values', () => {
     expect(SCORE_DELTAS.hire).toBe(3);
     expect(SCORE_DELTAS.dismiss).toBe(-5);
+  });
+
+  it('should not include normalDialogue in SCORE_DELTAS', () => {
+    expect('normalDialogue' in SCORE_DELTAS).toBe(false);
   });
 
   it('RELATIONSHIP_THRESHOLDS has expected values', () => {

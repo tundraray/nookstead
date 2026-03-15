@@ -38,6 +38,9 @@ export const npcBots = pgTable('npc_bots', {
   goals: jsonb('goals').$type<string[]>(),
   fears: jsonb('fears').$type<string[]>(),
   interests: jsonb('interests').$type<string[]>(),
+  mood: varchar('mood', { length: 32 }),
+  moodIntensity: smallint('mood_intensity').default(0),
+  moodUpdatedAt: timestamp('mood_updated_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

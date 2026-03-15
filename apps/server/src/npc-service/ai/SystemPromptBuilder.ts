@@ -26,6 +26,9 @@ export interface PromptContext {
   relationship?: RelationshipData;
   turnCount?: number;
   pendingInjection?: string | null;
+  mood?: string | null;
+  moodIntensity?: number | null;
+  moodUpdatedAt?: Date | null;
 }
 
 const BIO_MAX_LENGTH = 300;
@@ -187,6 +190,73 @@ function buildMemorySection(
   return `${header}\n${items}`;
 }
 
+const MOOD_DECAY_HALF_LIFE_HOURS = 2;
+
+export function computeDecayedIntensity(
+  storedIntensity: number,
+  moodUpdatedAt: Date,
+  halfLifeHours: number = MOOD_DECAY_HALF_LIFE_HOURS
+): number {
+  const elapsedHours = (Date.now() - moodUpdatedAt.getTime()) / (1000 * 60 * 60);
+  const decayed = storedIntensity * Math.pow(2, -elapsedHours / halfLifeHours);
+  return Math.max(0, Math.min(10, decayed));
+}
+
+export function buildMoodSection(
+  mood: string | null | undefined,
+  moodIntensity: number | null | undefined,
+  moodUpdatedAt: Date | null | undefined
+): string {
+  if (!mood) return '';
+  if (moodIntensity == null || moodUpdatedAt == null) return '';
+
+  const decayed = computeDecayedIntensity(moodIntensity, moodUpdatedAt);
+  if (decayed < 1) return '';
+
+  let intensityDesc: string;
+  if (decayed >= 7) {
+    intensityDesc = `сильно ${mood}`;
+  } else if (decayed >= 4) {
+    intensityDesc = mood;
+  } else {
+    intensityDesc = `слегка ${mood}`;
+  }
+
+  return `ТВОЁ НАСТРОЕНИЕ\nСейчас ты ${intensityDesc}.`;
+}
+
+export function buildToolInstructionsSection(_persona: SeedPersona): string {
+  return [
+    'ИНСТРУМЕНТЫ',
+    'У тебя есть специальные действия, которые ты можешь выполнять во время разговора.',
+    'Используй их ТОЛЬКО когда это естественно и уместно.',
+    'ВАЖНО: Реагируй в соответствии со своим характером.',
+    '- Если ты по натуре добродушный и отходчивый — прощай быстрее, давай маленькие штрафы за грубость, легче восстанавливай отношения.',
+    '- Если ты недоверчивый или замкнутый — медленно подпускай к себе, давай маленькие бонусы за доброту, но большие штрафы за предательство доверия.',
+    '- Если ты вспыльчивый — реагируй резко на грубость, но и отходи быстро.',
+    '- Если ты гордый — не терпи неуважения, помни обиды дольше.',
+    'Твои черты характера определяют, как именно ты используешь инструменты. Будь последователен — реагируй так, как реагировал бы живой человек с твоим характером.',
+    'adjust_relationship — Измени отношение к собеседнику.',
+    '- Используй при: комплиментах (+1..+2), помощи (+2..+3), оскорблениях (-3..-5), угрозах (-5..-7), обычной вежливости (+1).',
+    '- НЕ используй каждую реплику. Только при значимых моментах.',
+    '- Положительные изменения должны быть маленькими (+1..+3). Доверие зарабатывается медленно.',
+    '- Отрицательные изменения могут быть большими (-1..-7). Доверие теряется быстро.',
+    '- Учитывай свой характер: отходчивый персонаж даёт -1..-3 за грубость, злопамятный — -4..-7.',
+    'create_memory — Запомни важный момент.',
+    '- Используй только для значимых событий: признания, секреты, обещания, оскорбления.',
+    '- НЕ запоминай каждую реплику. Только то, что действительно важно.',
+    '- Запоминай обиды и добрые дела — это влияет на будущие разговоры.',
+    'end_conversation — Заверши разговор.',
+    '- Используй при: грубых оскорблениях, угрозах, если ты устал(а) от разговора.',
+    '- Можешь игнорировать собеседника (setIgnore) если он был особенно груб.',
+    '- Длительность игнорирования зависит от твоего характера: отходчивый — 5-15 минут, обидчивый — 30-120 минут.',
+    'express_emotion — Покажи свои эмоции.',
+    '- Используй для сильных эмоциональных реакций: радость, гнев, удивление, грусть.',
+    '- НЕ используй для обычных нейтральных реплик.',
+    '- Твой характер определяет интенсивность: сдержанный — 1-2, эмоциональный — 3-5.',
+  ].join('\n');
+}
+
 function buildGuardrailsSection(
   botName: string,
   role: string | null
@@ -216,17 +286,21 @@ export function buildSystemPrompt(context: PromptContext): string {
     context;
 
   const memorySection = buildMemorySection(context.memories, playerName);
+  const moodSection = buildMoodSection(context.mood, context.moodIntensity, context.moodUpdatedAt);
   const injectionSection = buildActionInjectionSection(context.pendingInjection ?? null);
   const fatigueSection = buildFatigueSection(
     context.turnCount ?? 0,
     FATIGUE_DEFAULTS
   );
+  const toolInstructions = buildToolInstructionsSection(persona);
 
   const sections = [
     buildIdentitySection(botName, persona),
     buildWorldSection(worldContext),
     buildRelationshipSection(playerName, meetingCount, context.relationship),
+    ...(moodSection ? [moodSection] : []),
     ...(memorySection ? [memorySection] : []),
+    toolInstructions,
     ...(injectionSection ? [injectionSection] : []),
     ...(fatigueSection ? [fatigueSection] : []),
     buildGuardrailsSection(botName, persona.role),

@@ -15,7 +15,6 @@ import { getGift } from './gift-registry';
 // ── Constants ──────────────────────────────────────────────
 
 export const SCORE_DELTAS = {
-  normalDialogue: 2,
   hire: 3,
   dismiss: -5,
 } as const;

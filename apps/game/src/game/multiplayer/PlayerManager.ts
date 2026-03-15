@@ -301,8 +301,11 @@ export class PlayerManager {
       }
     );
 
-    this.room.onMessage(ServerMessage.DIALOGUE_END_TURN, () => {
+    this.room.onMessage(ServerMessage.DIALOGUE_END_TURN, (data?: { ended?: boolean; reason?: string }) => {
       EventBus.emit('dialogue:end-turn');
+      if (data?.ended) {
+        EventBus.emit('dialogue:session-ended', { reason: data.reason });
+      }
     });
   }
 

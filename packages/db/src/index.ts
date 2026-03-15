@@ -165,3 +165,9 @@ export {
   listRelationshipsForUser,
   type UpsertRelationshipData,
 } from './services/npc-relationship';
+export {
+  hasActiveStatus,
+  createPlayerStatus,
+  cleanupExpiredStatuses,
+  listActiveStatusesForBot,
+} from './services/npc-player-status';

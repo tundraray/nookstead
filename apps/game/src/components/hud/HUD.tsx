@@ -115,6 +115,17 @@ export function HUD({ uiScale }: HUDProps) {
     }
   }, []);
 
+  // Listen for server-initiated dialogue end (NPC ended conversation, fatigue, etc.)
+  useEffect(() => {
+    function onSessionEnded() {
+      handleChatClose(false);
+    }
+    EventBus.on('dialogue:session-ended', onSessionEnded);
+    return () => {
+      EventBus.off('dialogue:session-ended', onSessionEnded);
+    };
+  }, [handleChatClose]);
+
   return (
     <div
       className="hud"

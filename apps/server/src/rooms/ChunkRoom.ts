@@ -30,6 +30,8 @@ import {
   updateBot,
   getOrCreateRelationship,
   updateRelationship,
+  getBotById,
+  hasActiveStatus,
 } from '@nookstead/db';
 import { MemoryStream, scoreAndRankMemories, type ScoredMemory } from '../npc-service/memory';
 import {
@@ -37,7 +39,6 @@ import {
   evaluateProgression,
   getAvailableActions,
   rowToRelationshipData,
-  SCORE_DELTAS,
   FATIGUE_DEFAULTS,
 } from '../npc-service/relationships/index.js';
 import type { RelationshipData, DialogueActionPayload } from '@nookstead/shared';
@@ -66,6 +67,7 @@ import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
 import type { SeedPersona } from '../npc-service/ai/DialogueService';
 import { generateNpcCharacter } from '@nookstead/ai';
+import { type ToolContext, createNpcTools } from '../npc-service/ai/tools/index.js';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
 
@@ -882,7 +884,47 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Increment turn count
     session.turnCount += 1;
 
-    // Stream AI response (with relationship, fatigue, and injection context)
+    // Load NPC mood from npc_bots (best-effort, null on error)
+    let botMood: string | null = null;
+    let botMoodIntensity: number | null = null;
+    let botMoodUpdatedAt: Date | null = null;
+    try {
+      const botRow = await getBotById(db, session.botId);
+      if (botRow) {
+        botMood = botRow.mood;
+        botMoodIntensity = botRow.moodIntensity;
+        botMoodUpdatedAt = botRow.moodUpdatedAt;
+        console.log(
+          `[ChunkRoom] Mood loaded: botId=${session.botId}, mood=${botMood}, intensity=${botMoodIntensity}`
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[ChunkRoom] Mood load failed (continuing without mood): botId=${session.botId}`,
+        err
+      );
+    }
+
+    // Resolve userId for tool context
+    const userId = (client.auth as AuthData)?.userId ?? client.sessionId;
+
+    // Create ToolContext for this dialogue turn
+    const toolContext: ToolContext = {
+      db,
+      botId: session.botId,
+      userId,
+      playerName,
+      sendToClient: (type: string, msgPayload: unknown) => client.send(type, msgPayload),
+      endConversation: () => { /* no-op: ChunkRoom checks endRequested after stream */ },
+      persona: session.persona ?? {
+        personality: null, role: null, speechStyle: null, bio: null,
+        age: null, traits: null, goals: null, fears: null, interests: null,
+      },
+      cumulativeDelta: 0,
+      endRequested: false,
+    };
+
+    // Stream AI response (with relationship, fatigue, injection, mood, and tools context)
     let fullText = '';
     try {
       const stream = this.dialogueService!.streamResponse({
@@ -897,6 +939,10 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         relationship: session.relationship ?? undefined,
         turnCount: session.turnCount,
         pendingInjection: session.pendingInjection,
+        mood: botMood,
+        moodIntensity: botMoodIntensity,
+        moodUpdatedAt: botMoodUpdatedAt,
+        tools: createNpcTools(toolContext),
       });
 
       for await (const chunk of stream) {
@@ -933,6 +979,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       });
     }
 
+    // Deferred end_conversation check (F004): NPC farewell text already sent
+    if (toolContext.endRequested) {
+      this.handleDialogueEnd(client, 'npc_end');
+      return;
+    }
+
     // Fatigue auto-end: close dialogue after maxTurnsBeforeEnd
     if (session.turnCount >= FATIGUE_DEFAULTS.maxTurnsBeforeEnd) {
       console.log(
@@ -962,6 +1014,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Abort any in-flight AI stream
     session.abortController?.abort();
 
+    // Notify client that dialogue session has ended (server-initiated)
+    // 'close' reason = player-initiated (client already knows), skip notification
+    if (reason !== 'close' && reason !== 'leave') {
+      client.send(ServerMessage.DIALOGUE_END_TURN, { ended: true, reason });
+    }
+
     // End DB session (fire-and-forget)
     const db = getGameDb();
     endDialogueSession(db, dbSessionId).catch((err: unknown) => {
@@ -971,16 +1029,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       );
     });
 
-    // Fire-and-forget: apply normalDialogue score delta and evaluate progression
+    // Fire-and-forget: evaluate progression (score changes are now handled by AI tools during the session)
     if (userId && relationship) {
-      const newScore = relationship.score + SCORE_DELTAS.normalDialogue;
-      const updatedRel: RelationshipData = { ...relationship, score: newScore };
-      const newSocialType = evaluateProgression(updatedRel, persona?.traits);
-      const needsUpdate = newScore !== relationship.score || newSocialType !== relationship.socialType;
+      const newSocialType = evaluateProgression(relationship, persona?.traits);
 
-      if (needsUpdate) {
+      if (newSocialType !== relationship.socialType) {
         updateRelationship(db, botId, userId, {
-          score: newScore,
           socialType: newSocialType,
         }).catch((err: unknown) => {
           console.error(
@@ -1245,6 +1299,25 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     );
 
     if (result.success) {
+      // Ignore status gate (fail-open on DB error)
+      const interactUserId = (client.auth as AuthData)?.userId;
+      if (interactUserId) {
+        try {
+          const statusDb = getGameDb();
+          const isIgnored = await hasActiveStatus(statusDb, botId, interactUserId, 'ignore');
+          if (isIgnored) {
+            client.send(ServerMessage.NPC_INTERACT_RESULT, {
+              success: false,
+              error: 'Этот NPC сейчас игнорирует вас',
+            });
+            return;
+          }
+        } catch (err) {
+          // Fail-open: log warning but allow interaction on query error
+          console.warn('[ChunkRoom] hasActiveStatus query failed, allowing interaction:', err);
+        }
+      }
+
       // Start dialogue interaction
       const started = this.botManager.startInteraction(
         botId,

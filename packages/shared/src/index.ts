@@ -123,6 +123,8 @@ export type {
 // Dialogue extended types
 export type {
   DialogueStartWithRelationshipPayload,
+  DialogueScoreChangePayload,
+  DialogueEmotionPayload,
 } from './types/dialogue';
 // NPC / Bot constants
 export {

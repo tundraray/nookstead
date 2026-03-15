@@ -21,6 +21,8 @@ export const ServerMessage = {
   DIALOGUE_STREAM_CHUNK: 'dialogue_stream_chunk',
   DIALOGUE_END_TURN: 'dialogue_end_turn',
   DIALOGUE_ACTION_RESULT: 'dialogue_action_result',
+  DIALOGUE_SCORE_CHANGE: 'dialogue_score_change',
+  DIALOGUE_EMOTION: 'dialogue_emotion',
   CLOCK_CONFIG: 'clock_config',
 } as const;
 

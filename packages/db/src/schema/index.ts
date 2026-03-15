@@ -18,3 +18,4 @@ export * from './dialogue-messages';
 export * from './npc-memories';
 export * from './memory-stream-config';
 export * from './npc-relationships';
+export * from './npc-player-statuses';
