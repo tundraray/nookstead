@@ -1,4 +1,5 @@
 import type { SerializedFenceLayer } from './fence-layer';
+import type { SerializedInteractionLayer } from './interaction-layer';
 
 // ============================================================
 // Core map types (moved from apps/game/src/game/mapgen/types.ts)
@@ -9,6 +10,11 @@ export type { TerrainCellType } from './terrain-cell-type.generated';
 
 /**
  * Action triggered when a player steps on a cell.
+ *
+ * @deprecated Use `InteractionLayer` with `CellTrigger` instead (ADR-0017).
+ * InteractionLayer supports multiple triggers per tile, distinct activation
+ * modes (touch/click/proximity), and structured trigger configurations.
+ * This type will be removed in a future major version.
  *
  * - 'transition': teleport to another map/area (target = map id, data.x/y = spawn point)
  * - 'interact':   triggers an interaction (target = NPC/object id)
@@ -29,7 +35,9 @@ export interface Cell {
   elevation: number;
   /** Extensible metadata for future passes (moisture, temperature, etc.). */
   meta: Record<string, number>;
-  /** Optional action triggered when a player steps on this cell. */
+  /**
+   * @deprecated Use InteractionLayer with CellTrigger instead (ADR-0017).
+   */
   action?: CellAction;
 }
 
@@ -142,6 +150,8 @@ export interface MapDataPayload {
   spawnY?: number;
   /** Fence layers for the map. Omitted or empty array if no fences. */
   fenceLayers?: SerializedFenceLayer[];
+  /** Interaction layers for the map. Omitted or empty array if no interactions. */
+  interactionLayers?: SerializedInteractionLayer[];
   /** Server-computed spawn facing direction. */
   spawnDirection?: 'up' | 'down' | 'left' | 'right';
 }
