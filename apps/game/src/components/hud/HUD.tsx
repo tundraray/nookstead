@@ -183,22 +183,19 @@ export function HUD({ uiScale }: HUDProps) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Keyboard: toggle inventory panel (E/I to open/close, Esc to close)
+  // Keyboard: toggle inventory panel (I key, layout-independent)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (isTextInputFocused()) return;
-      if (chatOpen) return; // Don't toggle inventory while chatting
+      if (chatOpen) return;
 
-      if (e.key === 'e' || e.key === 'E' || e.key === 'i' || e.key === 'I') {
+      if (e.code === 'KeyI') {
         setInventoryOpen((prev) => !prev);
-      }
-      if (e.key === 'Escape' && inventoryOpen) {
-        setInventoryOpen(false);
       }
     }
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [inventoryOpen, chatOpen]);
+  }, [chatOpen]);
 
   // Movement lock/unlock when inventory panel opens/closes
   useEffect(() => {
@@ -309,13 +306,12 @@ export function HUD({ uiScale }: HUDProps) {
           initialAvailableActions={chatAvailableActions}
         />
       )}
-      {inventoryOpen && (
-        <InventoryPanel
-          room={getRoom()}
-          hotbarItems={hotbarItems}
-          onClose={() => setInventoryOpen(false)}
-        />
-      )}
+      <InventoryPanel
+        open={inventoryOpen}
+        onOpenChange={setInventoryOpen}
+        room={getRoom()}
+        hotbarItems={hotbarItems}
+      />
     </div>
   );
 }

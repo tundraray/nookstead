@@ -111,78 +111,63 @@ function makeHotbarItems(
 }
 
 describe('InventoryPanel', () => {
-  const onClose = jest.fn();
+  const onOpenChange = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('renders the panel with role="dialog" and Backpack heading', () => {
+  it('renders the dialog with Inventory title', () => {
     const room = createMockRoom();
     render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(screen.getByText('Backpack')).toBeTruthy();
+    expect(screen.getByText('Inventory')).toBeTruthy();
   });
 
-  it('sends INVENTORY_REQUEST on mount', () => {
+  it('sends INVENTORY_REQUEST when opened', () => {
     const room = createMockRoom();
     render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
     expect(room.send).toHaveBeenCalledWith('inventory_request', {});
   });
 
-  it('renders 10 backpack slots (5x2 grid)', () => {
+  it('renders 20 slots across hotbar and backpack sections', () => {
     const room = createMockRoom();
-    const { container } = render(
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
-    const backpackGrid = container.querySelector(
-      '.inventory-panel__backpack'
-    );
-    expect(backpackGrid).toBeTruthy();
-    const slots = backpackGrid!.querySelectorAll('.inventory-slot');
-    expect(slots.length).toBe(10);
-  });
-
-  it('renders 10 hotbar slots in the panel', () => {
-    const room = createMockRoom();
-    const { container } = render(
-      <InventoryPanel
-        room={room as never}
-        hotbarItems={makeHotbarItems()}
-        onClose={onClose}
-      />
-    );
-    const hotbarGrid = container.querySelector(
-      '.inventory-panel__hotbar'
-    );
-    expect(hotbarGrid).toBeTruthy();
-    const slots = hotbarGrid!.querySelectorAll('.inventory-slot');
-    expect(slots.length).toBe(10);
+    const layout = document.querySelector('.inventory-layout');
+    expect(layout).toBeTruthy();
+    const slots = layout!.querySelectorAll('.inventory-slot');
+    expect(slots.length).toBe(20);
   });
 
   it('populates backpack slots from INVENTORY_DATA message', () => {
     const room = createMockRoom();
-    const { container } = render(
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
 
@@ -211,11 +196,9 @@ describe('InventoryPanel', () => {
       room._handlers['inventory_data'](inventoryData);
     });
 
-    const backpackGrid = container.querySelector(
-      '.inventory-panel__backpack'
-    )!;
-    const slots = backpackGrid.querySelectorAll('.inventory-slot');
-    // slot 0 (index 10) should have quantity 3
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
+    // Backpack slots are first in DOM (index 0-9)
     const qtyEl = slots[0].querySelector('.inventory-slot__qty');
     expect(qtyEl).toBeTruthy();
     expect(qtyEl!.textContent).toBe('3');
@@ -223,16 +206,16 @@ describe('InventoryPanel', () => {
 
   it('sends INVENTORY_MOVE when clicking a backpack slot with item', () => {
     const room = createMockRoom();
-    const hotbarItems = makeHotbarItems(); // all empty
-    const { container } = render(
+    const hotbarItems = makeHotbarItems();
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={hotbarItems}
-        onClose={onClose}
       />
     );
 
-    // Populate backpack slot 0 (index 10)
     const inventoryData: InventoryData = {
       inventoryId: 'inv-1',
       maxSlots: 20,
@@ -250,12 +233,10 @@ describe('InventoryPanel', () => {
       room._handlers['inventory_data'](inventoryData);
     });
 
-    const backpackGrid = container.querySelector(
-      '.inventory-panel__backpack'
-    )!;
-    const slots = backpackGrid.querySelectorAll('.inventory-slot');
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
 
-    // Click backpack slot 0 -> should move to first free hotbar slot (0)
+    // Click backpack slot 0 (DOM index 0)
     act(() => {
       slots[0].dispatchEvent(
         new MouseEvent('click', { bubbles: true })
@@ -270,23 +251,22 @@ describe('InventoryPanel', () => {
 
   it('sends INVENTORY_MOVE when clicking a hotbar slot with item', () => {
     const room = createMockRoom();
-    const hotbarItems = makeHotbarItems([0]); // slot 0 has an item
-    const { container } = render(
+    const hotbarItems = makeHotbarItems([0]);
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={hotbarItems}
-        onClose={onClose}
       />
     );
 
-    // All backpack slots empty -> first free backpack slot is index 10
-    const hotbarGrid = container.querySelector(
-      '.inventory-panel__hotbar'
-    )!;
-    const slots = hotbarGrid.querySelectorAll('.inventory-slot');
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
 
+    // Hotbar slot 0 is DOM index 10
     act(() => {
-      slots[0].dispatchEvent(
+      slots[10].dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       );
     });
@@ -297,33 +277,34 @@ describe('InventoryPanel', () => {
     });
   });
 
-  it('calls onClose when the close button is clicked', async () => {
+  it('calls onOpenChange when close button is clicked', async () => {
     const user = userEvent.setup();
     const room = createMockRoom();
     render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
 
-    const closeBtn = screen.getByLabelText('Close inventory');
+    const closeBtn = screen.getByLabelText('Close');
     await user.click(closeBtn);
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it('updates backpack slots on INVENTORY_UPDATE message', () => {
     const room = createMockRoom();
-    const { container } = render(
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
 
-    // First populate a slot
     act(() => {
       room._handlers['inventory_data']({
         inventoryId: 'inv-1',
@@ -340,7 +321,6 @@ describe('InventoryPanel', () => {
       } as InventoryData);
     });
 
-    // Now receive an update that clears that slot
     const update: InventoryUpdatePayload = {
       success: true,
       updatedSlots: [
@@ -357,11 +337,9 @@ describe('InventoryPanel', () => {
       room._handlers['inventory_update'](update);
     });
 
-    const backpackGrid = container.querySelector(
-      '.inventory-panel__backpack'
-    )!;
-    const slots = backpackGrid.querySelectorAll('.inventory-slot');
-    // Slot 0 should be empty now
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
+    // Backpack slot 0 is DOM index 0
     const qtyEl = slots[0].querySelector('.inventory-slot__qty');
     expect(qtyEl).toBeNull();
   });
@@ -370,19 +348,17 @@ describe('InventoryPanel', () => {
     const room = createMockRoom();
     const { unmount } = render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
 
-    // 3 listeners should be registered
     expect(room.onMessage).toHaveBeenCalledTimes(3);
 
-    // Unmount should call unsubscribe functions
     unmount();
 
-    // After unmount, handlers should be cleaned up
     expect(room._handlers['inventory_data']).toBeUndefined();
     expect(room._handlers['inventory_update']).toBeUndefined();
     expect(room._handlers['inventory_error']).toBeUndefined();
@@ -390,27 +366,25 @@ describe('InventoryPanel', () => {
 
   it('does not send INVENTORY_MOVE for empty backpack slot click', () => {
     const room = createMockRoom();
-    const { container } = render(
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
 
-    const backpackGrid = container.querySelector(
-      '.inventory-panel__backpack'
-    )!;
-    const slots = backpackGrid.querySelectorAll('.inventory-slot');
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
 
-    // Click empty backpack slot
+    // Click empty backpack slot (DOM index 0)
     act(() => {
       slots[0].dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       );
     });
 
-    // Should not send inventory_move (only inventory_request on mount)
     const moveCalls = room.send.mock.calls.filter(
       (c: unknown[]) => c[0] === 'inventory_move'
     );
@@ -419,22 +393,22 @@ describe('InventoryPanel', () => {
 
   it('does not send INVENTORY_MOVE for empty hotbar slot click', () => {
     const room = createMockRoom();
-    const hotbarItems = makeHotbarItems(); // all empty
-    const { container } = render(
+    const hotbarItems = makeHotbarItems();
+    render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={room as never}
         hotbarItems={hotbarItems}
-        onClose={onClose}
       />
     );
 
-    const hotbarGrid = container.querySelector(
-      '.inventory-panel__hotbar'
-    )!;
-    const slots = hotbarGrid.querySelectorAll('.inventory-slot');
+    const grid = document.querySelector('.inventory-layout')!;
+    const slots = grid.querySelectorAll('.inventory-slot');
 
+    // Click empty hotbar slot (DOM index 10)
     act(() => {
-      slots[0].dispatchEvent(
+      slots[10].dispatchEvent(
         new MouseEvent('click', { bubbles: true })
       );
     });
@@ -448,9 +422,10 @@ describe('InventoryPanel', () => {
   it('does not crash when room is null', () => {
     render(
       <InventoryPanel
+        open={true}
+        onOpenChange={onOpenChange}
         room={null}
         hotbarItems={makeHotbarItems()}
-        onClose={onClose}
       />
     );
     expect(screen.getByRole('dialog')).toBeTruthy();

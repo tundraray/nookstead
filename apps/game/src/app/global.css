@@ -1476,90 +1476,102 @@ button {
 
 /* ==========================================================================
    Section 10: Inventory Panel
-   Backpack overlay showing a 5x2 grid of inventory slots plus a hotbar row
-   for unified item management. Opened via E/I key toggle.
+   Stardew Valley-inspired inventory with separated hotbar and backpack
+   sections. Warm earthy palette, recessed slot styling, scrollable backpack.
    ========================================================================== */
 
 @keyframes inventory-slot-error {
-  0%, 100% { border-color: #6b4226; }
+  0%, 100% { border-color: #8b6b3a; }
   50% { border-color: #cc4444; }
 }
 
-.inventory-panel {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 51;
-  background: rgba(10, 10, 26, 0.95);
-  border: 2px solid #2a2a4a;
-  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.4);
-  padding: 16px;
-  min-width: 280px;
-  pointer-events: auto;
-  image-rendering: pixelated;
-  font-family: var(--font-pixel, 'Press Start 2P', monospace);
-  color: #e0e0e0;
+/* --- Inventory Layout --- */
 
-  & .inventory-panel__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 12px;
-
-    & h2 {
-      font-size: 10px;
-      color: #48c7aa;
-      letter-spacing: 1px;
-      margin: 0;
-    }
-
-    & button {
-      font-size: 14px;
-      color: #8a8aaa;
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 2px 6px;
-      line-height: 1;
-
-      &:hover {
-        color: #e0e0e0;
-      }
-
-      &:focus-visible {
-        outline: 2px solid #ffdd57;
-        outline-offset: 1px;
-      }
-    }
-  }
-
-  & .inventory-panel__backpack {
-    margin-bottom: 8px;
-  }
-
-  & .inventory-panel__hotbar {
-    border-top: 1px solid #2a2a4a;
-    padding-top: 8px;
-  }
+.inventory-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 4px 10px;
 }
 
-/* --- Inventory Slot (shared between backpack and hotbar rows) --- */
+/* --- Hotbar Grid (single row of 10) --- */
+
+.inventory-hotbar {
+  display: grid;
+  grid-template-columns: repeat(10, 36px);
+  gap: 2px;
+  justify-content: center;
+}
+
+/* --- Divider --- */
+
+.inventory-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px 0;
+}
+
+.inventory-divider::before {
+  content: '';
+  flex: 1;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    #8b6b3a 15%,
+    #8b6b3a 85%,
+    transparent
+  );
+  opacity: 0.4;
+}
+
+/* --- Backpack (scrollable grid) --- */
+
+.inventory-backpack {
+  display: grid;
+  grid-template-columns: repeat(10, 36px);
+  gap: 2px;
+  justify-content: center;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #8b6b3a transparent;
+}
+
+.inventory-backpack::-webkit-scrollbar {
+  width: 6px;
+}
+
+.inventory-backpack::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.inventory-backpack::-webkit-scrollbar-thumb {
+  background-color: #8b6b3a;
+  border-radius: 0;
+}
+
+/* --- Inventory Slot (Stardew Valley-inspired) --- */
 
 .inventory-slot {
   position: relative;
-  width: 40px;
-  height: 40px;
-  background: rgba(26, 26, 46, 0.8);
-  border: 2px solid #6b4226;
+  width: 36px;
+  height: 36px;
+  background: #c8b088;
+  border: 2px solid #8b6b3a;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 245, 220, 0.35),
+    inset -1px -1px 0 rgba(60, 40, 20, 0.2);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.15s;
+  transition: border-color 0.15s, background-color 0.15s;
 
   &:hover {
-    border-color: #48c7aa;
+    border-color: #d4a43a;
+    background: #d8c498;
   }
 
   & .inventory-slot__qty {
@@ -1581,16 +1593,19 @@ button {
   animation: inventory-slot-error 0.3s ease-in-out 2;
 }
 
-/* --- Inventory Panel Responsive --- */
+/* --- Inventory Responsive --- */
 
 @media (max-width: 480px) {
-  .inventory-panel {
-    min-width: 220px;
-    padding: 12px;
+  .inventory-hotbar {
+    grid-template-columns: repeat(10, 30px);
+  }
+
+  .inventory-backpack {
+    grid-template-columns: repeat(10, 30px);
   }
 
   .inventory-slot {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
   }
 }

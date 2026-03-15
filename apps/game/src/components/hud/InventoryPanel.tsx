@@ -13,21 +13,24 @@ import type {
   InventoryMovePayload,
   InventoryUpdatePayload,
 } from '@nookstead/shared';
+import { GameModal } from './GameModal';
 import { ItemTooltip } from './ItemTooltip';
 import type { HotbarItem } from './types';
 
 const BACKPACK_SLOT_COUNT = 10;
 
 interface InventoryPanelProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   room: Room | null;
   hotbarItems: (HotbarItem | null)[];
-  onClose: () => void;
 }
 
 export function InventoryPanel({
+  open,
+  onOpenChange,
   room,
   hotbarItems,
-  onClose,
 }: InventoryPanelProps) {
   const [backpackSlots, setBackpackSlots] = useState<
     (InventorySlotData | null)[]
@@ -40,7 +43,7 @@ export function InventoryPanel({
   );
 
   useEffect(() => {
-    if (!room) return;
+    if (!room || !open) return;
 
     // Request backpack data on open
     room.send(ClientMessage.INVENTORY_REQUEST, {});
@@ -93,7 +96,7 @@ export function InventoryPanel({
       unsubUpdate();
       unsubError();
     };
-  }, [room]);
+  }, [room, open]);
 
   const handleBackpackSlotClick = useCallback(
     (slotIndex: number) => {
@@ -134,78 +137,61 @@ export function InventoryPanel({
   );
 
   return (
-    <div
-      className="inventory-panel"
-      role="dialog"
-      aria-label="Inventory"
+    <GameModal
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Inventory"
+      className="inventory-modal"
     >
-      <div className="inventory-panel__header">
-        <h2>Backpack</h2>
-        <button onClick={onClose} aria-label="Close inventory">
-          &times;
-        </button>
-      </div>
+      <div className="inventory-layout">
+        {/* Backpack section */}
+        <div className="inventory-backpack">
+          {backpackSlots.map((slot, i) => (
+            <div
+              key={`b-${i}`}
+              className="inventory-slot"
+              onClick={() => handleBackpackSlotClick(i)}
+              onMouseEnter={() => setHoveredBackpackSlot(i)}
+              onMouseLeave={() => setHoveredBackpackSlot(null)}
+              title={slot?.itemType ?? ''}
+            >
+              {slot?.itemType && (
+                <span className="inventory-slot__qty">
+                  {slot.quantity > 1 ? slot.quantity : ''}
+                </span>
+              )}
+              {hoveredBackpackSlot === i && slot?.itemType && (
+                <ItemTooltip itemType={slot.itemType} position="beside" />
+              )}
+            </div>
+          ))}
+        </div>
 
-      {/* Backpack grid: 5 columns x 2 rows */}
-      <div
-        className="inventory-panel__backpack"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: 4,
-        }}
-      >
-        {backpackSlots.map((slot, i) => (
-          <div
-            key={i}
-            className="inventory-slot"
-            onClick={() => handleBackpackSlotClick(i)}
-            onMouseEnter={() => setHoveredBackpackSlot(i)}
-            onMouseLeave={() => setHoveredBackpackSlot(null)}
-            title={slot?.itemType ?? ''}
-          >
-            {slot?.itemType && (
-              <span className="inventory-slot__qty">
-                {slot.quantity > 1 ? slot.quantity : ''}
-              </span>
-            )}
-            {hoveredBackpackSlot === i && slot?.itemType && (
-              <ItemTooltip itemType={slot.itemType} position="beside" />
-            )}
-          </div>
-        ))}
-      </div>
+        <div className="inventory-divider" />
 
-      {/* Hotbar row for unified view */}
-      <div
-        className="inventory-panel__hotbar"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(10, 1fr)',
-          gap: 4,
-          marginTop: 8,
-        }}
-      >
-        {hotbarItems.map((item, i) => (
-          <div
-            key={i}
-            className="inventory-slot"
-            onClick={() => handleHotbarSlotClick(i)}
-            onMouseEnter={() => setHoveredHotbarSlot(i)}
-            onMouseLeave={() => setHoveredHotbarSlot(null)}
-            title={item?.id ?? ''}
-          >
-            {item && (
-              <span className="inventory-slot__qty">
-                {item.quantity > 1 ? item.quantity : ''}
-              </span>
-            )}
-            {hoveredHotbarSlot === i && item && (
-              <ItemTooltip itemType={item.id} position="above" />
-            )}
-          </div>
-        ))}
+        {/* Hotbar section */}
+        <div className="inventory-hotbar">
+          {hotbarItems.map((item, i) => (
+            <div
+              key={`h-${i}`}
+              className="inventory-slot"
+              onClick={() => handleHotbarSlotClick(i)}
+              onMouseEnter={() => setHoveredHotbarSlot(i)}
+              onMouseLeave={() => setHoveredHotbarSlot(null)}
+              title={item?.id ?? ''}
+            >
+              {item && (
+                <span className="inventory-slot__qty">
+                  {item.quantity > 1 ? item.quantity : ''}
+                </span>
+              )}
+              {hoveredHotbarSlot === i && item && (
+                <ItemTooltip itemType={item.id} position="above" />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </GameModal>
   );
 }
