@@ -15,3 +15,7 @@ export * from './fence-types';
 export * from './npc-bots';
 export * from './dialogue-sessions';
 export * from './dialogue-messages';
+export * from './npc-memories';
+export * from './memory-stream-config';
+export * from './npc-relationships';
+export * from './npc-player-statuses';

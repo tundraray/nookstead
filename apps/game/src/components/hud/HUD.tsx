@@ -4,7 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { EventBus } from '@/game/EventBus';
 import { isTextInputFocused } from '@/game/input/InputController';
 import { getRoom } from '@/services/colyseus';
-import { ClientMessage } from '@nookstead/shared';
+import {
+  ClientMessage,
+  type RelationshipData,
+  type DialogueActionType,
+} from '@nookstead/shared';
 import { ColyseusTransport } from '@/services/ColyseusTransport';
 import { Hotbar } from './Hotbar';
 import { GameModal } from './GameModal';
@@ -33,6 +37,11 @@ export function HUD({ uiScale }: HUDProps) {
   const [chatTransport, setChatTransport] = useState<ColyseusTransport | null>(
     null
   );
+  const [chatRelationship, setChatRelationship] =
+    useState<RelationshipData | null>(null);
+  const [chatAvailableActions, setChatAvailableActions] = useState<
+    DialogueActionType[]
+  >([]);
   const transportRef = useRef<ColyseusTransport | null>(null);
 
   // Keyboard: hotbar slot selection (1-0)
@@ -54,7 +63,12 @@ export function HUD({ uiScale }: HUDProps) {
 
   // Listen for dialogue:start EventBus event from PlayerManager
   useEffect(() => {
-    function onDialogueStart(data: { botId: string; botName: string }) {
+    function onDialogueStart(data: {
+      botId: string;
+      botName: string;
+      relationship?: RelationshipData;
+      availableActions?: DialogueActionType[];
+    }) {
       const room = getRoom();
       const transport = new ColyseusTransport(room);
       transportRef.current = transport;
@@ -62,6 +76,8 @@ export function HUD({ uiScale }: HUDProps) {
       setChatBotId(data.botId);
       setChatBotName(data.botName);
       setChatTransport(transport);
+      setChatRelationship(data.relationship ?? null);
+      setChatAvailableActions(data.availableActions ?? []);
       setChatOpen(true);
 
       EventBus.emit('dialogue:lock-movement');
@@ -92,10 +108,23 @@ export function HUD({ uiScale }: HUDProps) {
       setChatTransport(null);
       setChatBotId('');
       setChatBotName('');
+      setChatRelationship(null);
+      setChatAvailableActions([]);
 
       EventBus.emit('dialogue:unlock-movement');
     }
   }, []);
+
+  // Listen for server-initiated dialogue end (NPC ended conversation, fatigue, etc.)
+  useEffect(() => {
+    function onSessionEnded() {
+      handleChatClose(false);
+    }
+    EventBus.on('dialogue:session-ended', onSessionEnded);
+    return () => {
+      EventBus.off('dialogue:session-ended', onSessionEnded);
+    };
+  }, [handleChatClose]);
 
   return (
     <div
@@ -128,6 +157,8 @@ export function HUD({ uiScale }: HUDProps) {
           botId={chatBotId}
           botName={chatBotName}
           transport={chatTransport}
+          initialRelationship={chatRelationship}
+          initialAvailableActions={chatAvailableActions}
         />
       )}
     </div>

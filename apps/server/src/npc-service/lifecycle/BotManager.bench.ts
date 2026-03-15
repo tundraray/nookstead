@@ -35,6 +35,9 @@ function makeBotRecord(index: number) {
     goals: null,
     fears: null,
     interests: null,
+    mood: null,
+    moodIntensity: 0,
+    moodUpdatedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

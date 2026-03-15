@@ -1,4 +1,4 @@
-import { streamText } from 'ai';
+import { streamText, type Tool } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import {
   buildSystemPrompt,
@@ -31,6 +31,14 @@ export interface StreamResponseParams {
   meetingCount: number;
   conversationHistory: Array<{ role: string; content: string }>;
   abortSignal?: AbortSignal;
+  memories?: import('../memory/MemoryRetrieval').ScoredMemory[];
+  relationship?: import('@nookstead/shared').RelationshipData;
+  turnCount?: number;
+  pendingInjection?: string | null;
+  tools?: Record<string, Tool>;
+  mood?: string | null;
+  moodIntensity?: number | null;
+  moodUpdatedAt?: Date | null;
 }
 
 export class DialogueService {
@@ -68,10 +76,19 @@ export class DialogueService {
         messages,
         abortSignal,
         maxOutputTokens: MAX_TOKENS,
+        ...(params.tools ? { tools: params.tools, maxSteps: 10 } : {}),
       });
 
-      for await (const chunk of result.textStream) {
-        yield chunk;
+      for await (const chunk of result.fullStream) {
+        if (chunk.type === 'text-delta') {
+          yield chunk.text;
+        } else if (chunk.type === 'tool-call') {
+          console.log(`[DialogueService] tool call: ${chunk.toolName}`, JSON.stringify('input' in chunk ? chunk.input : undefined));
+        } else if (chunk.type === 'tool-result') {
+          console.log(`[DialogueService] tool result: ${chunk.toolName} ->`, 'output' in chunk ? chunk.output : undefined);
+        } else if (chunk.type === 'error') {
+          console.error(`[DialogueService] stream error:`, chunk.error);
+        }
       }
     } catch (error) {
       console.error(
@@ -83,13 +100,20 @@ export class DialogueService {
   }
 
   private buildSystemPrompt(params: StreamResponseParams): string {
-    const { persona, botName, playerName, meetingCount } = params;
+    const { persona, botName, playerName, meetingCount, memories, relationship, turnCount, pendingInjection, mood, moodIntensity, moodUpdatedAt } = params;
     if (persona && persona.bio !== null) {
       const context: PromptContext = {
         persona,
         botName,
         playerName,
         meetingCount,
+        memories,
+        relationship,
+        turnCount,
+        pendingInjection,
+        mood,
+        moodIntensity,
+        moodUpdatedAt,
       };
       return buildSystemPrompt(context);
     }

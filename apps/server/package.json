@@ -90,7 +90,8 @@
     "@nookstead/shared": "workspace:*",
     "ai": "^6.0.105",
     "alea": "^1.0.1",
-    "simplex-noise": "^4.0.3"
+    "simplex-noise": "^4.0.3",
+    "zod": "^4.3.6"
   },
   "devDependencies": {}
 }

@@ -21,7 +21,6 @@
     ],
     "sharedGlobals": []
   },
-  "nxCloudId": "6990f71df0df252385999b6d",
   "plugins": [
     {
       "plugin": "@nx/js/typescript",

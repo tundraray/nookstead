@@ -5,6 +5,7 @@ export const ClientMessage = {
   HARD_RESET: 'hard_reset',
   DIALOGUE_MESSAGE: 'dialogue_message',
   DIALOGUE_END: 'dialogue_end',
+  DIALOGUE_ACTION: 'dialogue_action',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
@@ -19,6 +20,9 @@ export const ServerMessage = {
   DIALOGUE_START: 'dialogue_start',
   DIALOGUE_STREAM_CHUNK: 'dialogue_stream_chunk',
   DIALOGUE_END_TURN: 'dialogue_end_turn',
+  DIALOGUE_ACTION_RESULT: 'dialogue_action_result',
+  DIALOGUE_SCORE_CHANGE: 'dialogue_score_change',
+  DIALOGUE_EMOTION: 'dialogue_emotion',
   CLOCK_CONFIG: 'clock_config',
 } as const;
 

@@ -101,6 +101,9 @@ describe('config', () => {
       process.env.OPENAI_API_KEY = 'sk-test-key';
       process.env.COLYSEUS_PORT = '2567';
       process.env.CORS_ORIGIN = 'http://localhost:3000';
+      delete process.env.GAME_EPOCH;
+      delete process.env.GAME_DAY_DURATION_SECONDS;
+      delete process.env.GAME_SEASON_DURATION_DAYS;
 
       const config = loadConfig();
 
