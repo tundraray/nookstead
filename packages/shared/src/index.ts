@@ -106,6 +106,36 @@ export type {
   DialogueStartPayload,
   DialogueStreamChunkPayload,
 } from './types/dialogue';
+// Memory types
+export type {
+  MemoryType,
+  NpcMemory,
+  MemoryStreamConfig,
+  NpcMemoryOverride,
+} from './types/memory';
+// Relationship types
+export type {
+  RelationshipSocialType,
+  RelationshipData,
+  GiftCategory,
+  GiftId,
+  GiftDefinition,
+  DialogueActionType,
+  DialogueAction,
+  GiveGiftAction,
+  HireAction,
+  DismissAction,
+  AskAboutAction,
+  DialogueActionResult,
+  DialogueActionPayload,
+  DialogueActionResultPayload,
+} from './types/relationship';
+// Dialogue extended types
+export type {
+  DialogueStartWithRelationshipPayload,
+  DialogueScoreChangePayload,
+  DialogueEmotionPayload,
+} from './types/dialogue';
 // Inventory types (from types/inventory.ts)
 export type {
   OwnerType,

@@ -1,5 +1,5 @@
 {
-  "id": "ca936ba4-2ab1-44fe-826f-cc0d12fb1771",
+  "id": "e12e68a7-a08b-4157-8af3-db83da1dea84",
   "prevId": "4094479b-9cef-4761-b84b-9590fe40cc03",
   "version": "7",
   "dialect": "postgresql",
@@ -1281,85 +1281,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.fence_types": {
-      "name": "fence_types",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "key": {
-          "name": "key",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "category": {
-          "name": "category",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "frame_mapping": {
-          "name": "frame_mapping",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "gate_frame_mapping": {
-          "name": "gate_frame_mapping",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "fence_types_key_unique": {
-          "name": "fence_types_key_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "key"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.npc_bots": {
       "name": "npc_bots",
       "schema": "",
@@ -1700,8 +1621,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.inventories": {
-      "name": "inventories",
+    "public.npc_memories": {
+      "name": "npc_memories",
       "schema": "",
       "columns": {
         "id": {
@@ -1711,25 +1632,42 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "owner_type": {
-          "name": "owner_type",
-          "type": "owner_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "owner_id": {
-          "name": "owner_id",
+        "bot_id": {
+          "name": "bot_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "max_slots": {
-          "name": "max_slots",
-          "type": "integer",
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "type": {
+          "name": "type",
+          "type": "varchar(32)",
           "primaryKey": false,
           "notNull": true,
-          "default": 20
+          "default": "'interaction'"
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "importance": {
+          "name": "importance",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "dialogue_session_id": {
+          "name": "dialogue_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -1737,6 +1675,207 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_nm_bot_user": {
+          "name": "idx_nm_bot_user",
+          "columns": [
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_nm_bot_created": {
+          "name": "idx_nm_bot_created",
+          "columns": [
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_nm_bot_importance": {
+          "name": "idx_nm_bot_importance",
+          "columns": [
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "importance",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "npc_memories_bot_id_npc_bots_id_fk": {
+          "name": "npc_memories_bot_id_npc_bots_id_fk",
+          "tableFrom": "npc_memories",
+          "tableTo": "npc_bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "npc_memories_user_id_users_id_fk": {
+          "name": "npc_memories_user_id_users_id_fk",
+          "tableFrom": "npc_memories",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "npc_memories_dialogue_session_id_dialogue_sessions_id_fk": {
+          "name": "npc_memories_dialogue_session_id_dialogue_sessions_id_fk",
+          "tableFrom": "npc_memories",
+          "tableTo": "dialogue_sessions",
+          "columnsFrom": [
+            "dialogue_session_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.memory_stream_config": {
+      "name": "memory_stream_config",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "top_k": {
+          "name": "top_k",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 10
+        },
+        "half_life_hours": {
+          "name": "half_life_hours",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 48
+        },
+        "recency_weight": {
+          "name": "recency_weight",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "importance_weight": {
+          "name": "importance_weight",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "max_memories_per_npc": {
+          "name": "max_memories_per_npc",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1000
+        },
+        "token_budget": {
+          "name": "token_budget",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 400
+        },
+        "importance_first_meeting": {
+          "name": "importance_first_meeting",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
+        },
+        "importance_normal_dialogue": {
+          "name": "importance_normal_dialogue",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 4
+        },
+        "importance_emotional_dialogue": {
+          "name": "importance_emotional_dialogue",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 6
+        },
+        "importance_gift_received": {
+          "name": "importance_gift_received",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 7
+        },
+        "importance_quest_related": {
+          "name": "importance_quest_related",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 8
         },
         "updated_at": {
           "name": "updated_at",
@@ -1746,29 +1885,7 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "inventories_owner_unique": {
-          "name": "inventories_owner_unique",
-          "columns": [
-            {
-              "expression": "owner_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "owner_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -1776,8 +1893,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.inventory_slots": {
-      "name": "inventory_slots",
+    "public.npc_memory_overrides": {
+      "name": "npc_memory_overrides",
       "schema": "",
       "columns": {
         "id": {
@@ -1787,50 +1904,47 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "inventory_id": {
-          "name": "inventory_id",
+        "bot_id": {
+          "name": "bot_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "slot_index": {
-          "name": "slot_index",
+        "top_k": {
+          "name": "top_k",
           "type": "smallint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "item_type": {
-          "name": "item_type",
-          "type": "varchar(64)",
+        "half_life_hours": {
+          "name": "half_life_hours",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "quantity": {
-          "name": "quantity",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "owned_by_type": {
-          "name": "owned_by_type",
-          "type": "owner_type",
-          "typeSchema": "public",
+        "recency_weight": {
+          "name": "recency_weight",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "owned_by_id": {
-          "name": "owned_by_id",
-          "type": "uuid",
+        "importance_weight": {
+          "name": "importance_weight",
+          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
+        "max_memories_per_npc": {
+          "name": "max_memories_per_npc",
+          "type": "smallint",
           "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
+          "notNull": false
+        },
+        "token_budget": {
+          "name": "token_budget",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -1840,36 +1954,14 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "inventory_slots_slot_unique": {
-          "name": "inventory_slots_slot_unique",
-          "columns": [
-            {
-              "expression": "inventory_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "slot_index",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
+      "indexes": {},
       "foreignKeys": {
-        "inventory_slots_inventory_id_inventories_id_fk": {
-          "name": "inventory_slots_inventory_id_inventories_id_fk",
-          "tableFrom": "inventory_slots",
-          "tableTo": "inventories",
+        "npc_memory_overrides_bot_id_npc_bots_id_fk": {
+          "name": "npc_memory_overrides_bot_id_npc_bots_id_fk",
+          "tableFrom": "npc_memory_overrides",
+          "tableTo": "npc_bots",
           "columnsFrom": [
-            "inventory_id"
+            "bot_id"
           ],
           "columnsTo": [
             "id"
@@ -1879,22 +1971,173 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "npc_memory_overrides_bot_id_unique": {
+          "name": "npc_memory_overrides_bot_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "bot_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.npc_relationships": {
+      "name": "npc_relationships",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "bot_id": {
+          "name": "bot_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "social_type": {
+          "name": "social_type",
+          "type": "varchar(32)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'stranger'"
+        },
+        "is_worker": {
+          "name": "is_worker",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "hired_at": {
+          "name": "hired_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_nr_bot_user": {
+          "name": "idx_nr_bot_user",
+          "columns": [
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_nr_bot_social": {
+          "name": "idx_nr_bot_social",
+          "columns": [
+            {
+              "expression": "bot_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "social_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "npc_relationships_bot_id_npc_bots_id_fk": {
+          "name": "npc_relationships_bot_id_npc_bots_id_fk",
+          "tableFrom": "npc_relationships",
+          "tableTo": "npc_bots",
+          "columnsFrom": [
+            "bot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "npc_relationships_user_id_users_id_fk": {
+          "name": "npc_relationships_user_id_users_id_fk",
+          "tableFrom": "npc_relationships",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "uq_nr_bot_user": {
+          "name": "uq_nr_bot_user",
+          "nullsNotDistinct": false,
+          "columns": [
+            "bot_id",
+            "user_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     }
   },
-  "enums": {
-    "public.owner_type": {
-      "name": "owner_type",
-      "schema": "public",
-      "values": [
-        "player",
-        "npc"
-      ]
-    }
-  },
+  "enums": {},
   "schemas": {},
   "sequences": {},
   "roles": {},

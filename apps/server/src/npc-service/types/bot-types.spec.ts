@@ -24,6 +24,9 @@ function makeBotRecord(overrides?: Partial<NpcBot>): NpcBot {
     goals: overrides?.goals ?? null,
     fears: overrides?.fears ?? null,
     interests: overrides?.interests ?? null,
+    mood: overrides?.mood ?? null,
+    moodIntensity: overrides?.moodIntensity ?? null,
+    moodUpdatedAt: overrides?.moodUpdatedAt ?? null,
     createdAt: overrides?.createdAt ?? new Date('2026-01-01'),
     updatedAt: overrides?.updatedAt ?? new Date('2026-01-01'),
   };

@@ -9,7 +9,7 @@ import {
   ClientMessage,
   ServerMessage,
   type ChunkRoomState,
-  type DialogueStartPayload,
+  type DialogueStartWithRelationshipPayload,
   type DialogueStreamChunkPayload,
 } from '@nookstead/shared';
 import { EventBus } from '../EventBus';
@@ -281,13 +281,15 @@ export class PlayerManager {
     // Dialogue events: forward server messages to EventBus for React consumption
     this.room.onMessage(
       ServerMessage.DIALOGUE_START,
-      (data: DialogueStartPayload) => {
+      (data: DialogueStartWithRelationshipPayload) => {
         console.log(
           `[PlayerManager] DIALOGUE_START received: botId=${data.botId}, botName=${data.botName}`
         );
         EventBus.emit('dialogue:start', {
           botId: data.botId,
           botName: data.botName,
+          relationship: data.relationship,
+          availableActions: data.availableActions,
         });
       }
     );
@@ -299,8 +301,11 @@ export class PlayerManager {
       }
     );
 
-    this.room.onMessage(ServerMessage.DIALOGUE_END_TURN, () => {
+    this.room.onMessage(ServerMessage.DIALOGUE_END_TURN, (data?: { ended?: boolean; reason?: string }) => {
       EventBus.emit('dialogue:end-turn');
+      if (data?.ended) {
+        EventBus.emit('dialogue:session-ended', { reason: data.reason });
+      }
     });
   }
 

@@ -21,6 +21,9 @@ export interface Npc {
   goals: string[] | null;
   fears: string[] | null;
   interests: string[] | null;
+  mood: string | null;
+  moodIntensity: number | null;
+  moodUpdatedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -17,11 +17,18 @@ jest.mock('@ai-sdk/openai', () => ({
 import { streamText } from 'ai';
 const mockStreamText = streamText as jest.MockedFunction<typeof streamText>;
 
-/** Helper: create an async iterable from an array of strings */
-async function* makeTextStream(chunks: string[]): AsyncIterable<string> {
+/** Helper: create an async iterable of fullStream chunks from text strings */
+async function* makeFullStream(
+  chunks: Array<{ type: string; text?: string; toolName?: string; [key: string]: unknown }>
+): AsyncIterable<{ type: string; text?: string; toolName?: string; [key: string]: unknown }> {
   for (const chunk of chunks) {
     yield chunk;
   }
+}
+
+/** Shorthand: create fullStream with only text-delta chunks from plain strings */
+function makeTextFullStream(texts: string[]) {
+  return makeFullStream(texts.map((text) => ({ type: 'text-delta', text })));
 }
 
 /** Full SeedPersona fixture with bio non-null (triggers 6-section prompt) */
@@ -58,9 +65,9 @@ describe('DialogueService', () => {
     service = new DialogueService({ apiKey: 'test-key' });
   });
 
-  it('yields text chunks from AI textStream', async () => {
+  it('yields text chunks from AI fullStream', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream(['Hello', ' world']),
+      fullStream: makeTextFullStream(['Hello', ' world']),
     } as never);
 
     const chunks: string[] = [];
@@ -122,7 +129,7 @@ describe('DialogueService', () => {
 
   it('includes persona in system prompt when provided', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -149,7 +156,7 @@ describe('DialogueService', () => {
 
   it('uses default system prompt when persona is null', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -175,7 +182,7 @@ describe('DialogueService', () => {
 
   it('includes conversation history in messages array', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     const history = [
@@ -215,7 +222,7 @@ describe('DialogueService', () => {
 
   it('truncates playerText to 500 characters', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     const longText = 'a'.repeat(600);
@@ -242,9 +249,9 @@ describe('DialogueService', () => {
 
   // --- Prompt selection path tests ---
 
-  it('should use 6-section prompt when persona has non-null bio', async () => {
+  it('should use full prompt when persona has non-null bio', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -263,22 +270,21 @@ describe('DialogueService', () => {
       system?: string;
     };
     const prompt = callArgs?.system ?? '';
-    const sections = prompt.split('\n\n');
 
-    // buildSystemPrompt produces exactly 6 sections
-    expect(sections).toHaveLength(6);
     // Identity section starts with Russian character intro
     expect(prompt).toMatch(/^Ты — Farmer Bob/);
     // Relationship section references playerName and meetingCount
     expect(prompt).toContain('TestPlayer');
     expect(prompt).toContain('2 раз');
+    // Tool instructions section present
+    expect(prompt).toContain('ИНСТРУМЕНТЫ');
     // Guardrails section present
     expect(prompt).toContain('ПРАВИЛА');
   });
 
   it('should use legacy prompt when persona has null bio', async () => {
     mockStreamText.mockReturnValue({
-      textStream: makeTextStream([]),
+      fullStream: makeTextFullStream([]),
     } as never);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -310,5 +316,92 @@ describe('DialogueService', () => {
     expect(prompt).toContain('ПРАВИЛА');
     // Should NOT have the 6-section markers like memory placeholder
     expect(prompt).not.toContain('Пока нет воспоминаний');
+  });
+
+  // --- Tools integration tests (Phase 3) ---
+
+  it('does not pass tools to streamText when tools param is omitted', async () => {
+    mockStreamText.mockReturnValue({
+      fullStream: makeTextFullStream(['Hello']),
+    } as never);
+
+    const chunks: string[] = [];
+    for await (const chunk of service.streamResponse({
+      botName: 'Farmer Bob',
+      persona: null,
+      playerText: 'Hi',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
+      conversationHistory: [],
+    })) {
+      chunks.push(chunk);
+    }
+
+    // Arrange: verify streamText called without tools key
+    const callArgs = mockStreamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs).not.toHaveProperty('tools');
+    // Generator still yields text normally
+    expect(chunks).toEqual(['Hello']);
+  });
+
+  it('passes tools to streamText when tools param is provided', async () => {
+    const mockTool = { description: 'test tool', parameters: {} };
+    mockStreamText.mockReturnValue({
+      fullStream: makeTextFullStream(['OK']),
+    } as never);
+
+    const chunks: string[] = [];
+    for await (const chunk of service.streamResponse({
+      botName: 'Farmer Bob',
+      persona: null,
+      playerText: 'Hi',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
+      conversationHistory: [],
+      tools: { my_tool: mockTool } as never,
+    })) {
+      chunks.push(chunk);
+    }
+
+    // Verify tools were forwarded to streamText
+    const callArgs = mockStreamText.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(callArgs.tools).toEqual({ my_tool: mockTool });
+    expect(chunks).toEqual(['OK']);
+  });
+
+  it('yields only text from mixed text-delta and tool-call chunks', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    mockStreamText.mockReturnValue({
+      fullStream: makeFullStream([
+        { type: 'text-delta', text: 'I feel ' },
+        { type: 'tool-call', toolName: 'adjust_relationship' },
+        { type: 'tool-result', toolName: 'adjust_relationship', result: 'done' },
+        { type: 'text-delta', text: 'closer to you.' },
+      ]),
+    } as never);
+
+    const chunks: string[] = [];
+    for await (const chunk of service.streamResponse({
+      botName: 'Farmer Bob',
+      persona: null,
+      playerText: 'Hi',
+      playerName: 'TestPlayer',
+      meetingCount: 0,
+      conversationHistory: [],
+    })) {
+      chunks.push(chunk);
+    }
+
+    // Only text-delta chunks should be yielded
+    expect(chunks).toEqual(['I feel ', 'closer to you.']);
+    // Tool call should be logged
+    const toolCallLog = consoleSpy.mock.calls.find(
+      (call) => typeof call[0] === 'string' && call[0].includes('tool call: adjust_relationship')
+    );
+    expect(toolCallLog).toBeTruthy();
+
+    consoleSpy.mockRestore();
   });
 });

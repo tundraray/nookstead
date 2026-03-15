@@ -138,6 +138,40 @@ export {
   type AdminDialogueSession,
 } from './services/dialogue';
 export {
+  createMemory,
+  getMemoriesForBot,
+  getMemoryCount,
+  deleteOldestMemories,
+  deleteMemory,
+  listMemoriesAdmin,
+  type CreateMemoryData,
+  type ListMemoriesAdminParams,
+} from './services/npc-memory';
+export {
+  getGlobalConfig,
+  updateGlobalConfig,
+  getNpcOverride,
+  upsertNpcOverride,
+  deleteNpcOverride,
+  getEffectiveConfig,
+  type MemoryConfigValues,
+} from './services/memory-config';
+export {
+  getRelationship,
+  getOrCreateRelationship,
+  updateRelationship,
+  adjustRelationshipScore,
+  listRelationshipsForBot,
+  listRelationshipsForUser,
+  type UpsertRelationshipData,
+} from './services/npc-relationship';
+export {
+  hasActiveStatus,
+  createPlayerStatus,
+  cleanupExpiredStatuses,
+  listActiveStatusesForBot,
+} from './services/npc-player-status';
+export {
   createInventory,
   loadInventory,
   saveSlots,

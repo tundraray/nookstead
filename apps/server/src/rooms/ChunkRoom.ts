@@ -26,11 +26,26 @@ import {
   addDialogueMessage,
   getRecentDialogueHistory,
   getSessionCountForPair,
+  getMemoriesForBot,
+  getEffectiveConfig,
   updateBot,
+  getOrCreateRelationship,
+  updateRelationship,
+  getBotById,
+  hasActiveStatus,
   createInventory,
   loadInventory,
   saveSlots,
 } from '@nookstead/db';
+import { MemoryStream, scoreAndRankMemories, type ScoredMemory } from '../npc-service/memory';
+import {
+  processAction,
+  evaluateProgression,
+  getAvailableActions,
+  rowToRelationshipData,
+  FATIGUE_DEFAULTS,
+} from '../npc-service/relationships/index.js';
+import type { RelationshipData, DialogueActionPayload } from '@nookstead/shared';
 import {
   PATCH_RATE_MS,
   AVAILABLE_SKINS,
@@ -52,7 +67,7 @@ import {
   type SerializedLayer,
   type CollisionZoneDef,
   type DialogueMessagePayload,
-  type DialogueStartPayload,
+  type DialogueStartWithRelationshipPayload,
   type InventorySlotData,
   type InventoryMovePayload,
   type InventoryAddPayload,
@@ -62,6 +77,7 @@ import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
 import type { SeedPersona } from '../npc-service/ai/DialogueService';
 import { generateNpcCharacter } from '@nookstead/ai';
+import { type ToolContext, createNpcTools } from '../npc-service/ai/tools/index.js';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
 
@@ -120,11 +136,16 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       dbSessionId: string;
       abortController: AbortController | null;
       persona: SeedPersona | null;
+      memories: ScoredMemory[];
+      relationship: RelationshipData | null;
+      turnCount: number;
+      pendingInjection: string | null;
     }
   >();
   private dialogueService: DialogueService | null = null;
   private serverEpoch!: number;
   private clockConfig!: { dayDurationSeconds: number; seasonDurationDays: number };
+  private memoryStream: MemoryStream | null = null;
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -149,6 +170,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       dayDurationSeconds: config.dayDurationSeconds,
       seasonDurationDays: config.seasonDurationDays,
     };
+
+    // Initialize MemoryStream for NPC memory creation
+    this.memoryStream = new MemoryStream({
+      apiKey: config.openaiApiKey,
+    });
 
     // Register with ChunkManager
     chunkManager.registerRoom(this.chunkId, this);
@@ -183,6 +209,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     this.onMessage(ClientMessage.DIALOGUE_END, (client) => {
       this.handleDialogueEnd(client as Client, 'close');
     });
+
+    this.onMessage(
+      ClientMessage.DIALOGUE_ACTION,
+      (client, payload: unknown) => {
+        this.handleDialogueAction(client as Client, payload);
+      }
+    );
 
     // ── Inventory message handlers ──────────────────────────────────────────────
 
@@ -932,7 +965,50 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Extract player name from world state
     const playerName = player?.name ?? 'Stranger';
 
-    // Stream AI response
+    // Increment turn count
+    session.turnCount += 1;
+
+    // Load NPC mood from npc_bots (best-effort, null on error)
+    let botMood: string | null = null;
+    let botMoodIntensity: number | null = null;
+    let botMoodUpdatedAt: Date | null = null;
+    try {
+      const botRow = await getBotById(db, session.botId);
+      if (botRow) {
+        botMood = botRow.mood;
+        botMoodIntensity = botRow.moodIntensity;
+        botMoodUpdatedAt = botRow.moodUpdatedAt;
+        console.log(
+          `[ChunkRoom] Mood loaded: botId=${session.botId}, mood=${botMood}, intensity=${botMoodIntensity}`
+        );
+      }
+    } catch (err) {
+      console.warn(
+        `[ChunkRoom] Mood load failed (continuing without mood): botId=${session.botId}`,
+        err
+      );
+    }
+
+    // Resolve userId for tool context
+    const userId = (client.auth as AuthData)?.userId ?? client.sessionId;
+
+    // Create ToolContext for this dialogue turn
+    const toolContext: ToolContext = {
+      db,
+      botId: session.botId,
+      userId,
+      playerName,
+      sendToClient: (type: string, msgPayload: unknown) => client.send(type, msgPayload),
+      endConversation: () => { /* no-op: ChunkRoom checks endRequested after stream */ },
+      persona: session.persona ?? {
+        personality: null, role: null, speechStyle: null, bio: null,
+        age: null, traits: null, goals: null, fears: null, interests: null,
+      },
+      cumulativeDelta: 0,
+      endRequested: false,
+    };
+
+    // Stream AI response (with relationship, fatigue, injection, mood, and tools context)
     let fullText = '';
     try {
       const stream = this.dialogueService!.streamResponse({
@@ -943,6 +1019,14 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         playerText: text,
         conversationHistory,
         abortSignal: abortController.signal,
+        memories: session.memories,
+        relationship: session.relationship ?? undefined,
+        turnCount: session.turnCount,
+        pendingInjection: session.pendingInjection,
+        mood: botMood,
+        moodIntensity: botMoodIntensity,
+        moodUpdatedAt: botMoodUpdatedAt,
+        tools: createNpcTools(toolContext),
       });
 
       for await (const chunk of stream) {
@@ -955,6 +1039,9 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         err
       );
     }
+
+    // Clear pending injection after one turn (consumed)
+    session.pendingInjection = null;
 
     // Send end-of-turn marker
     client.send(ServerMessage.DIALOGUE_END_TURN, {});
@@ -975,6 +1062,20 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         );
       });
     }
+
+    // Deferred end_conversation check (F004): NPC farewell text already sent
+    if (toolContext.endRequested) {
+      this.handleDialogueEnd(client, 'npc_end');
+      return;
+    }
+
+    // Fatigue auto-end: close dialogue after maxTurnsBeforeEnd
+    if (session.turnCount >= FATIGUE_DEFAULTS.maxTurnsBeforeEnd) {
+      console.log(
+        `[ChunkRoom] Fatigue auto-end: sessionId=${client.sessionId}, turnCount=${session.turnCount}`
+      );
+      this.handleDialogueEnd(client, 'fatigue');
+    }
   }
 
   private handleDialogueEnd(client: Client, reason: string): void {
@@ -983,33 +1084,188 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       return;
     }
 
+    // Capture all data into locals before cleanup deletes session (I003)
+    const botId = session.botId;
+    const dbSessionId = session.dbSessionId;
+    const botSchema = this.state.bots.get(botId);
+    const botName = botSchema?.name ?? 'NPC';
+    const player = world.getPlayer(client.sessionId);
+    const userId = (client.auth as AuthData)?.userId;
+    const playerName = player?.name ?? 'Stranger';
+    const relationship = session.relationship;
+    const persona = session.persona;
+
     // Abort any in-flight AI stream
     session.abortController?.abort();
 
+    // Notify client that dialogue session has ended (server-initiated)
+    // 'close' reason = player-initiated (client already knows), skip notification
+    if (reason !== 'close' && reason !== 'leave') {
+      client.send(ServerMessage.DIALOGUE_END_TURN, { ended: true, reason });
+    }
+
     // End DB session (fire-and-forget)
     const db = getGameDb();
-    endDialogueSession(db, session.dbSessionId).catch((err: unknown) => {
+    endDialogueSession(db, dbSessionId).catch((err: unknown) => {
       console.error(
-        `[ChunkRoom] Failed to end dialogue session: dbSessionId=${session.dbSessionId}`,
+        `[ChunkRoom] Failed to end dialogue session: dbSessionId=${dbSessionId}`,
         err
       );
     });
 
+    // Fire-and-forget: evaluate progression (score changes are now handled by AI tools during the session)
+    if (userId && relationship) {
+      const newSocialType = evaluateProgression(relationship, persona?.traits);
+
+      if (newSocialType !== relationship.socialType) {
+        updateRelationship(db, botId, userId, {
+          socialType: newSocialType,
+        }).catch((err: unknown) => {
+          console.error(
+            `[ChunkRoom] Relationship progression update failed: botId=${botId}, userId=${userId}`,
+            err
+          );
+        });
+      }
+    }
+
+    // Fire-and-forget: create memory from dialogue (uses only captured locals)
+    if (this.memoryStream && userId) {
+      getEffectiveConfig(db, botId)
+        .then((config) =>
+          getSessionCountForPair(db, botId, userId).then((count) =>
+            this.memoryStream!.createDialogueMemory({
+              db,
+              botId,
+              userId,
+              dialogueSessionId: dbSessionId,
+              isFirstMeeting: count <= 1,
+              botName,
+              playerName,
+              config,
+            })
+          )
+        )
+        .catch((err: unknown) => {
+          console.error('[ChunkRoom] Memory creation failed:', err);
+        });
+    }
+
     // End interaction in BotManager
-    this.botManager.endInteraction(session.botId, client.sessionId);
+    this.botManager.endInteraction(botId, client.sessionId);
 
     // Sync bot state back to idle in Colyseus schema
-    const botSchema = this.state.bots.get(session.botId);
     if (botSchema) {
       botSchema.state = 'idle';
     }
 
     console.log(
-      `[ChunkRoom] Dialogue ended: sessionId=${client.sessionId}, botId=${session.botId}, reason=${reason}`
+      `[ChunkRoom] Dialogue ended: sessionId=${client.sessionId}, botId=${botId}, reason=${reason}`
     );
 
     // Remove session
     this.dialogueSessions.delete(client.sessionId);
+  }
+
+  private async handleDialogueAction(client: Client, payload: unknown): Promise<void> {
+    const session = this.dialogueSessions.get(client.sessionId);
+    if (!session) {
+      return;
+    }
+
+    // Reject actions during NPC streaming
+    if (session.abortController) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: 'unknown',
+        message: 'NPC is speaking',
+      });
+      return;
+    }
+
+    // Validate payload
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      typeof (payload as DialogueActionPayload).action !== 'object'
+    ) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: 'unknown',
+        message: 'Invalid action payload',
+      });
+      return;
+    }
+
+    const { action } = payload as DialogueActionPayload;
+    const userId = (client.auth as AuthData)?.userId;
+    const player = world.getPlayer(client.sessionId);
+    const playerName = player?.name ?? 'Stranger';
+
+    if (!session.relationship || !userId) {
+      client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+        success: false,
+        actionType: action.type,
+        message: 'Нет данных об отношениях.',
+      });
+      return;
+    }
+
+    const db = getGameDb();
+    const result = await processAction(
+      db,
+      session.botId,
+      userId,
+      action,
+      session.relationship,
+      playerName
+    );
+
+    // Update session relationship on success
+    if (result.success && result.updatedRelationship) {
+      session.relationship = result.updatedRelationship;
+    }
+
+    // Store prompt injection for next turn
+    if (result.success && result.promptInjection) {
+      session.pendingInjection = result.promptInjection;
+    }
+
+    // Fire-and-forget: create action memory for gift actions
+    if (result.success && action.type === 'give_gift' && this.memoryStream) {
+      const { getGift } = await import('../npc-service/relationships/gift-registry.js');
+      const gift = getGift(action.params.giftId);
+      this.memoryStream
+        .createActionMemory({
+          db,
+          botId: session.botId,
+          userId,
+          playerName,
+          memoryTemplate: gift.memoryTemplate,
+          importance: gift.importance,
+          dialogueSessionId: session.dbSessionId,
+        })
+        .catch((err: unknown) => {
+          console.error(
+            `[ChunkRoom] Gift memory creation failed: botId=${session.botId}`,
+            err
+          );
+        });
+    }
+
+    // Send result to client (include updated available actions)
+    const availableActions = session.relationship
+      ? getAvailableActions(session.relationship)
+      : [];
+
+    client.send(ServerMessage.DIALOGUE_ACTION_RESULT, {
+      ...result,
+      availableActions,
+    });
+
+    console.log(
+      `[ChunkRoom] Dialogue action: sessionId=${client.sessionId}, type=${action.type}, success=${result.success}`
+    );
   }
 
   private handleMove(client: Client, payload: unknown): void {
@@ -1127,6 +1383,25 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     );
 
     if (result.success) {
+      // Ignore status gate (fail-open on DB error)
+      const interactUserId = (client.auth as AuthData)?.userId;
+      if (interactUserId) {
+        try {
+          const statusDb = getGameDb();
+          const isIgnored = await hasActiveStatus(statusDb, botId, interactUserId, 'ignore');
+          if (isIgnored) {
+            client.send(ServerMessage.NPC_INTERACT_RESULT, {
+              success: false,
+              error: 'Этот NPC сейчас игнорирует вас',
+            });
+            return;
+          }
+        } catch (err) {
+          // Fail-open: log warning but allow interaction on query error
+          console.warn('[ChunkRoom] hasActiveStatus query failed, allowing interaction:', err);
+        }
+      }
+
       // Start dialogue interaction
       const started = this.botManager.startInteraction(
         botId,
@@ -1167,12 +1442,54 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       // Load persona from bot record (personality, role, speechStyle)
       const persona = this.botManager.getBotPersona(botId);
 
+      // Retrieve memories for this bot-user pair (best-effort, empty on failure)
+      let memories: ScoredMemory[] = [];
+      const userId = (client.auth as AuthData)?.userId;
+      if (userId) {
+        try {
+          const db = getGameDb();
+          const effectiveConfig = await getEffectiveConfig(db, botId);
+          const rawMemories = await getMemoriesForBot(db, botId, userId);
+          memories = scoreAndRankMemories(rawMemories, {
+            topK: effectiveConfig.topK,
+            halfLifeHours: effectiveConfig.halfLifeHours,
+            recencyWeight: effectiveConfig.recencyWeight,
+            importanceWeight: effectiveConfig.importanceWeight,
+            tokenBudget: effectiveConfig.tokenBudget,
+          });
+        } catch (err) {
+          console.warn(
+            `[ChunkRoom] Memory retrieval failed (continuing without memories): botId=${botId}`,
+            err
+          );
+        }
+      }
+
+      // Load relationship (best-effort, default to null/stranger)
+      let relationship: RelationshipData | null = null;
+      if (userId) {
+        try {
+          const db2 = getGameDb();
+          const relRow = await getOrCreateRelationship(db2, botId, userId);
+          relationship = rowToRelationshipData(relRow);
+        } catch (err) {
+          console.warn(
+            `[ChunkRoom] Relationship load failed (defaulting to stranger): botId=${botId}`,
+            err
+          );
+        }
+      }
+
       // Track dialogue session
       this.dialogueSessions.set(client.sessionId, {
         botId,
         dbSessionId,
         abortController: null,
         persona,
+        memories,
+        relationship,
+        turnCount: 0,
+        pendingInjection: null,
       });
 
       console.log(
@@ -1185,10 +1502,13 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
         botSchema.state = 'interacting';
       }
 
-      // Send dialogue start to client
-      const startPayload: DialogueStartPayload = {
+      // Send dialogue start to client (with relationship context)
+      const availableActions = relationship ? getAvailableActions(relationship) : [];
+      const startPayload: DialogueStartWithRelationshipPayload = {
         botId,
         botName: result.name,
+        relationship: relationship ?? undefined,
+        availableActions,
       };
       client.send(ServerMessage.DIALOGUE_START, startPayload);
 
