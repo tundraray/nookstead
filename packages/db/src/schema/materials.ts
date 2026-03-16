@@ -18,6 +18,12 @@ export const materials = pgTable('materials', {
   renderPriority: integer('render_priority').notNull().default(0),
   swimRequired: boolean('swim_required').notNull().default(false),
   damaging: boolean('damaging').notNull().default(false),
+  // Interactive map properties (ADR-0017 Decision 2)
+  diggable: boolean('diggable').notNull().default(false),
+  fishable: boolean('fishable').notNull().default(false),
+  waterSource: boolean('water_source').notNull().default(false),
+  buildable: boolean('buildable').notNull().default(false),
+  surfaceType: varchar('surface_type', { length: 50 }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

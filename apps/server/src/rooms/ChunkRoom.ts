@@ -235,6 +235,12 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       this.handleInventoryDrop(client as Client, payload);
     });
 
+    // Tool action stub (farming tools, interactions) — no state mutation yet
+    this.onMessage(ClientMessage.TOOL_ACTION, (_client, payload: unknown) => {
+      const p = payload as { action?: string; x?: number; y?: number };
+      console.log(`[ChunkRoom] TOOL_ACTION received: ${p.action} at (${p.x},${p.y})`)
+    });
+
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
     this.setSimulationInterval((deltaTime) => {
       if (this.state.bots.size === 0) return;
@@ -427,6 +433,11 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           grid: savedMap.grid as MapDataPayload['grid'],
           layers: savedMap.layers as MapDataPayload['layers'],
           walkable: mapWalkable,
+          interactionLayers:
+            (savedMap as unknown as Record<string, unknown>)
+              .interactionLayers as
+              | MapDataPayload['interactionLayers']
+              | undefined,
         };
       } else {
         console.error(

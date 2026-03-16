@@ -11,6 +11,11 @@ export interface RawMaterial {
   color: string;
   walkable: boolean;
   renderPriority: number;
+  diggable?: boolean;
+  fishable?: boolean;
+  waterSource?: boolean;
+  buildable?: boolean;
+  surfaceType?: string | null;
 }
 
 /** Tileset shape expected by buildMapEditorData (material keys already resolved). */
@@ -63,6 +68,11 @@ export function buildMapEditorData(
     walkable: m.walkable,
     renderPriority: m.renderPriority,
     baseTilesetKey: baseTilesetMap.get(m.key),
+    diggable: m.diggable ?? false,
+    fishable: m.fishable ?? false,
+    waterSource: m.waterSource ?? false,
+    buildable: m.buildable ?? false,
+    surfaceType: m.surfaceType ?? null,
   }));
 
   return { materials, tilesets: tilesetInfos };

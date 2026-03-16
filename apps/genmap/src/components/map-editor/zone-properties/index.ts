@@ -28,6 +28,12 @@ export const zoneTypeToEditor: Record<
   building_footprint: GenericProperties,
   transport_point: GenericProperties,
   lighting: GenericProperties,
+  warp_zone: GenericProperties,
+  no_dig: GenericProperties,
+  no_build: GenericProperties,
+  no_fish: GenericProperties,
+  no_spawn: GenericProperties,
+  farmland: GenericProperties,
 };
 
 export { CropFieldProperties } from './crop-field-properties';

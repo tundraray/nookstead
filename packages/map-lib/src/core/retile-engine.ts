@@ -1180,6 +1180,12 @@ export class RetileEngine {
       if (layer.type === 'object') {
         return { ...layer };
       }
+      if (layer.type === 'interaction') {
+        return {
+          ...layer,
+          triggers: new Map(layer.triggers),
+        };
+      }
       // Tile layer — deep-clone frames and tilesetKeys
       return {
         ...layer,

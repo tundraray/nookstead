@@ -61,6 +61,9 @@ function layerHasData(layer: EditorLayerUnion): boolean {
     }
     return false;
   }
+  if (layer.type === 'interaction') {
+    return layer.triggers.size > 0;
+  }
   // TileLayer: check for non-zero frame data
   for (const row of layer.frames) {
     for (const frame of row) {
@@ -71,7 +74,7 @@ function layerHasData(layer: EditorLayerUnion): boolean {
 }
 
 /** Get the layer type. */
-function getLayerType(layer: EditorLayerUnion): 'tile' | 'object' | 'fence' {
+function getLayerType(layer: EditorLayerUnion): EditorLayerUnion['type'] {
   return layer.type;
 }
 
@@ -314,7 +317,9 @@ export function LayerPanel({ state, dispatch }: LayerPanelProps) {
                     ? `${layer.objects.length} object${layer.objects.length !== 1 ? 's' : ''}`
                     : layer.type === 'fence'
                       ? layer.fenceTypeKey
-                      : layer.terrainKey}
+                      : layer.type === 'interaction'
+                        ? `${layer.triggers.size} trigger${layer.triggers.size !== 1 ? 's' : ''}`
+                        : layer.terrainKey}
                 </div>
               </div>
 

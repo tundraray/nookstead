@@ -28,4 +28,14 @@ export interface MaterialInfo {
   renderPriority: number;
   /** Tileset key used for palette swatch rendering (optional; color fallback if absent). */
   baseTilesetKey?: string;
+  /** Whether this material can be tilled with a hoe (ADR-0017 D2). */
+  diggable: boolean;
+  /** Whether fishing is allowed on this material. */
+  fishable: boolean;
+  /** Whether a watering can can be refilled here. */
+  waterSource: boolean;
+  /** Whether buildings/structures can be placed on this material. */
+  buildable: boolean;
+  /** Surface type for step sounds and planting logic. */
+  surfaceType: string | null;
 }

@@ -28,7 +28,13 @@ export type ZoneType =
   | 'animal_pen'
   | 'building_footprint'
   | 'transport_point'
-  | 'lighting';
+  | 'lighting'
+  | 'warp_zone'
+  | 'no_dig'
+  | 'no_build'
+  | 'no_fish'
+  | 'no_spawn'
+  | 'farmland';
 
 /** Shape of a zone. */
 export type ZoneShape = 'rectangle' | 'polygon';
@@ -72,6 +78,12 @@ export const ZONE_COLORS: Record<ZoneType, string> = {
   building_footprint: '#607D8B',
   transport_point: '#FFC107',
   lighting: '#FFEB3B',
+  warp_zone: '#AB47BC',
+  no_dig: '#D32F2F',
+  no_build: '#C62828',
+  no_fish: '#E53935',
+  no_spawn: '#B71C1C',
+  farmland: '#66BB6A',
 };
 
 /** Pairs of zone types that can overlap. */
@@ -83,7 +95,88 @@ export const ZONE_OVERLAP_ALLOWED: [ZoneType, ZoneType][] = [
   ['lighting', 'spawn_point'],
   ['lighting', 'npc_location'],
   ['lighting', 'building_footprint'],
+  // Farmland overlaps
+  ['farmland', 'crop_field'],
+  ['farmland', 'lighting'],
+  ['farmland', 'decoration'],
+  // Restriction zones overlay gameplay zones
+  ['no_dig', 'farmland'],
+  ['no_dig', 'crop_field'],
+  ['no_dig', 'building_footprint'],
+  ['no_build', 'farmland'],
+  ['no_build', 'crop_field'],
+  ['no_fish', 'water_feature'],
+  ['no_spawn', 'farmland'],
+  ['no_spawn', 'crop_field'],
+  ['no_spawn', 'spawn_point'],
+  // Warp zones
+  ['warp_zone', 'transition'],
+  ['warp_zone', 'lighting'],
+  // Restriction zones can stack
+  ['no_dig', 'no_build'],
+  ['no_dig', 'no_spawn'],
+  ['no_build', 'no_spawn'],
 ];
+
+// ============================================================
+// Zone property schemas (ADR-0017 Decision 3)
+// ============================================================
+
+import type {
+  Direction,
+  WarpTransition,
+  WarpCondition,
+  DebrisType,
+} from '@nookstead/shared';
+
+/** Warp zone configuration stored in ZoneData.properties. */
+export interface WarpZoneProperties {
+  targetMap: string;
+  targetX: number;
+  targetY: number;
+  targetDirection?: Direction;
+  transition?: WarpTransition;
+  conditions?: WarpCondition[];
+  promptText?: string;
+}
+
+/** Spawn rules for farmland/crop zones stored in ZoneData.properties. */
+export interface SpawnRuleConfig {
+  allowedTypes: DebrisType[];
+  /** Daily spawn probability per empty tile (0-1). */
+  probability: number;
+  /** Max percentage of tiles with spawns (0-1). */
+  maxDensity: number;
+  /** Only spawn after N days without player activity. */
+  neglectDays?: number;
+}
+
+/** NPC schedule binding stored in ZoneData.properties. */
+export interface NpcScheduleConfig {
+  /** Named location (e.g., "bakery", "park_bench"). */
+  locationName: string;
+  /** Which NPCs use this location. */
+  npcIds?: string[];
+  /** Max NPCs at this location simultaneously. */
+  capacity?: number;
+}
+
+/** Operating hours for shop/market zones stored in ZoneData.properties. */
+export interface OperatingHoursConfig {
+  /** Opening hour (24h format, e.g., 8). */
+  openHour: number;
+  /** Closing hour (24h format, e.g., 18). */
+  closeHour: number;
+  /** Message shown when closed. */
+  closedMessage?: string;
+}
+
+/** Type guard: checks if a zone is a warp zone with warp properties. */
+export function isWarpZone(
+  zone: ZoneData,
+): zone is ZoneData & { properties: WarpZoneProperties } {
+  return zone.zoneType === 'warp_zone';
+}
 
 /** Result of map dimension validation. */
 export interface DimensionValidationResult {

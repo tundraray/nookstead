@@ -11,6 +11,7 @@ export type {
   PositionUpdatePayload,
   ClientMessageType,
   ChunkTransitionPayload,
+  ToolActionPayload,
 } from './types/messages';
 export {
   COLYSEUS_PORT,
@@ -70,6 +71,36 @@ export type {
   SerializedGateData,
   SerializedFenceLayer,
 } from './types/fence-layer';
+// Interaction layer types (from types/interaction-layer.ts)
+export type {
+  Direction,
+  TriggerActivation,
+  WarpTransition,
+  WarpCondition,
+  WarpTrigger,
+  InteractionType,
+  InteractTrigger,
+  EventTrigger,
+  SoundTrigger,
+  DamageTrigger,
+  CellTrigger,
+  SerializedTriggerEntry,
+  SerializedInteractionLayer,
+} from './types/interaction-layer';
+export {
+  serializeInteractionLayer,
+  deserializeInteractionLayer,
+  isInteractionLayer,
+} from './types/interaction-layer';
+// Farm state types (from types/farm-state.ts)
+export type {
+  CropStage,
+  FertilizerType,
+  DebrisType,
+  CropState,
+  DebrisState,
+  FarmTileState,
+} from './types/farm-state';
 // Game object classification types (from types/game-object.ts)
 export {
   GAME_OBJECT_CATEGORIES,

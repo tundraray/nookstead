@@ -37,6 +37,8 @@ const TOOL_LABELS: Record<EditorTool, string> = {
   'object-place': 'Object Place',
   fence: 'Fence',
   'fence-eraser': 'Fence Eraser',
+  'interaction-place': 'Place Trigger',
+  'interaction-eraser': 'Erase Trigger',
 };
 
 const ZONE_TYPE_OPTIONS: { value: ZoneType; label: string }[] = [

@@ -1,4 +1,5 @@
 import type { Cell } from '@nookstead/shared';
+import type { CellTrigger } from '@nookstead/shared';
 import type { MapType, ZoneData } from './map-types';
 import type { TilesetInfo, MaterialInfo } from './material-types';
 import type { FenceCellData } from '@nookstead/shared';
@@ -16,7 +17,9 @@ export type EditorTool =
   | 'zone-poly'
   | 'object-place'
   | 'fence'
-  | 'fence-eraser';
+  | 'fence-eraser'
+  | 'interaction-place'
+  | 'interaction-eraser';
 
 /** Sidebar tab identifiers. */
 export type SidebarTab =
@@ -26,7 +29,8 @@ export type SidebarTab =
   | 'zones'
   | 'frames'
   | 'game-objects'
-  | 'fence-types';
+  | 'fence-types'
+  | 'interactions';
 
 /** All sidebar tab values as a runtime-accessible constant array. */
 export const SIDEBAR_TABS: SidebarTab[] = [
@@ -37,6 +41,7 @@ export const SIDEBAR_TABS: SidebarTab[] = [
   'frames',
   'game-objects',
   'fence-types',
+  'interactions',
 ];
 
 /** Common fields shared by all layer types. */
@@ -92,14 +97,28 @@ export interface FenceLayer extends BaseLayer {
 }
 
 /**
+ * A layer storing sparse interaction triggers per tile.
+ * ADR-0017 Decision 1.
+ */
+export interface InteractionLayer extends BaseLayer {
+  type: 'interaction';
+  /**
+   * Sparse trigger storage. Key = "x,y" string.
+   * Most tiles are empty — only tiles with triggers appear in the map.
+   */
+  triggers: Map<string, CellTrigger[]>;
+}
+
+/**
  * Discriminated union of all editor layer types.
  *
  * Narrowing via the `type` field:
- * - `'tile'`   -> TileLayer
- * - `'object'` -> ObjectLayer
- * - `'fence'`  -> FenceLayer
+ * - `'tile'`        -> TileLayer
+ * - `'object'`      -> ObjectLayer
+ * - `'fence'`       -> FenceLayer
+ * - `'interaction'` -> InteractionLayer
  */
-export type EditorLayerUnion = TileLayer | ObjectLayer | FenceLayer;
+export type EditorLayerUnion = TileLayer | ObjectLayer | FenceLayer | InteractionLayer;
 
 /**
  * A single tile layer in the editor (backward-compatible flat structure).
@@ -163,6 +182,7 @@ export interface MapEditorState {
   activeTool: EditorTool;
   activeMaterialKey: string;
   activeFenceTypeKey: string;
+  activeTriggerType: CellTrigger['type'];
   brushSize: number;
   brushShape: BrushShape;
 
@@ -255,7 +275,33 @@ export type MapEditorAction =
   | { type: 'ADD_ZONE'; zone: ZoneData }
   | { type: 'UPDATE_ZONE'; zoneId: string; data: Partial<ZoneData> }
   | { type: 'DELETE_ZONE'; zoneId: string }
-  | { type: 'TOGGLE_ZONE_VISIBILITY' };
+  | { type: 'TOGGLE_ZONE_VISIBILITY' }
+
+  // Interaction layer actions (ADR-0017)
+  | { type: 'ADD_INTERACTION_LAYER'; name: string }
+  | {
+      type: 'PLACE_TRIGGER';
+      layerIndex: number;
+      x: number;
+      y: number;
+      trigger: CellTrigger;
+    }
+  | {
+      type: 'REMOVE_TRIGGER';
+      layerIndex: number;
+      x: number;
+      y: number;
+      triggerIndex?: number;
+    }
+  | {
+      type: 'UPDATE_TRIGGER';
+      layerIndex: number;
+      x: number;
+      y: number;
+      triggerIndex: number;
+      trigger: CellTrigger;
+    }
+  | { type: 'SET_TRIGGER_TYPE'; triggerType: CellTrigger['type'] };
 
 /** Payload shape for LOAD_MAP action, matching API response. */
 export interface LoadMapPayload {
@@ -272,4 +318,6 @@ export interface LoadMapPayload {
   zones?: ZoneData[];
   /** Fence layers from persisted map data. Empty array if no fences. */
   fenceLayers: unknown[];
+  /** Interaction layers from persisted map data. */
+  interactionLayers?: unknown[];
 }

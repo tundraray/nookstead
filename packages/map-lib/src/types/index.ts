@@ -7,6 +7,10 @@ export type {
   ZoneVertex,
   ZoneData,
   DimensionValidationResult,
+  WarpZoneProperties,
+  SpawnRuleConfig,
+  NpcScheduleConfig,
+  OperatingHoursConfig,
 } from './map-types';
 
 export {
@@ -14,6 +18,7 @@ export {
   ZONE_COLORS,
   ZONE_OVERLAP_ALLOWED,
   validateMapDimensions,
+  isWarpZone,
 } from './map-types';
 
 export type {
