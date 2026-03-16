@@ -6,7 +6,7 @@ import {
   PromptContext,
 } from './SystemPromptBuilder';
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 const MAX_PLAYER_TEXT_LENGTH = 500;
 const MAX_TOKENS = 300;
 const FALLBACK_MESSAGE = '*shrugs*';

@@ -11,7 +11,7 @@ export const endConversationSchema = z.object({
 
 export function endConversationTool(context: ToolContext): Tool {
   return tool({
-    description: 'Завершить разговор с игроком',
+    description: 'End the conversation with the player',
     inputSchema: endConversationSchema,
     execute: async ({ reason, setIgnore, ignoreDurationMinutes }) => {
       // Set deferred end flag unconditionally (F004 pattern).
@@ -37,10 +37,10 @@ export function endConversationTool(context: ToolContext): Tool {
         );
         // endRequested is already set -- conversation still ends
         // even if ignore status creation fails
-        return 'Разговор завершён (статус игнорирования не установлен)';
+        return 'Conversation ended (ignore status not set)';
       }
 
-      return 'Разговор завершён';
+      return 'Conversation ended';
     },
   });
 }
