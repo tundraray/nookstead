@@ -35,14 +35,14 @@ function deriveMood(delta: number): { mood: string; intensity: number } {
 
 export function adjustRelationshipTool(context: ToolContext): Tool {
   return tool({
-    description: 'Изменить уровень отношений с игроком',
+    description: 'Change relationship level with the player',
     inputSchema: adjustRelationshipSchema,
     execute: async ({ delta, reason }) => {
       try {
         // F005: Per-turn cumulative delta cap check
         const projected = context.cumulativeDelta + delta;
         if (projected < CUMULATIVE_CAP_NEGATIVE || projected > CUMULATIVE_CAP_POSITIVE) {
-          return 'Превышен лимит изменений за один ход';
+          return 'Turn change limit exceeded';
         }
 
         // 1. Score adjustment
@@ -99,13 +99,13 @@ export function adjustRelationshipTool(context: ToolContext): Tool {
           newSocialType,
         });
 
-        return `Отношение изменено на ${delta}`;
+        return `Relationship changed by ${delta}`;
       } catch (error) {
         console.error(
           `[adjust_relationship] Failed: bot=${context.botId}, user=${context.userId}, delta=${delta}`,
           error
         );
-        return 'Не удалось изменить отношение';
+        return 'Failed to change relationship';
       }
     },
   });

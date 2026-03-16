@@ -15,7 +15,7 @@ export const expressEmotionSchema = z.object({
 
 export function expressEmotionTool(context: ToolContext): Tool {
   return tool({
-    description: 'Выразить эмоцию для анимации персонажа',
+    description: 'Express an emotion for character animation',
     inputSchema: expressEmotionSchema,
     execute: async ({ emotion, intensity }) => {
       try {
@@ -24,13 +24,13 @@ export function expressEmotionTool(context: ToolContext): Tool {
           intensity,
         });
 
-        return 'Эмоция выражена';
+        return 'Emotion expressed';
       } catch (error) {
         console.error(
           `[express_emotion] Failed: bot=${context.botId}, emotion=${emotion}`,
           error
         );
-        return 'Не удалось выразить эмоцию';
+        return 'Failed to express emotion';
       }
     },
   });

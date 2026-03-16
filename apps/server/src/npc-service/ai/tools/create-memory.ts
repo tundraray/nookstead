@@ -10,7 +10,7 @@ export const createMemorySchema = z.object({
 
 export function createMemoryTool(context: ToolContext): Tool {
   return tool({
-    description: 'Записать важное воспоминание о текущем разговоре',
+    description: 'Record an important memory about the current conversation',
     inputSchema: createMemorySchema,
     execute: async ({ content, importance }) => {
       try {
@@ -24,13 +24,13 @@ export function createMemoryTool(context: ToolContext): Tool {
           dialogueSessionId: undefined,
         });
 
-        return 'Воспоминание записано';
+        return 'Memory recorded';
       } catch (error) {
         console.error(
           `[create_memory] Failed: bot=${context.botId}, user=${context.userId}`,
           error
         );
-        return 'Не удалось записать воспоминание';
+        return 'Failed to record memory';
       }
     },
   });

@@ -10,7 +10,7 @@ import {
 import type { MemoryConfigValues } from '@nookstead/db';
 import { scoreImportance, type ImportanceScorerConfig } from './ImportanceScorer';
 
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 const SUMMARY_MAX_TOKENS = 150;
 const SUMMARY_MAX_LENGTH = 500;
 const SUMMARY_TIMEOUT_MS = 15_000;
