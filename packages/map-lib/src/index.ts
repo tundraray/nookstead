@@ -56,10 +56,11 @@ export type {
   MapType, MapDimensionConstraints,
   ZoneType, ZoneShape, ZoneBounds, ZoneVertex, ZoneData,
   DimensionValidationResult,
+  WarpZoneProperties, SpawnRuleConfig, NpcScheduleConfig, OperatingHoursConfig,
 } from './types/index';
 export {
   MAP_TYPE_CONSTRAINTS, ZONE_COLORS, ZONE_OVERLAP_ALLOWED,
-  validateMapDimensions,
+  validateMapDimensions, isWarpZone,
 } from './types/index';
 
 // Material types
@@ -82,6 +83,7 @@ export type {
   PlacedObject,
   ObjectLayer,
   FenceLayer,
+  InteractionLayer,
   EditorLayerUnion,
   EditorLayer,
   CellDelta,

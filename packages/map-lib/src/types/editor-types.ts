@@ -182,6 +182,7 @@ export interface MapEditorState {
   activeTool: EditorTool;
   activeMaterialKey: string;
   activeFenceTypeKey: string;
+  activeTriggerType: CellTrigger['type'];
   brushSize: number;
   brushShape: BrushShape;
 
@@ -299,7 +300,8 @@ export type MapEditorAction =
       y: number;
       triggerIndex: number;
       trigger: CellTrigger;
-    };
+    }
+  | { type: 'SET_TRIGGER_TYPE'; triggerType: CellTrigger['type'] };
 
 /** Payload shape for LOAD_MAP action, matching API response. */
 export interface LoadMapPayload {
@@ -316,4 +318,6 @@ export interface LoadMapPayload {
   zones?: ZoneData[];
   /** Fence layers from persisted map data. Empty array if no fences. */
   fenceLayers: unknown[];
+  /** Interaction layers from persisted map data. */
+  interactionLayers?: unknown[];
 }

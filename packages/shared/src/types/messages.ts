@@ -11,6 +11,7 @@ export const ClientMessage = {
   INVENTORY_MOVE: 'inventory_move',
   INVENTORY_ADD: 'inventory_add', // debug/admin use only
   INVENTORY_DROP: 'inventory_drop',
+  TOOL_ACTION: 'tool_action',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
@@ -53,4 +54,12 @@ export interface PositionUpdatePayload {
   y: number;
   direction: string;
   animState: string;
+}
+
+/** Payload for TOOL_ACTION messages (farming tools, interactions). Stub — no server handler yet. */
+export interface ToolActionPayload {
+  action: string;
+  x: number;
+  y: number;
+  data?: Record<string, unknown>;
 }

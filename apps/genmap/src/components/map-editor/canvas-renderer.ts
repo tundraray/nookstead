@@ -1,5 +1,20 @@
 import { FRAMES_PER_TERRAIN, EMPTY_FRAME, stampCells } from '@nookstead/map-lib';
-import type { MapEditorState, BrushShape, FenceLayer } from '@nookstead/map-lib';
+import type {
+  MapEditorState,
+  BrushShape,
+  FenceLayer,
+  InteractionLayer,
+} from '@nookstead/map-lib';
+import type { CellTrigger } from '@nookstead/shared';
+
+/** Colors for interaction trigger type overlays in the editor. */
+const TRIGGER_OVERLAY_COLORS: Record<CellTrigger['type'], string> = {
+  warp: '#AB47BC',
+  interact: '#42A5F5',
+  event: '#FFA726',
+  sound: '#66BB6A',
+  damage: '#EF5350',
+};
 
 /** Camera state for viewport positioning and zoom. */
 export interface Camera {
@@ -201,6 +216,37 @@ export function renderMapCanvas(
           );
         }
       }
+    } else if (layer.type === 'interaction') {
+      // Interaction layer rendering (ADR-0017):
+      // Colored semi-transparent squares on tiles with triggers.
+      const interactionLayer = layer as InteractionLayer;
+      ctx.save();
+      for (const [key, triggers] of interactionLayer.triggers) {
+        const [xStr, yStr] = key.split(',');
+        const tileX = parseInt(xStr, 10);
+        const tileY = parseInt(yStr, 10);
+        if (tileX < startX || tileX >= endX || tileY < startY || tileY >= endY)
+          continue;
+
+        const canvasX = tileX * tileSize;
+        const canvasY = tileY * tileSize;
+
+        // Render a colored overlay per trigger type
+        for (let i = 0; i < triggers.length; i++) {
+          const trigger = triggers[i];
+          ctx.globalAlpha = 0.45;
+          ctx.fillStyle = TRIGGER_OVERLAY_COLORS[trigger.type] ?? '#888';
+          if (triggers.length === 1) {
+            // Single trigger: fill entire tile
+            ctx.fillRect(canvasX, canvasY, tileSize, tileSize);
+          } else {
+            // Multiple triggers: split tile horizontally
+            const w = tileSize / triggers.length;
+            ctx.fillRect(canvasX + i * w, canvasY, w, tileSize);
+          }
+        }
+      }
+      ctx.restore();
     }
   }
 

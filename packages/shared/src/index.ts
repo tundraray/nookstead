@@ -11,6 +11,7 @@ export type {
   PositionUpdatePayload,
   ClientMessageType,
   ChunkTransitionPayload,
+  ToolActionPayload,
 } from './types/messages';
 export {
   COLYSEUS_PORT,
@@ -85,6 +86,11 @@ export type {
   CellTrigger,
   SerializedTriggerEntry,
   SerializedInteractionLayer,
+} from './types/interaction-layer';
+export {
+  serializeInteractionLayer,
+  deserializeInteractionLayer,
+  isInteractionLayer,
 } from './types/interaction-layer';
 // Farm state types (from types/farm-state.ts)
 export type {

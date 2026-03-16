@@ -136,3 +136,71 @@ export interface SerializedInteractionLayer {
   /** Sparse list of positioned trigger entries. */
   triggers: SerializedTriggerEntry[];
 }
+
+// ============================================================
+// Serialization functions
+// ============================================================
+
+const VALID_TRIGGER_TYPES = new Set<string>([
+  'warp',
+  'interact',
+  'event',
+  'sound',
+  'damage',
+]);
+
+/**
+ * Converts a triggers Map (editor format) to sparse SerializedInteractionLayer (DB/wire format).
+ * Only positions with at least one trigger are included in the output.
+ */
+export function serializeInteractionLayer(
+  name: string,
+  triggers: ReadonlyMap<string, CellTrigger[]>,
+): SerializedInteractionLayer {
+  const entries: SerializedTriggerEntry[] = [];
+  for (const [key, cellTriggers] of triggers) {
+    if (cellTriggers.length === 0) continue;
+    const [xStr, yStr] = key.split(',');
+    entries.push({
+      x: parseInt(xStr, 10),
+      y: parseInt(yStr, 10),
+      triggers: cellTriggers,
+    });
+  }
+  return { type: 'interaction', name, triggers: entries };
+}
+
+/**
+ * Converts a SerializedInteractionLayer (DB/wire format) to a triggers Map (editor format).
+ * Invalid trigger types are warned and skipped (fail-soft for deserialization).
+ */
+export function deserializeInteractionLayer(
+  layer: SerializedInteractionLayer,
+): Map<string, CellTrigger[]> {
+  const map = new Map<string, CellTrigger[]>();
+  for (const entry of layer.triggers) {
+    const validTriggers = entry.triggers.filter((t) => {
+      if (VALID_TRIGGER_TYPES.has(t.type)) return true;
+      console.warn(
+        `[deserializeInteractionLayer] Unknown trigger type "${t.type}" at (${entry.x},${entry.y}). Skipping.`,
+      );
+      return false;
+    });
+    if (validTriggers.length > 0) {
+      map.set(`${entry.x},${entry.y}`, validTriggers);
+    }
+  }
+  return map;
+}
+
+/** Type guard for checking if a serialized layer is an interaction layer. */
+export function isInteractionLayer(
+  layer: unknown,
+): layer is SerializedInteractionLayer {
+  return (
+    typeof layer === 'object' &&
+    layer !== null &&
+    'type' in layer &&
+    (layer as { type: string }).type === 'interaction'
+  );
+}

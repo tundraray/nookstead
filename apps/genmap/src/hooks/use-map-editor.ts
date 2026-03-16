@@ -16,7 +16,10 @@ import type {
   PlacedObject,
   ObjectLayer,
   MaterialInfo,
+  InteractionLayer,
 } from '@nookstead/map-lib';
+import type { CellTrigger } from '@nookstead/shared';
+import { serializeInteractionLayer } from '@nookstead/shared';
 import {
   RetileEngine,
   recalculateAffectedCells,
@@ -148,6 +151,7 @@ function createInitialState(): MapEditorState {
     activeTool: 'brush',
     activeMaterialKey: DEFAULT_MATERIAL_KEY,
     activeFenceTypeKey: '',
+    activeTriggerType: 'warp' as const,
     brushSize: 1,
     brushShape: 'circle' as const,
     undoStack: [],
@@ -291,6 +295,30 @@ function normalizeLayer(
       objects: (l.objects as PlacedObject[]) ?? [],
     };
     return objLayer;
+  }
+
+  if (l.type === 'interaction') {
+    // Deserialize sparse trigger array back to Map
+    const serializedTriggers = (l.triggers as Array<{
+      x: number;
+      y: number;
+      triggers: CellTrigger[];
+    }>) ?? [];
+    const triggersMap = new Map<string, CellTrigger[]>();
+    for (const entry of serializedTriggers) {
+      if (entry.triggers && entry.triggers.length > 0) {
+        triggersMap.set(`${entry.x},${entry.y}`, entry.triggers);
+      }
+    }
+    const interactionLayer: InteractionLayer = {
+      type: 'interaction',
+      id: (l.id as string) || crypto.randomUUID(),
+      name: (l.name as string) || 'Interactions',
+      visible: l.visible !== undefined ? (l.visible as boolean) : true,
+      opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
+      triggers: triggersMap,
+    };
+    return interactionLayer;
   }
 
   if (l.type === 'fence') {
@@ -496,6 +524,19 @@ export function mapEditorReducer(
               newHeight
             ),
           };
+        }
+        if (layer.type === 'interaction') {
+          // InteractionLayer: filter out triggers outside new bounds
+          const newTriggers = new Map<string, CellTrigger[]>();
+          for (const [key, triggers] of layer.triggers) {
+            const [xStr, yStr] = key.split(',');
+            const x = parseInt(xStr, 10);
+            const y = parseInt(yStr, 10);
+            if (x < newWidth && y < newHeight) {
+              newTriggers.set(key, triggers);
+            }
+          }
+          return { ...layer, triggers: newTriggers };
         }
         return {
           ...layer,
@@ -1056,6 +1097,110 @@ export function mapEditorReducer(
       };
     }
 
+    // --- Interaction layer actions (ADR-0017) ---
+
+    case 'ADD_INTERACTION_LAYER': {
+      const newInteractionLayer: InteractionLayer = {
+        type: 'interaction',
+        id: crypto.randomUUID(),
+        name: action.name,
+        visible: true,
+        opacity: 1,
+        triggers: new Map(),
+      };
+      return {
+        ...state,
+        layers: [...state.layers, newInteractionLayer],
+        activeLayerIndex: state.layers.length,
+        isDirty: true,
+      };
+    }
+
+    case 'PLACE_TRIGGER': {
+      const ptLayer = state.layers[action.layerIndex];
+      if (!ptLayer || ptLayer.type !== 'interaction') return state;
+
+      const ptKey = `${action.x},${action.y}`;
+      const ptExisting = ptLayer.triggers.get(ptKey) ?? [];
+      const sameTypeIdx = ptExisting.findIndex(
+        (t) => t.type === action.trigger.type,
+      );
+
+      const ptUpdated =
+        sameTypeIdx >= 0
+          ? ptExisting.map((t, i) =>
+              i === sameTypeIdx ? action.trigger : t,
+            )
+          : [...ptExisting, action.trigger];
+
+      const ptTriggers = new Map(ptLayer.triggers);
+      ptTriggers.set(ptKey, ptUpdated);
+
+      const ptNewLayer: InteractionLayer = {
+        ...ptLayer,
+        triggers: ptTriggers,
+      };
+      const ptLayers = [...state.layers];
+      ptLayers[action.layerIndex] = ptNewLayer;
+      return { ...state, layers: ptLayers, isDirty: true };
+    }
+
+    case 'REMOVE_TRIGGER': {
+      const rtLayer = state.layers[action.layerIndex];
+      if (!rtLayer || rtLayer.type !== 'interaction') return state;
+
+      const rtKey = `${action.x},${action.y}`;
+      const rtTriggers = new Map(rtLayer.triggers);
+
+      if (action.triggerIndex !== undefined) {
+        const rtExisting = rtTriggers.get(rtKey) ?? [];
+        const rtFiltered = rtExisting.filter(
+          (_, i) => i !== action.triggerIndex,
+        );
+        if (rtFiltered.length === 0) {
+          rtTriggers.delete(rtKey);
+        } else {
+          rtTriggers.set(rtKey, rtFiltered);
+        }
+      } else {
+        rtTriggers.delete(rtKey);
+      }
+
+      const rtNewLayer: InteractionLayer = {
+        ...rtLayer,
+        triggers: rtTriggers,
+      };
+      const rtLayers = [...state.layers];
+      rtLayers[action.layerIndex] = rtNewLayer;
+      return { ...state, layers: rtLayers, isDirty: true };
+    }
+
+    case 'UPDATE_TRIGGER': {
+      const utLayer = state.layers[action.layerIndex];
+      if (!utLayer || utLayer.type !== 'interaction') return state;
+
+      const utKey = `${action.x},${action.y}`;
+      const utExisting = utLayer.triggers.get(utKey) ?? [];
+      const utUpdated = utExisting.map((t, i) =>
+        i === action.triggerIndex ? action.trigger : t,
+      );
+
+      const utTriggers = new Map(utLayer.triggers);
+      utTriggers.set(utKey, utUpdated);
+
+      const utNewLayer: InteractionLayer = {
+        ...utLayer,
+        triggers: utTriggers,
+      };
+      const utLayers = [...state.layers];
+      utLayers[action.layerIndex] = utNewLayer;
+      return { ...state, layers: utLayers, isDirty: true };
+    }
+
+    case 'SET_TRIGGER_TYPE': {
+      return { ...state, activeTriggerType: action.triggerType };
+    }
+
     default:
       return state;
   }
@@ -1098,7 +1243,13 @@ export function useMapEditor() {
           width: state.width,
           height: state.height,
           grid: state.grid,
-          layers: state.layers,
+          layers: state.layers.map((l) => {
+            if (l.type === 'interaction') {
+              // Map is not JSON-serializable; convert to sparse array format
+              return serializeInteractionLayer(l.name, l.triggers);
+            }
+            return l;
+          }),
           walkable: state.walkable,
           seed: state.seed,
           metadata: state.metadata,

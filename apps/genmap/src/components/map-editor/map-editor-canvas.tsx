@@ -36,6 +36,10 @@ import { createFillTool } from './tools/fill-tool';
 import { createRectangleTool } from './tools/rectangle-tool';
 import { createEraserTool } from './tools/eraser-tool';
 import { createFenceTool, type FencePlacementMode } from './tools/fence-tool';
+import {
+  createInteractionPlaceTool,
+  createInteractionEraserTool,
+} from './tools/interaction-tool';
 import { createFenceEraserTool } from './tools/fence-eraser-tool';
 import { drawZoneOverlay } from './zone-overlay';
 
@@ -285,6 +289,10 @@ export function MapEditorCanvas({
         );
       case 'fence-eraser':
         return createFenceEraserTool(state, dispatch);
+      case 'interaction-place':
+        return createInteractionPlaceTool(state, dispatch);
+      case 'interaction-eraser':
+        return createInteractionEraserTool(state, dispatch);
     }
   }, [state.activeTool, state.activeMaterialKey, state.activeLayerIndex, state.activeFenceTypeKey, fencePlacementMode, dispatch, state, onZoneRectComplete]);
 
