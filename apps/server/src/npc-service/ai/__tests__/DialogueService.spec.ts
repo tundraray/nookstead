@@ -147,11 +147,11 @@ describe('DialogueService', () => {
     const callArgs = mockStreamText.mock.calls[0]?.[0] as {
       system?: string;
     };
-    // Full persona (bio non-null) triggers buildSystemPrompt with Russian text
-    expect(callArgs?.system).toContain('Ты —');
+    // Full persona (bio non-null) triggers buildSystemPrompt with English text
+    expect(callArgs?.system).toContain('You are');
     expect(callArgs?.system).toContain('farmer');
     expect(callArgs?.system).toContain('rustic dialect');
-    expect(callArgs?.system).toContain('ПРАВИЛА');
+    expect(callArgs?.system).toContain('RULES');
   });
 
   it('uses default system prompt when persona is null', async () => {
@@ -174,10 +174,10 @@ describe('DialogueService', () => {
     const callArgs = mockStreamText.mock.calls[0]?.[0] as {
       system?: string;
     };
-    // Null persona triggers buildLegacyPrompt with Russian fallback
-    expect(callArgs?.system).toContain('Ты —');
+    // Null persona triggers buildLegacyPrompt with English fallback
+    expect(callArgs?.system).toContain('You are');
     expect(callArgs?.system).toContain('Villager');
-    expect(callArgs?.system).toContain('ПРАВИЛА');
+    expect(callArgs?.system).toContain('RULES');
   });
 
   it('includes conversation history in messages array', async () => {
@@ -271,15 +271,17 @@ describe('DialogueService', () => {
     };
     const prompt = callArgs?.system ?? '';
 
-    // Identity section starts with Russian character intro
-    expect(prompt).toMatch(/^Ты — Farmer Bob/);
+    // Static prefix starts with TOOLS (prompt-cache optimized order)
+    expect(prompt).toMatch(/^TOOLS/);
+    // Identity section contains character intro
+    expect(prompt).toContain('You are Farmer Bob');
     // Relationship section references playerName and meetingCount
     expect(prompt).toContain('TestPlayer');
-    expect(prompt).toContain('2 раз');
+    expect(prompt).toContain('2 time');
     // Tool instructions section present
-    expect(prompt).toContain('ИНСТРУМЕНТЫ');
+    expect(prompt).toContain('TOOLS');
     // Guardrails section present
-    expect(prompt).toContain('ПРАВИЛА');
+    expect(prompt).toContain('RULES');
   });
 
   it('should use legacy prompt when persona has null bio', async () => {
@@ -305,17 +307,18 @@ describe('DialogueService', () => {
     const prompt = callArgs?.system ?? '';
     const sections = prompt.split('\n\n');
 
-    // Legacy prompt produces 3 sections: identity, guardrails, format
-    expect(sections).toHaveLength(3);
+    // Legacy prompt produces 4 sections: guardrailsStatic, format, identity, guardrailsDynamic
+    expect(sections).toHaveLength(4);
     // Should contain identity with bot name
-    expect(prompt).toContain('Ты —');
+    expect(prompt).toContain('You are');
     expect(prompt).toContain('Farmer Bob');
     // Should contain personality (used by buildLegacyPrompt)
     expect(prompt).toContain('grumpy but kind');
     // Guardrails present
-    expect(prompt).toContain('ПРАВИЛА');
-    // Should NOT have the 6-section markers like memory placeholder
-    expect(prompt).not.toContain('Пока нет воспоминаний');
+    expect(prompt).toContain('RULES');
+    // Should NOT have full-prompt markers like TOOLS or DIGNITY
+    expect(prompt).not.toContain('TOOLS');
+    expect(prompt).not.toContain('YOUR DIGNITY');
   });
 
   // --- Tools integration tests (Phase 3) ---

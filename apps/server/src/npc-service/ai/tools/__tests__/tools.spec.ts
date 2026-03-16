@@ -146,7 +146,7 @@ describe('adjust_relationship tool', () => {
         messages: [],
       });
 
-      expect(result).toBe('Отношение изменено на 2');
+      expect(result).toBe('Relationship changed by 2');
       expect(mockAdjustRelationshipScore).toHaveBeenCalledWith(ctx.db, 'bot-uuid', 'user-uuid', 2);
       expect(ctx.sendToClient).toHaveBeenCalledWith('dialogue_score_change', {
         delta: 2,
@@ -174,7 +174,7 @@ describe('adjust_relationship tool', () => {
         messages: [],
       });
 
-      expect(result).toBe('Отношение изменено на -5');
+      expect(result).toBe('Relationship changed by -5');
       expect(mockAdjustRelationshipScore).toHaveBeenCalledWith(ctx.db, 'bot-uuid', 'user-uuid', -5);
       expect(ctx.sendToClient).toHaveBeenCalledWith('dialogue_score_change', expect.objectContaining({
         delta: -5,
@@ -200,7 +200,7 @@ describe('adjust_relationship tool', () => {
         messages: [],
       });
 
-      expect(result).toBe('Превышен лимит изменений за один ход');
+      expect(result).toBe('Turn change limit exceeded');
       expect(mockAdjustRelationshipScore).not.toHaveBeenCalled();
       expect(ctx.cumulativeDelta).toBe(3); // unchanged
     });
@@ -214,7 +214,7 @@ describe('adjust_relationship tool', () => {
         messages: [],
       });
 
-      expect(result).toBe('Превышен лимит изменений за один ход');
+      expect(result).toBe('Turn change limit exceeded');
       expect(mockAdjustRelationshipScore).not.toHaveBeenCalled();
       expect(ctx.cumulativeDelta).toBe(-6); // unchanged
     });
@@ -229,7 +229,7 @@ describe('adjust_relationship tool', () => {
         messages: [],
       });
 
-      expect(result).toBe('Не удалось изменить отношение');
+      expect(result).toBe('Failed to change relationship');
     });
 
     it('should attempt mood update with correct direction for negative delta', async () => {
@@ -296,7 +296,7 @@ describe('create_memory tool', () => {
         { toolCallId: 'tc-10', messages: [] }
       );
 
-      expect(result).toBe('Воспоминание записано');
+      expect(result).toBe('Memory recorded');
       expect(mockCreateMemory).toHaveBeenCalledWith(ctx.db, {
         botId: 'bot-uuid',
         userId: 'user-uuid',
@@ -317,7 +317,7 @@ describe('create_memory tool', () => {
         { toolCallId: 'tc-11', messages: [] }
       );
 
-      expect(result).toBe('Не удалось записать воспоминание');
+      expect(result).toBe('Failed to record memory');
     });
   });
 });
@@ -435,7 +435,7 @@ describe('end_conversation tool', () => {
         { toolCallId: 'tc-25', messages: [] }
       );
 
-      expect(result).toBe('Разговор завершён');
+      expect(result).toBe('Conversation ended');
     });
   });
 });
@@ -479,7 +479,7 @@ describe('express_emotion tool', () => {
         { toolCallId: 'tc-30', messages: [] }
       );
 
-      expect(result).toBe('Эмоция выражена');
+      expect(result).toBe('Emotion expressed');
       expect(ctx.sendToClient).toHaveBeenCalledWith('dialogue_emotion', {
         emotion: 'happy',
         intensity: 3,
