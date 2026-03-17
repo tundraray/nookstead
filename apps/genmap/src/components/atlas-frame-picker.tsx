@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { Input } from '@/components/ui/input';
 
 export interface FramePickerFrame {
@@ -186,28 +187,30 @@ export function AtlasFramePicker({
                       {lowerSearch ? 'No matches' : 'No frames'}
                     </p>
                   )}
-                  {frames.map((frame) => (
-                    <FrameThumbnail
-                      key={frame.id}
-                      frame={frame}
-                      spriteUrl={sprite.s3Url}
-                      isActive={activeFrame?.id === frame.id}
-                      onClick={() =>
-                        onFrameSelect({
-                          id: frame.id,
-                          spriteId: sprite.id,
-                          spriteName: sprite.name,
-                          spriteS3Url: sprite.s3Url,
-                          filename: frame.filename,
-                          frameX: frame.frameX,
-                          frameY: frame.frameY,
-                          frameW: frame.frameW,
-                          frameH: frame.frameH,
-                        })
-                      }
-                      imageCache={imageCacheRef}
-                    />
-                  ))}
+                  {frames.map((frame) => {
+                    const pickerFrame: FramePickerFrame = {
+                      id: frame.id,
+                      spriteId: sprite.id,
+                      spriteName: sprite.name,
+                      spriteS3Url: sprite.s3Url,
+                      filename: frame.filename,
+                      frameX: frame.frameX,
+                      frameY: frame.frameY,
+                      frameW: frame.frameW,
+                      frameH: frame.frameH,
+                    };
+                    return (
+                      <FrameThumbnail
+                        key={frame.id}
+                        frame={frame}
+                        pickerFrame={pickerFrame}
+                        spriteUrl={sprite.s3Url}
+                        isActive={activeFrame?.id === frame.id}
+                        onClick={() => onFrameSelect(pickerFrame)}
+                        imageCache={imageCacheRef}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -218,21 +221,45 @@ export function AtlasFramePicker({
   );
 }
 
+/**
+ * FrameThumbnail renders a single atlas frame as a clickable, draggable thumbnail.
+ *
+ * Drag-and-drop: Each thumbnail is a draggable source via @dnd-kit/core's useDraggable.
+ * The drag data carries the full FramePickerFrame object at `active.data.current.frame`.
+ * A parent DndContext is required for drag-and-drop to function (provided by task-11/12).
+ */
 function FrameThumbnail({
   frame,
+  pickerFrame,
   spriteUrl,
   isActive,
   onClick,
   imageCache,
 }: {
   frame: AtlasFrameData;
+  pickerFrame: FramePickerFrame;
   spriteUrl: string;
   isActive: boolean;
   onClick: () => void;
   imageCache: React.RefObject<Map<string, HTMLImageElement>>;
 }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: `atlas-frame-${pickerFrame.spriteId}-${pickerFrame.id}`,
+    data: { frame: pickerFrame },
+  });
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbSize = 40;
+
+  const style: React.CSSProperties | undefined = transform
+    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
+    : undefined;
 
   const draw = useCallback(
     (img: HTMLImageElement) => {
@@ -277,11 +304,15 @@ function FrameThumbnail({
 
   return (
     <button
+      ref={setNodeRef}
       onClick={onClick}
       title={frame.filename}
       className={`cursor-pointer border-2 rounded ${
         isActive ? 'border-primary' : 'border-transparent'
-      } hover:border-primary`}
+      } hover:border-primary${isDragging ? ' opacity-50' : ''}`}
+      style={style}
+      {...listeners}
+      {...attributes}
     >
       <canvas
         ref={canvasRef}

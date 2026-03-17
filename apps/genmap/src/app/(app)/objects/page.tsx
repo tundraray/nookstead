@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,9 +9,16 @@ import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useGameObjects } from '@/hooks/use-game-objects';
 import { toast } from 'sonner';
 
-export default function ObjectsPage() {
-  const { objects, isLoading, isLoadingMore, error, hasMore, refetch, loadMore } =
-    useGameObjects();
+function ObjectsPageContent() {
+  const {
+    objects,
+    isLoading,
+    isLoadingMore,
+    error,
+    hasMore,
+    refetch,
+    loadMore,
+  } = useGameObjects();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -38,7 +45,7 @@ export default function ObjectsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Game Objects</h1>
+        <h1 className="text-2xl font-bold">Objects</h1>
         <Button asChild>
           <Link href="/objects/new">New Object</Link>
         </Button>
@@ -111,11 +118,39 @@ export default function ObjectsPage() {
         onCancel={() => setDeleteTarget(null)}
         description={
           <p>
-            Are you sure you want to delete this game object? This action cannot
-            be undone.
+            Are you sure you want to delete this game object? This action
+            cannot be undone.
           </p>
         }
       />
     </div>
+  );
+}
+
+function ObjectsPageFallback() {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <Skeleton className="h-8 w-24" />
+        <Skeleton className="h-9 w-28" />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="aspect-square w-full rounded-lg" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export default function ObjectsPage() {
+  return (
+    <Suspense fallback={<ObjectsPageFallback />}>
+      <ObjectsPageContent />
+    </Suspense>
   );
 }

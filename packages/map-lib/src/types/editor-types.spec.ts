@@ -57,15 +57,13 @@ describe('EditorLayerUnion', () => {
     expect(layer.triggers.size).toBe(1);
   });
 
-  it('covers all 4 layer types in exhaustive type check', () => {
+  it('covers all 3 layer types in exhaustive type check', () => {
     function getLayerKind(layer: EditorLayerUnion): string {
       switch (layer.type) {
         case 'tile':
           return 'tile';
         case 'object':
           return 'object';
-        case 'fence':
-          return 'fence';
         case 'interaction':
           return 'interaction';
       }

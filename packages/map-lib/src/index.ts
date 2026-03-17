@@ -10,29 +10,6 @@ export {
   getFrame,
 } from './core/autotile';
 
-// Fence autotile engine
-export type { FenceCellLike, FenceCells } from './core/fence-autotile';
-export {
-  FENCE_N, FENCE_E, FENCE_S, FENCE_W,
-  FENCE_EMPTY_FRAME, FENCE_TILESET_COLS, FENCE_FRAME_COUNT,
-  FENCE_GATE_FRAME_COUNT, FENCE_TOTAL_FRAMES,
-  GATE_BITMASK_NS, GATE_BITMASK_EW,
-  computeFenceBitmask, getFenceFrame, canPlaceGate, getGateFrameIndex,
-  isValidGateBitmask, applyGatePlacement, applyGateRemoval, applyGateToggle,
-} from './core/fence-autotile';
-
-// Fence tileset generation
-export type { FrameImageSource } from './core/fence-tileset';
-export { generateFenceTileset } from './core/fence-tileset';
-
-// Fence batch recalculation
-export type { RecalculateCell, RecalculateLayer, Position } from './core/fence-recalculate';
-export { recalculateAffectedCells } from './core/fence-recalculate';
-
-// Fence walkability
-export type { FenceLayerSnapshot } from './core/fence-walkability';
-export { computeFenceWalkability, updateCellWalkability } from './core/fence-walkability';
-
 // Terrain definitions
 export type { TerrainType, TilesetRelationship } from './core/terrain';
 export {
@@ -82,7 +59,6 @@ export type {
   TileLayer,
   PlacedObject,
   ObjectLayer,
-  FenceLayer,
   InteractionLayer,
   EditorLayerUnion,
   EditorLayer,

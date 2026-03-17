@@ -35,8 +35,6 @@ const TOOL_LABELS: Record<EditorTool, string> = {
   'zone-rect': 'Zone Rect',
   'zone-poly': 'Zone Poly',
   'object-place': 'Object Place',
-  fence: 'Fence',
-  'fence-eraser': 'Fence Eraser',
   'interaction-place': 'Place Trigger',
   'interaction-eraser': 'Erase Trigger',
 };
@@ -76,7 +74,7 @@ export interface EditorOptionsBarProps {
   onToggleGrid: () => void;
   showWalkability: boolean;
   onToggleWalkability: () => void;
-  /** Optional slot for additional tool-specific controls (e.g., fence mode selector). */
+  /** Optional slot for additional tool-specific controls. */
   toolControls?: React.ReactNode;
 }
 

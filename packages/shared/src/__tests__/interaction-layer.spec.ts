@@ -371,10 +371,6 @@ describe('isInteractionLayer', () => {
     expect(isInteractionLayer({ type: 'object', name: 'Objects', objects: [] })).toBe(false);
   });
 
-  it('returns false for a fence layer', () => {
-    expect(isInteractionLayer({ type: 'fence', name: 'Fences', fenceTypeKey: 'wooden' })).toBe(false);
-  });
-
   it('returns false for null', () => {
     expect(isInteractionLayer(null)).toBe(false);
   });
