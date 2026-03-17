@@ -1151,7 +1151,7 @@ export class RetileEngine {
   // -------------------------------------------------------------------------
 
   /**
-   * Check whether a layer is a non-tile layer (object or fence).
+   * Check whether a layer is a non-tile layer (object, interaction, etc.).
    * Only tile layers have terrain/tilesetKeys that the RetileEngine manages.
    */
   private isNonTileLayer(layer: EditorLayerUnion): boolean {
@@ -1170,13 +1170,6 @@ export class RetileEngine {
    */
   private cloneLayers(layers: EditorLayerUnion[]): EditorLayerUnion[] {
     return layers.map((layer): EditorLayerUnion => {
-      if (layer.type === 'fence') {
-        return {
-          ...layer,
-          cells: layer.cells.map(row => row.map(c => c ? { ...c } : null)),
-          frames: layer.frames.map(row => [...row]),
-        };
-      }
       if (layer.type === 'object') {
         return { ...layer };
       }

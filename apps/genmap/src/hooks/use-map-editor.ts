@@ -11,7 +11,6 @@ import type {
   EditorLayer,
   EditorLayerUnion,
   TileLayer,
-  FenceLayer,
   LoadMapPayload,
   PlacedObject,
   ObjectLayer,
@@ -22,17 +21,7 @@ import type { CellTrigger } from '@nookstead/shared';
 import { serializeInteractionLayer } from '@nookstead/shared';
 import {
   RetileEngine,
-  recalculateAffectedCells,
-  updateCellWalkability,
-  canPlaceGate,
-  getGateFrameIndex,
-  getFenceFrame,
-  computeFenceBitmask,
-  FENCE_EMPTY_FRAME,
-  isWalkable,
 } from '@nookstead/map-lib';
-import type { FenceLayerSnapshot, TerrainCellType } from '@nookstead/map-lib';
-import type { FenceCellData } from '@nookstead/shared';
 
 const DEFAULT_WIDTH = 32;
 const DEFAULT_HEIGHT = 32;
@@ -150,7 +139,6 @@ function createInitialState(): MapEditorState {
     activeLayerIndex: 0,
     activeTool: 'brush',
     activeMaterialKey: DEFAULT_MATERIAL_KEY,
-    activeFenceTypeKey: '',
     activeTriggerType: 'warp' as const,
     brushSize: 1,
     brushShape: 'circle' as const,
@@ -220,32 +208,6 @@ function resizeFrames(
 }
 
 /**
- * Resize a 2D fence cells array to new dimensions.
- * Expanding adds null (empty); truncating slices from right and bottom.
- */
-function resizeFenceCells(
-  cells: (FenceCellData | null)[][],
-  oldWidth: number,
-  oldHeight: number,
-  newWidth: number,
-  newHeight: number
-): (FenceCellData | null)[][] {
-  const resized: (FenceCellData | null)[][] = [];
-  for (let y = 0; y < newHeight; y++) {
-    const row: (FenceCellData | null)[] = [];
-    for (let x = 0; x < newWidth; x++) {
-      if (y < oldHeight && x < oldWidth) {
-        row.push(cells[y][x]);
-      } else {
-        row.push(null);
-      }
-    }
-    resized.push(row);
-  }
-  return resized;
-}
-
-/**
  * Resize the walkable grid to new dimensions.
  * Expanding adds false; truncating slices from right and bottom.
  */
@@ -276,7 +238,6 @@ function resizeWalkable(
  *
  * Layers without a `type` field (or with `type: 'tile'`) are treated as
  * TileLayer. Layers with `type: 'object'` are treated as ObjectLayer.
- * Layers with `type: 'fence'` are treated as FenceLayer.
  */
 function normalizeLayer(
   raw: unknown,
@@ -321,22 +282,6 @@ function normalizeLayer(
     return interactionLayer;
   }
 
-  if (l.type === 'fence') {
-    const fenceLayer: FenceLayer = {
-      type: 'fence',
-      id: (l.id as string) || crypto.randomUUID(),
-      name: (l.name as string) || 'fence',
-      fenceTypeKey: (l.fenceTypeKey as string) || '',
-      visible: l.visible !== undefined ? (l.visible as boolean) : true,
-      opacity: l.opacity !== undefined ? (l.opacity as number) : 1,
-      cells:
-        (l.cells as (FenceCellData | null)[][]) ||
-        createEmptyFenceCells(width, height),
-      frames: (l.frames as number[][]) || createEmptyFrames(width, height),
-    };
-    return fenceLayer;
-  }
-
   // Default: TileLayer
   const tileLayer: TileLayer = {
     type: 'tile',
@@ -364,54 +309,6 @@ function toEditorLayers(
   }
 
   return layers.map((layer) => normalizeLayer(layer, width, height));
-}
-
-/**
- * Create an empty 2D array of null FenceCellData for fence layer cells.
- */
-function createEmptyFenceCells(
-  width: number,
-  height: number
-): (FenceCellData | null)[][] {
-  const cells: (FenceCellData | null)[][] = [];
-  for (let y = 0; y < height; y++) {
-    const row: (FenceCellData | null)[] = [];
-    for (let x = 0; x < width; x++) {
-      row.push(null);
-    }
-    cells.push(row);
-  }
-  return cells;
-}
-
-/**
- * Compute terrain-only walkability for a single cell.
- */
-function terrainWalkableAt(grid: import('@nookstead/map-lib').Cell[][], x: number, y: number): boolean {
-  return isWalkable(grid[y][x].terrain as TerrainCellType);
-}
-
-/**
- * Build a terrain-only walkability grid from the full grid.
- */
-function buildTerrainWalkable(grid: import('@nookstead/map-lib').Cell[][], width: number, height: number): boolean[][] {
-  const tw: boolean[][] = [];
-  for (let y = 0; y < height; y++) {
-    tw[y] = [];
-    for (let x = 0; x < width; x++) {
-      tw[y][x] = terrainWalkableAt(grid, x, y);
-    }
-  }
-  return tw;
-}
-
-/**
- * Collect all fence layers from the layers array as FenceLayerSnapshot[].
- */
-function collectFenceSnapshots(layers: EditorLayerUnion[]): FenceLayerSnapshot[] {
-  return layers
-    .filter((l): l is FenceLayer => l.type === 'fence')
-    .map((l) => ({ cells: l.cells }));
 }
 
 /** The core reducer for the map editor. */
@@ -504,26 +401,6 @@ export function mapEditorReducer(
         // Object layers have no frames to resize
         if (layer.type === 'object') {
           return layer;
-        }
-        if (layer.type === 'fence') {
-          // Fence layers have both cells and frames to resize
-          return {
-            ...layer,
-            cells: resizeFenceCells(
-              layer.cells,
-              state.width,
-              state.height,
-              newWidth,
-              newHeight
-            ),
-            frames: resizeFrames(
-              layer.frames,
-              state.width,
-              state.height,
-              newWidth,
-              newHeight
-            ),
-          };
         }
         if (layer.type === 'interaction') {
           // InteractionLayer: filter out triggers outside new bounds
@@ -859,240 +736,6 @@ export function mapEditorReducer(
         layers: state.layers.map((l, i) =>
           i === action.layerIndex ? movedLayer : l
         ),
-        isDirty: true,
-      };
-    }
-
-    // --- Fence layer actions ---
-
-    case 'SET_FENCE_TYPE':
-      return { ...state, activeFenceTypeKey: action.fenceTypeKey };
-
-    case 'ADD_FENCE_LAYER': {
-      const newFenceLayer: FenceLayer = {
-        type: 'fence',
-        id: crypto.randomUUID(),
-        name: action.name,
-        fenceTypeKey: action.fenceTypeKey,
-        visible: true,
-        opacity: 1,
-        cells: createEmptyFenceCells(state.width, state.height),
-        frames: createEmptyFrames(state.width, state.height),
-      };
-      return {
-        ...state,
-        layers: [...state.layers, newFenceLayer],
-        isDirty: true,
-      };
-    }
-
-    case 'PLACE_FENCE': {
-      const placeTarget = state.layers[action.layerIndex];
-      if (!placeTarget || placeTarget.type !== 'fence') {
-        return state;
-      }
-
-      // Deep-copy cells and frames for immutable update
-      const placeCells = placeTarget.cells.map((row) => [...row]);
-      const placeFrames = placeTarget.frames.map((row) => [...row]);
-
-      // Determine fenceTypeId from the layer's fenceTypeKey
-      const fenceTypeId = placeTarget.fenceTypeKey;
-
-      // Place fence cells at given positions (skip if already occupied by same type)
-      const placedPositions: { x: number; y: number }[] = [];
-      for (const pos of action.positions) {
-        const { x, y } = pos;
-        if (x < 0 || x >= state.width || y < 0 || y >= state.height) continue;
-        if (placeCells[y][x] !== null) continue; // Already occupied
-        placeCells[y][x] = {
-          fenceTypeId,
-          isGate: false,
-          gateOpen: false,
-        };
-        placedPositions.push({ x, y });
-      }
-
-      if (placedPositions.length === 0) return state;
-
-      // Build the updated fence layer for recalculation
-      const placeLayer = { cells: placeCells, frames: placeFrames };
-      recalculateAffectedCells(
-        placeLayer,
-        placedPositions,
-        state.width,
-        state.height
-      );
-
-      // Update walkability for placed cells
-      const terrainWalkable = buildTerrainWalkable(
-        state.grid,
-        state.width,
-        state.height
-      );
-      const updatedFenceLayer: FenceLayer = {
-        ...placeTarget,
-        cells: placeLayer.cells as (FenceCellData | null)[][],
-        frames: placeLayer.frames,
-      };
-      const newPlaceLayers = state.layers.map((l, i) =>
-        i === action.layerIndex ? updatedFenceLayer : l
-      );
-      const fenceSnapshots = collectFenceSnapshots(newPlaceLayers);
-      const newPlaceWalkable = state.walkable.map((row) => [...row]);
-      for (const pos of placedPositions) {
-        updateCellWalkability(
-          newPlaceWalkable,
-          terrainWalkable,
-          fenceSnapshots,
-          pos.x,
-          pos.y
-        );
-      }
-
-      return {
-        ...state,
-        layers: newPlaceLayers,
-        walkable: newPlaceWalkable,
-        isDirty: true,
-      };
-    }
-
-    case 'ERASE_FENCE': {
-      const eraseTarget = state.layers[action.layerIndex];
-      if (!eraseTarget || eraseTarget.type !== 'fence') {
-        return state;
-      }
-
-      // Deep-copy cells and frames
-      const eraseCells = eraseTarget.cells.map((row) => [...row]);
-      const eraseFrames = eraseTarget.frames.map((row) => [...row]);
-
-      // Remove fence cells at given positions
-      const erasedPositions: { x: number; y: number }[] = [];
-      for (const pos of action.positions) {
-        const { x, y } = pos;
-        if (x < 0 || x >= state.width || y < 0 || y >= state.height) continue;
-        if (eraseCells[y][x] === null) continue; // Already empty
-        eraseCells[y][x] = null;
-        eraseFrames[y][x] = FENCE_EMPTY_FRAME;
-        erasedPositions.push({ x, y });
-      }
-
-      if (erasedPositions.length === 0) return state;
-
-      // Recalculate neighbors
-      const eraseLayer = { cells: eraseCells, frames: eraseFrames };
-      recalculateAffectedCells(
-        eraseLayer,
-        erasedPositions,
-        state.width,
-        state.height
-      );
-
-      // Update walkability
-      const eraseTerrainWalkable = buildTerrainWalkable(
-        state.grid,
-        state.width,
-        state.height
-      );
-      const updatedEraseLayer: FenceLayer = {
-        ...eraseTarget,
-        cells: eraseLayer.cells as (FenceCellData | null)[][],
-        frames: eraseLayer.frames,
-      };
-      const newEraseLayers = state.layers.map((l, i) =>
-        i === action.layerIndex ? updatedEraseLayer : l
-      );
-      const eraseSnapshots = collectFenceSnapshots(newEraseLayers);
-      const newEraseWalkable = state.walkable.map((row) => [...row]);
-      for (const pos of erasedPositions) {
-        updateCellWalkability(
-          newEraseWalkable,
-          eraseTerrainWalkable,
-          eraseSnapshots,
-          pos.x,
-          pos.y
-        );
-      }
-
-      return {
-        ...state,
-        layers: newEraseLayers,
-        walkable: newEraseWalkable,
-        isDirty: true,
-      };
-    }
-
-    case 'TOGGLE_GATE': {
-      const gateTarget = state.layers[action.layerIndex];
-      if (!gateTarget || gateTarget.type !== 'fence') {
-        return state;
-      }
-
-      const { x, y } = action;
-      if (x < 0 || x >= state.width || y < 0 || y >= state.height) {
-        return state;
-      }
-
-      const gateCell = gateTarget.cells[y][x];
-      if (gateCell === null) return state;
-
-      // Deep-copy cells and frames
-      const gateCells = gateTarget.cells.map((row) => [...row]);
-      const gateFrames = gateTarget.frames.map((row) => [...row]);
-
-      if (gateCell.isGate) {
-        // Remove gate: revert to regular fence
-        const bitmask = computeFenceBitmask(gateCells, x, y, state.width, state.height);
-        gateCells[y][x] = {
-          ...gateCell,
-          isGate: false,
-          gateOpen: false,
-        };
-        gateFrames[y][x] = getFenceFrame(bitmask);
-      } else {
-        // Place gate: validate corridor constraint
-        if (!canPlaceGate(gateCells, x, y, state.width, state.height)) {
-          return state;
-        }
-        const bitmask = computeFenceBitmask(gateCells, x, y, state.width, state.height);
-        gateCells[y][x] = {
-          ...gateCell,
-          isGate: true,
-          gateOpen: false,
-        };
-        gateFrames[y][x] = getGateFrameIndex(bitmask, false);
-      }
-
-      // Update walkability for the toggled cell
-      const gateTerrainWalkable = buildTerrainWalkable(
-        state.grid,
-        state.width,
-        state.height
-      );
-      const updatedGateLayer: FenceLayer = {
-        ...gateTarget,
-        cells: gateCells as (FenceCellData | null)[][],
-        frames: gateFrames,
-      };
-      const newGateLayers = state.layers.map((l, i) =>
-        i === action.layerIndex ? updatedGateLayer : l
-      );
-      const gateSnapshots = collectFenceSnapshots(newGateLayers);
-      const newGateWalkable = state.walkable.map((row) => [...row]);
-      updateCellWalkability(
-        newGateWalkable,
-        gateTerrainWalkable,
-        gateSnapshots,
-        x,
-        y
-      );
-
-      return {
-        ...state,
-        layers: newGateLayers,
-        walkable: newGateWalkable,
         isDirty: true,
       };
     }

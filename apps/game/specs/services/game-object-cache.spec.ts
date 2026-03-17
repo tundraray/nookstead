@@ -43,20 +43,6 @@ describe('GameObjectCache', () => {
         },
       ],
     },
-    'obj-2': {
-      id: 'obj-2',
-      name: 'Fence',
-      layers: [
-        {
-          frameId: 'frame-3',
-          spriteId: 'sprite-2',
-          xOffset: 0,
-          yOffset: 0,
-          layerOrder: 0,
-        },
-      ],
-      collisionZones: [],
-    },
   };
 
   const mockSprites: Record<string, SpriteMeta> = {
@@ -64,11 +50,6 @@ describe('GameObjectCache', () => {
       id: 'sprite-1',
       name: 'Trees Sheet',
       s3Url: 'https://s3.example.com/trees.png?signed=abc',
-    },
-    'sprite-2': {
-      id: 'sprite-2',
-      name: 'Fences Sheet',
-      s3Url: 'https://s3.example.com/fences.png?signed=def',
     },
   };
 
@@ -89,14 +70,6 @@ describe('GameObjectCache', () => {
       frameW: 16,
       frameH: 16,
     },
-    'frame-3': {
-      id: 'frame-3',
-      spriteId: 'sprite-2',
-      frameX: 0,
-      frameY: 0,
-      frameW: 16,
-      frameH: 16,
-    },
   };
 
   beforeEach(() => {
@@ -112,9 +85,7 @@ describe('GameObjectCache', () => {
       });
 
       expect(cache.getObjectDefinition('obj-1')).toEqual(mockGameObjects['obj-1']);
-      expect(cache.getObjectDefinition('obj-2')).toEqual(mockGameObjects['obj-2']);
       expect(cache.getSpriteUrl('sprite-1')).toBe(mockSprites['sprite-1'].s3Url);
-      expect(cache.getSpriteUrl('sprite-2')).toBe(mockSprites['sprite-2'].s3Url);
       expect(cache.getFrameData('frame-1')).toEqual(mockAtlasFrames['frame-1']);
     });
   });
@@ -217,9 +188,8 @@ describe('GameObjectCache', () => {
       });
 
       const spriteIds = cache.getAllSpriteIds();
-      expect(spriteIds).toHaveLength(2);
+      expect(spriteIds).toHaveLength(1);
       expect(spriteIds).toContain('sprite-1');
-      expect(spriteIds).toContain('sprite-2');
     });
 
     it('should return an empty array when cache is not populated', () => {
@@ -239,18 +209,6 @@ describe('GameObjectCache', () => {
       expect(frameIds).toHaveLength(2);
       expect(frameIds).toContain('frame-1');
       expect(frameIds).toContain('frame-2');
-    });
-
-    it('should return only frames for the specified sprite', () => {
-      cache.populate({
-        gameObjects: mockGameObjects,
-        sprites: mockSprites,
-        atlasFrames: mockAtlasFrames,
-      });
-
-      const frameIds = cache.getFrameIdsForSprite('sprite-2');
-      expect(frameIds).toHaveLength(1);
-      expect(frameIds).toContain('frame-3');
     });
 
     it('should return an empty array for an unknown sprite', () => {

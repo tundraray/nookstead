@@ -11,7 +11,6 @@ export * from './map-zones';
 export * from './materials';
 export * from './tilesets';
 export * from './tileset-tags';
-export * from './fence-types';
 export * from './npc-bots';
 export * from './dialogue-sessions';
 export * from './dialogue-messages';

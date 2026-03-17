@@ -65,12 +65,6 @@ export type {
   SessionKickedPayload,
 } from './types/map';
 export { isTileLayer, isObjectLayer } from './types/map';
-// Fence types (from types/fence-layer.ts)
-export type {
-  FenceCellData,
-  SerializedGateData,
-  SerializedFenceLayer,
-} from './types/fence-layer';
 // Interaction layer types (from types/interaction-layer.ts)
 export type {
   Direction,

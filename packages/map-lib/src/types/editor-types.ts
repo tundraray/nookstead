@@ -2,7 +2,6 @@ import type { Cell } from '@nookstead/shared';
 import type { CellTrigger } from '@nookstead/shared';
 import type { MapType, ZoneData } from './map-types';
 import type { TilesetInfo, MaterialInfo } from './material-types';
-import type { FenceCellData } from '@nookstead/shared';
 
 /** Brush shape for the brush and eraser tools. */
 export type BrushShape = 'circle' | 'square';
@@ -16,8 +15,6 @@ export type EditorTool =
   | 'zone-rect'
   | 'zone-poly'
   | 'object-place'
-  | 'fence'
-  | 'fence-eraser'
   | 'interaction-place'
   | 'interaction-eraser';
 
@@ -29,7 +26,6 @@ export type SidebarTab =
   | 'zones'
   | 'frames'
   | 'game-objects'
-  | 'fence-types'
   | 'interactions';
 
 /** All sidebar tab values as a runtime-accessible constant array. */
@@ -40,7 +36,6 @@ export const SIDEBAR_TABS: SidebarTab[] = [
   'zones',
   'frames',
   'game-objects',
-  'fence-types',
   'interactions',
 ];
 
@@ -81,22 +76,6 @@ export interface ObjectLayer extends BaseLayer {
 }
 
 /**
- * A fence layer with per-cell connection data and derived frame indices.
- * Design Doc Section 4.2: Each fence layer is associated with exactly one
- * fence type (identified by fenceTypeKey). Connection detection operates
- * within a single layer -- cells from different fence layers do not interact.
- */
-export interface FenceLayer extends BaseLayer {
-  type: 'fence';
-  /** Programmatic fence type key (e.g., "wooden_fence") */
-  fenceTypeKey: string;
-  /** [y][x] authoritative cell data. null = empty cell. */
-  cells: (FenceCellData | null)[][];
-  /** [y][x] derived frame indices. 0 = empty (FENCE_EMPTY_FRAME). */
-  frames: number[][];
-}
-
-/**
  * A layer storing sparse interaction triggers per tile.
  * ADR-0017 Decision 1.
  */
@@ -115,10 +94,9 @@ export interface InteractionLayer extends BaseLayer {
  * Narrowing via the `type` field:
  * - `'tile'`        -> TileLayer
  * - `'object'`      -> ObjectLayer
- * - `'fence'`       -> FenceLayer
  * - `'interaction'` -> InteractionLayer
  */
-export type EditorLayerUnion = TileLayer | ObjectLayer | FenceLayer | InteractionLayer;
+export type EditorLayerUnion = TileLayer | ObjectLayer | InteractionLayer;
 
 /**
  * A single tile layer in the editor (backward-compatible flat structure).
@@ -181,7 +159,6 @@ export interface MapEditorState {
   activeLayerIndex: number;
   activeTool: EditorTool;
   activeMaterialKey: string;
-  activeFenceTypeKey: string;
   activeTriggerType: CellTrigger['type'];
   brushSize: number;
   brushShape: BrushShape;
@@ -240,21 +217,6 @@ export type MapEditorAction =
       gridX: number;
       gridY: number;
     }
-
-  // Fence layer actions
-  | { type: 'ADD_FENCE_LAYER'; name: string; fenceTypeKey: string }
-  | {
-      type: 'PLACE_FENCE';
-      layerIndex: number;
-      positions: { x: number; y: number }[];
-    }
-  | {
-      type: 'ERASE_FENCE';
-      layerIndex: number;
-      positions: { x: number; y: number }[];
-    }
-  | { type: 'TOGGLE_GATE'; layerIndex: number; x: number; y: number }
-  | { type: 'SET_FENCE_TYPE'; fenceTypeKey: string }
 
   // Undo/redo
   | { type: 'UNDO' }
@@ -316,8 +278,6 @@ export interface LoadMapPayload {
   walkable: boolean[][];
   metadata?: unknown;
   zones?: ZoneData[];
-  /** Fence layers from persisted map data. Empty array if no fences. */
-  fenceLayers: unknown[];
   /** Interaction layers from persisted map data. */
   interactionLayers?: unknown[];
 }

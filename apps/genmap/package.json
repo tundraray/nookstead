@@ -3,6 +3,8 @@
   "version": "0.0.1",
   "private": true,
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
     "@nookstead/ai": "workspace:*",
     "@nookstead/db": "workspace:*",
     "@nookstead/map-lib": "workspace:*",
