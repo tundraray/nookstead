@@ -25,12 +25,7 @@ import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
 import type { Point } from '@nookstead/pathfinding';
 import { PLAYER_SPEED, MAP_WIDTH, MAP_HEIGHT, TILE_SIZE } from '../constants';
-import {
-  CORRECTION_THRESHOLD,
-  INTERPOLATION_SPEED,
-  DISPLACEMENT_RECONCILE_COOLDOWN_MS,
-  ClientMessage,
-} from '@nookstead/shared';
+import { ClientMessage } from '@nookstead/shared';
 import { findNearestWalkable } from '../systems/displacement';
 import { getRoom } from '../../services/colyseus';
 
@@ -55,17 +50,8 @@ export class Player extends Phaser.GameObjects.Sprite {
   /** Index into `waypoints` of the waypoint currently being targeted. */
   public currentWaypointIndex = 0;
 
-  // Prediction state (FR-16)
-  /** Last authoritative X position received from the server. */
-  authoritativeX: number;
-  /** Last authoritative Y position received from the server. */
-  authoritativeY: number;
-  /** Whether the player is currently interpolating toward the authoritative position. */
-  private isInterpolating = false;
   /** True while the player is displaced — suppresses repeated spiral searches. */
   private displaced = false;
-  /** Timestamp of the last displacement correction (used for reconciliation cooldown). */
-  private displacedAt = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -84,10 +70,6 @@ export class Player extends Phaser.GameObjects.Sprite {
     this.mapWidth = MAP_WIDTH;
     this.mapHeight = MAP_HEIGHT;
     this.tileSize = TILE_SIZE;
-
-    // Initialize authoritative position to starting position
-    this.authoritativeX = x;
-    this.authoritativeY = y;
 
     // Bottom-center anchor (feet alignment)
     this.setOrigin(0.5, 1.0);
@@ -118,11 +100,7 @@ export class Player extends Phaser.GameObjects.Sprite {
    * Phaser frame update hook.
    *
    * Calls the parent implementation (required for the animation system),
-   * applies reconciliation interpolation toward the authoritative position,
-   * then delegates to the active FSM state.
-   *
-   * Interpolation runs at the Player entity level so it continues through
-   * Walk -> Idle state transitions without interruption.
+   * checks for displacement, then delegates to the active FSM state.
    */
   override preUpdate(time: number, delta: number): void {
     super.preUpdate(time, delta);
@@ -150,12 +128,6 @@ export class Player extends Phaser.GameObjects.Sprite {
         if (nearby) {
           this.x = nearby.tileX * TILE_SIZE + TILE_SIZE / 2;
           this.y = (nearby.tileY + 1) * TILE_SIZE;
-          // Sync authoritative position so reconcile() does not fight displacement
-          this.authoritativeX = this.x;
-          this.authoritativeY = this.y;
-          this.isInterpolating = false;
-          this.displacedAt = time;
-
           // Notify server of corrected position
           const room = getRoom();
           if (room) {
@@ -174,72 +146,16 @@ export class Player extends Phaser.GameObjects.Sprite {
     // Y-sorted depth: player renders in front of objects with lower y (AC-4.6)
     this.setDepth(this.y);
 
-    // Apply reconciliation interpolation if active (FR-16)
-    if (this.isInterpolating) {
-      const dx = this.authoritativeX - this.x;
-      const dy = this.authoritativeY - this.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < 0.5) {
-        // Close enough: snap to authoritative and stop interpolating
-        this.x = this.authoritativeX;
-        this.y = this.authoritativeY;
-        this.isInterpolating = false;
-      } else {
-        // Frame-rate-independent exponential decay toward authoritative position.
-        // At 60fps (delta≈16.67): lerpFactor ≈ 0.2 (matches original behavior).
-        // At 30fps (delta≈33.33): lerpFactor ≈ 0.36 (converges at same wall-clock rate).
-        const lerpFactor = 1 - Math.pow(1 - INTERPOLATION_SPEED, delta / 16.67);
-        this.x += dx * lerpFactor;
-        this.y += dy * lerpFactor;
-      }
-    }
-
     this.stateMachine.update(delta);
   }
 
   /**
-   * Called when the server sends an authoritative position update.
-   *
-   * Determines whether to interpolate smoothly or snap to the new position
-   * based on the distance delta between predicted and authoritative positions.
-   *
-   * - Delta >= CORRECTION_THRESHOLD (8px): snap immediately
-   * - Delta > 0.5px but < CORRECTION_THRESHOLD: smooth interpolation
-   * - Delta <= 0.5px: already in sync, no action needed
-   *
-   * This method is called at the Player entity level, NOT within FSM states.
-   * Interpolation continues even when state transitions from Walk to Idle.
+   * Placeholder for future server-authoritative reconciliation.
+   * Currently disabled: local player trusts client-side prediction (MVP).
+   * Will be re-enabled when input-state architecture is implemented.
    */
-  reconcile(serverX: number, serverY: number): void {
-    // Skip reconciliation during displacement cooldown to prevent the server
-    // from overwriting the corrected position before it receives POSITION_UPDATE.
-    if (
-      this.displacedAt > 0 &&
-      performance.now() - this.displacedAt < DISPLACEMENT_RECONCILE_COOLDOWN_MS
-    ) {
-      return;
-    }
-
-    this.authoritativeX = serverX;
-    this.authoritativeY = serverY;
-
-    const dx = serverX - this.x;
-    const dy = serverY - this.y;
-    const delta = Math.sqrt(dx * dx + dy * dy);
-
-    if (delta >= CORRECTION_THRESHOLD) {
-      // Large delta: snap immediately
-      this.x = serverX;
-      this.y = serverY;
-      this.isInterpolating = false;
-    } else if (delta > 0.5) {
-      // Small delta: begin interpolation
-      this.isInterpolating = true;
-    } else {
-      // Negligible delta: already in sync
-      this.isInterpolating = false;
-    }
+  reconcile(_serverX: number, _serverY: number): void {
+    // Intentionally no-op during client-authoritative MVP.
   }
 
   /**

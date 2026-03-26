@@ -32,8 +32,6 @@ export class PlayerManager {
   private sprites = new Map<string, PlayerSprite>();
   private botSprites = new Map<string, PlayerSprite>();
   private detachCallbacks: (() => void)[] = [];
-  /** Local Player entity for reconciliation wiring (FR-16). */
-  private localPlayer: Player | null = null;
   /** Set to true before client-initiated disconnect to suppress reconnect flow. */
   private intentionalLeave = false;
 
@@ -42,15 +40,12 @@ export class PlayerManager {
   }
 
   /**
-   * Register the local Player entity for server reconciliation (FR-16).
-   *
-   * When the server sends authoritative position updates for this session,
-   * the PlayerManager calls player.reconcile() to correct any prediction drift.
-   * Must be called before connect() so the reference is available when the
-   * onAdd callback fires for the local player.
+   * Register the local Player entity.
+   * Currently a no-op — local player uses client-side prediction only (MVP).
+   * Will wire server reconciliation when input-state architecture is implemented.
    */
-  setLocalPlayer(player: Player): void {
-    this.localPlayer = player;
+  setLocalPlayer(_player: Player): void {
+    // Intentionally no-op during client-authoritative MVP.
   }
 
   async connect(existingRoom?: Room<unknown, ChunkRoomState>): Promise<void> {
@@ -116,12 +111,11 @@ export class PlayerManager {
       (player: any, sessionId: any) => {
         const isLocal = sessionId === this.room?.sessionId;
 
-        if (isLocal && this.localPlayer) {
-          // Wire server position updates to local player reconciliation (FR-16)
-          const detachChange = $.onChange(player, () => {
-            this.localPlayer?.reconcile(player.worldX, player.worldY);
-          });
-          this.detachCallbacks.push(detachChange);
+        if (isLocal) {
+          // Local player uses client-side prediction only (FR-16).
+          // Server position updates are intentionally ignored for the
+          // local player to prevent reconciliation oscillation.
+          // Remote players continue to receive interpolated updates.
         }
 
         if (!isLocal) {

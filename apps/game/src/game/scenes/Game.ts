@@ -144,6 +144,9 @@ export class Game extends Scene {
 
     // Enable Arcade Physics on the player for collision detection
     this.physics.add.existing(this.player);
+    // Direct control: position is set externally via setPosition(), not velocity.
+    // Prevents physics postUpdate from fighting manual position changes.
+    (this.player.body as Phaser.Physics.Arcade.Body).setDirectControl(true);
 
     // Register collider between player and object collision bodies (AC-5.2)
     if (this.objectRenderer) {
@@ -157,7 +160,7 @@ export class Game extends Scene {
     const cam = this.cameras.main;
     cam.setBackgroundColor(0x215c81);
     cam.setBounds(0, 0, mapPixelW, mapPixelH);
-    cam.startFollow(this.player, true, 0.1, 0.1);
+    cam.startFollow(this.player, true, 1, 1);
     cam.setZoom(2);
 
     // Tile hover highlight

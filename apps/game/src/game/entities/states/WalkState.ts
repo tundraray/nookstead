@@ -32,8 +32,17 @@ const ARRIVAL_THRESHOLD = 8;
  * - `enter()`: plays the walk animation for the current facing direction
  * - `update()`: checks keyboard first (priority), then moveTarget, then idle
  */
+/** Minimum interval between MOVE messages sent to the server (ms). */
+const SEND_INTERVAL_MS = 50;
+
 export class WalkState implements State {
   readonly name = 'walk';
+
+  /** Accumulated unsent movement deltas. */
+  private pendingDx = 0;
+  private pendingDy = 0;
+  /** Timestamp of last MOVE message sent to server. */
+  private lastSendTime = 0;
 
   constructor(private context: PlayerContext) {}
 
@@ -194,7 +203,8 @@ export class WalkState implements State {
    * Apply movement using the movement system (shared by both input modes).
    *
    * Computes the movement delta, applies it locally for zero-frame-lag
-   * prediction, then sends the delta to the server (fire-and-forget).
+   * prediction, then sends accumulated deltas to the server at a
+   * throttled rate (~20Hz) to reduce network overhead.
    */
   private applyMovement(
     direction: { x: number; y: number },
@@ -220,10 +230,41 @@ export class WalkState implements State {
     // Apply movement locally for zero-frame-lag prediction (FR-16 AC16.1)
     this.context.setPosition(result.x, result.y);
 
-    // Send movement delta to server (fire-and-forget, drop if not connected)
+    // Accumulate deltas and send at throttled rate
+    this.pendingDx += dx;
+    this.pendingDy += dy;
+
     const room = getRoom();
-    if (room && (dx !== 0 || dy !== 0)) {
-      room.send(ClientMessage.MOVE, { dx, dy });
+    const now = performance.now();
+    if (
+      room &&
+      (this.pendingDx !== 0 || this.pendingDy !== 0) &&
+      now - this.lastSendTime >= SEND_INTERVAL_MS
+    ) {
+      room.send(ClientMessage.MOVE, {
+        dx: this.pendingDx,
+        dy: this.pendingDy,
+      });
+      this.pendingDx = 0;
+      this.pendingDy = 0;
+      this.lastSendTime = now;
+    }
+  }
+
+  /**
+   * Flush any remaining unsent movement deltas to the server.
+   * Called when transitioning out of walk state to ensure the
+   * server receives the final position.
+   */
+  exit(): void {
+    const room = getRoom();
+    if (room && (this.pendingDx !== 0 || this.pendingDy !== 0)) {
+      room.send(ClientMessage.MOVE, {
+        dx: this.pendingDx,
+        dy: this.pendingDy,
+      });
+      this.pendingDx = 0;
+      this.pendingDy = 0;
     }
   }
 

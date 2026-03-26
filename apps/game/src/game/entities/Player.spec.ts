@@ -1,16 +1,13 @@
 /**
- * Unit tests for Player.reconcile() movement prediction behavior.
+ * Unit tests for Player entity.
  *
  * Tests verify:
- * 1. Small delta (< CORRECTION_THRESHOLD) activates interpolation
- * 2. Large delta (>= CORRECTION_THRESHOLD) triggers snap
- * 3. Snap sets position equal to authoritative
- * 4. Interpolation converges toward authoritative over multiple frames
+ * 1. reconcile() is a no-op (client-authoritative MVP)
+ * 2. preUpdate() does not apply reconciliation interpolation
+ * 3. setWaypoints / clearWaypoints work correctly
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-import { CORRECTION_THRESHOLD, INTERPOLATION_SPEED } from '@nookstead/shared';
 
 // Mock Phaser before importing Player (must be before any import that uses Phaser)
 jest.mock('phaser', () => {
@@ -118,7 +115,7 @@ function createMockScene(): any {
 }
 
 /**
- * Create a mock GeneratedMap large enough for reconcile tests.
+ * Create a mock GeneratedMap large enough for tests.
  * The walkable grid must cover all pixel positions used in tests
  * (up to ~200px → tile 12 at TILE_SIZE=16) so the displacement
  * check in preUpdate() doesn't relocate the player.
@@ -142,7 +139,7 @@ function createMockMapData(): GeneratedMap {
   };
 }
 
-describe('Player: Movement Prediction', () => {
+describe('Player', () => {
   let player: Player;
 
   beforeEach(() => {
@@ -153,57 +150,43 @@ describe('Player: Movement Prediction', () => {
     // Ensure starting state is consistent
     player.x = 100;
     player.y = 100;
-    player.authoritativeX = 100;
-    player.authoritativeY = 100;
   });
 
-  describe('reconcile(): small delta triggers interpolation', () => {
-    it('should activate interpolation when delta < CORRECTION_THRESHOLD', () => {
-      // Delta of 3px is well below CORRECTION_THRESHOLD (8px)
-      const smallDelta = CORRECTION_THRESHOLD - 5;
-      const serverX = 100 + smallDelta;
-      const serverY = 100;
+  describe('reconcile(): no-op in client-authoritative MVP', () => {
+    it('should not change player position regardless of delta', () => {
+      player.reconcile(200, 200);
 
-      player.reconcile(serverX, serverY);
-
-      // Player should NOT snap: position remains at 100 after reconcile call
       expect(player.x).toBe(100);
       expect(player.y).toBe(100);
+    });
 
-      // After one frame of preUpdate, interpolation moves position toward authoritative
-      player.preUpdate(0, 16);
+    it('should not change position for small deltas either', () => {
+      player.reconcile(103, 100);
 
-      // x should have moved toward serverX but not reached it
-      expect(player.x).toBeGreaterThan(100);
-      expect(player.x).toBeLessThan(serverX);
+      expect(player.x).toBe(100);
+      expect(player.y).toBe(100);
     });
   });
 
-  describe('reconcile(): large delta triggers snap', () => {
-    it('should snap to authoritative when delta >= CORRECTION_THRESHOLD', () => {
-      // Delta of 25px is well above CORRECTION_THRESHOLD (8px)
-      const largeDelta = CORRECTION_THRESHOLD + 17;
-      const serverX = 100 + largeDelta;
-      const serverY = 100;
+  describe('preUpdate(): no reconciliation interpolation', () => {
+    it('should not move position toward any server position after preUpdate', () => {
+      // Even after reconcile is called, preUpdate should not interpolate
+      player.reconcile(200, 200);
+      player.preUpdate(0, 16);
 
-      player.reconcile(serverX, serverY);
-
-      // Player should snap immediately to server position
-      expect(player.x).toBe(serverX);
+      expect(player.x).toBe(100);
       expect(player.y).toBe(100);
     });
 
-    it('should set position equal to authoritative after snap', () => {
-      const serverX = 200;
-      const serverY = 150;
+    it('should maintain position over multiple frames', () => {
+      player.reconcile(105, 100);
 
-      player.reconcile(serverX, serverY);
+      for (let i = 0; i < 10; i++) {
+        player.preUpdate(0, 16);
+      }
 
-      // Verify predicted position equals authoritative after snap
-      expect(player.x).toBe(player.authoritativeX);
-      expect(player.y).toBe(player.authoritativeY);
-      expect(player.x).toBe(200);
-      expect(player.y).toBe(150);
+      expect(player.x).toBe(100);
+      expect(player.y).toBe(100);
     });
   });
 
@@ -244,51 +227,6 @@ describe('Player: Movement Prediction', () => {
 
       expect(player.waypoints).toEqual([]);
       expect(player.currentWaypointIndex).toBe(0);
-    });
-  });
-
-  describe('reconcile(): interpolation converges toward authoritative over frames', () => {
-    it('should converge toward authoritative position over multiple frames', () => {
-      // Setup: small delta of 5px (below CORRECTION_THRESHOLD of 8px)
-      const initialDelta = 5;
-      const targetX = 100 + initialDelta;
-      player.x = 100;
-      player.y = 100;
-
-      player.reconcile(targetX, 100);
-
-      // Verify authoritative was set
-      expect(player.authoritativeX).toBe(targetX);
-
-      // Simulate 10 frames of interpolation
-      const frameCount = 10;
-      const positions: number[] = [];
-      for (let i = 0; i < frameCount; i++) {
-        player.preUpdate(0, 16);
-        positions.push(player.x);
-      }
-
-      // Each subsequent position should be closer to (or equal to) the target
-      for (let i = 1; i < positions.length; i++) {
-        expect(positions[i]).toBeGreaterThanOrEqual(positions[i - 1]);
-      }
-
-      // After 10 frames with delta-time interpolation:
-      // Per-frame factor = 1 - (1 - INTERPOLATION_SPEED)^(delta/16.67)
-      // With delta=16: factor ≈ 0.1927, retention = 1 - factor ≈ 0.8073
-      // remaining = initialDelta * retention^frameCount
-      // The lerp also has a 0.5px snap threshold in preUpdate, so if remaining
-      // drops below 0.5, the position snaps to authoritative.
-      const frameDelta = 16;
-      const retention = Math.pow(1 - INTERPOLATION_SPEED, frameDelta / 16.67);
-      const remaining = initialDelta * Math.pow(retention, frameCount);
-      const expectedMin = targetX - remaining - 0.01;
-
-      expect(player.x).toBeGreaterThan(expectedMin);
-      expect(player.x).toBeLessThanOrEqual(targetX);
-
-      // Y should remain unchanged (no Y delta)
-      expect(player.y).toBe(100);
     });
   });
 });
