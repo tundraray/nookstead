@@ -137,6 +137,7 @@ export interface SerializedInteractionLayer {
   triggers: SerializedTriggerEntry[];
 }
 
+
 // ============================================================
 // Serialization functions
 // ============================================================

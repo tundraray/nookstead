@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useDroppable } from '@dnd-kit/core';
 import type { CanvasBackground } from '@/lib/canvas-utils';
 import type { CollisionZone } from '@nookstead/db';
 
@@ -262,6 +263,8 @@ export function ObjectGridCanvas({
   onZoneUpdate,
   onZoneSelect,
 }: ObjectGridCanvasProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'object-canvas' });
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
   const [dirty, setDirty] = useState(0);
@@ -699,7 +702,10 @@ export function ObjectGridCanvas({
   const cursor = editorMode === 'zones' ? 'crosshair' : activeFrame ? 'crosshair' : 'default';
 
   return (
-    <div className={`overflow-auto border rounded-lg inline-block ${className ?? ''}`}>
+    <div
+      ref={setNodeRef}
+      className={`overflow-auto border rounded-lg inline-block ${isOver ? 'ring-2 ring-primary' : ''} ${className ?? ''}`}
+    >
       <canvas
         ref={canvasRef}
         className="max-w-full"

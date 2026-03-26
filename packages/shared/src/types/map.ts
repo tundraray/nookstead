@@ -1,4 +1,3 @@
-import type { SerializedFenceLayer } from './fence-layer';
 import type { SerializedInteractionLayer } from './interaction-layer';
 
 // ============================================================
@@ -148,8 +147,6 @@ export interface MapDataPayload {
   spawnX?: number;
   /** Server-computed spawn pixel Y. */
   spawnY?: number;
-  /** Fence layers for the map. Omitted or empty array if no fences. */
-  fenceLayers?: SerializedFenceLayer[];
   /** Interaction layers for the map. Omitted or empty array if no interactions. */
   interactionLayers?: SerializedInteractionLayer[];
   /** Server-computed spawn facing direction. */
