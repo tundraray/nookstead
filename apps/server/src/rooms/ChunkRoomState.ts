@@ -13,6 +13,7 @@ export class ChunkPlayer extends Schema {
   @type('string') direction!: string;
   @type('string') skin!: string;
   @type('string') name!: string;
+  @type('string') animState!: string;
   @type([InventorySlotSchema]) hotbar = new ArraySchema<InventorySlotSchema>(
     ...Array.from({ length: HOTBAR_SLOT_COUNT }, () => new InventorySlotSchema())
   );

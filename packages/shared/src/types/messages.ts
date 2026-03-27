@@ -12,6 +12,8 @@ export const ClientMessage = {
   INVENTORY_ADD: 'inventory_add', // debug/admin use only
   INVENTORY_DROP: 'inventory_drop',
   TOOL_ACTION: 'tool_action',
+  // Animation state sync
+  ANIM_STATE: 'anim_state',
 } as const;
 
 export type ClientMessageType = typeof ClientMessage[keyof typeof ClientMessage];
@@ -62,4 +64,9 @@ export interface ToolActionPayload {
   x: number;
   y: number;
   data?: Record<string, unknown>;
+}
+
+/** Payload for ANIM_STATE messages (non-movement animation sync). */
+export interface AnimStatePayload {
+  animState: string;
 }

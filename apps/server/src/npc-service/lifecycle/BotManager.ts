@@ -12,6 +12,11 @@ import {
   MAX_BOTS_PER_HOMESTEAD,
   AVAILABLE_SKINS,
   DEFAULT_NPC_INVENTORY_SIZE,
+  BOT_SIT_CHANCE,
+  BOT_SIT_MIN_IDLE_TICKS,
+  BOT_SIT_MAX_IDLE_TICKS,
+  BOT_SIT_MIN_DURATION_TICKS,
+  BOT_SIT_MAX_DURATION_TICKS,
 } from '@nookstead/shared';
 import type {
   ServerBot,
@@ -31,13 +36,11 @@ import type { InventoryManager } from '../../inventory/index.js';
  * Uses generic function signatures to accept the concrete DB functions
  * from @nookstead/db without importing Drizzle-specific types.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface InitDbFunctions {
   createInventory: (...args: any[]) => Promise<any>;
   loadInventory: (...args: any[]) => Promise<any>;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface SaveDbFunctions {
   saveSlots: (...args: any[]) => Promise<any>;
 }
@@ -355,6 +358,7 @@ export class BotManager {
     bot.targetX = null;
     bot.targetY = null;
     bot.idleTicks = 0;
+    bot.sitTicks = 0;
     bot.walkStartTime = null;
     bot.waypoints = [];
     bot.currentWaypointIndex = 0;
@@ -555,6 +559,8 @@ export class BotManager {
     if (bot.state === 'interacting') return false;
     if (bot.state === 'idle') {
       return this.tickIdle(bot);
+    } else if (bot.state === 'sitting') {
+      return this.tickSitting(bot);
     } else {
       return this.tickWalkingWaypoint(bot, deltaMs, now);
     }
@@ -562,6 +568,25 @@ export class BotManager {
 
   private tickIdle(bot: ServerBot): boolean {
     bot.idleTicks += 1;
+
+    // Accumulate sit eligibility ticks across wander cycles.
+    // sitTicks tracks cumulative idle time for sit threshold comparison.
+    bot.sitTicks++;
+
+    // Sit eligibility check: after accumulating enough idle ticks
+    // (across wander cycles), roll for a random chance to sit.
+    const sitThreshold =
+      BOT_SIT_MIN_IDLE_TICKS +
+      Math.floor(
+        Math.random() *
+          (BOT_SIT_MAX_IDLE_TICKS - BOT_SIT_MIN_IDLE_TICKS + 1)
+      );
+
+    if (bot.sitTicks >= sitThreshold && Math.random() < BOT_SIT_CHANCE) {
+      this.transitionToSitting(bot);
+      return true;
+    }
+
     if (bot.idleTicks >= BOT_WANDER_INTERVAL_TICKS) {
       return this.startWander(bot);
     }
@@ -699,6 +724,37 @@ export class BotManager {
     // Stay idle, will retry on next tickIdle trigger
     this.transitionToIdle(bot);
     return true;
+  }
+
+  private transitionToSitting(bot: ServerBot): void {
+    bot.state = 'sitting';
+    bot.sitTicks = 0;
+    bot.targetX = null;
+    bot.targetY = null;
+    bot.walkStartTime = null;
+    bot.waypoints = [];
+    bot.currentWaypointIndex = 0;
+    bot.routeComputedAt = 0;
+    this.engines.get(bot.id)?.clearPath();
+  }
+
+  private tickSitting(bot: ServerBot): boolean {
+    bot.sitTicks++;
+
+    const durationThreshold =
+      BOT_SIT_MIN_DURATION_TICKS +
+      Math.floor(
+        Math.random() *
+          (BOT_SIT_MAX_DURATION_TICKS - BOT_SIT_MIN_DURATION_TICKS + 1)
+      );
+
+    if (bot.sitTicks >= durationThreshold) {
+      bot.sitTicks = 0;
+      this.transitionToIdle(bot);
+      return true;
+    }
+
+    return false;
   }
 
   private transitionToIdle(bot: ServerBot): void {

@@ -2,7 +2,7 @@
  * State machine states for a bot companion.
  * Bots alternate between IDLE (waiting) and WALKING (moving toward a target).
  */
-export type BotAnimState = 'idle' | 'walking' | 'interacting';
+export type BotAnimState = 'idle' | 'walking' | 'interacting' | 'sitting';
 
 /**
  * Runtime state of a single bot, mirroring Colyseus ChunkBot schema fields.

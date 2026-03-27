@@ -136,14 +136,10 @@ export class PlayerManager {
             // Update remote sprite target position using worldX/worldY
             sprite.setTarget(player.worldX, player.worldY);
 
-            // Derive animState client-side: walking if position differs from
-            // current rendered position, idle otherwise
-            const isMoving =
-              player.worldX !== sprite.getX() ||
-              player.worldY !== sprite.getY();
+            // Read animation state from schema (set by server ANIM_STATE handler)
             sprite.updateAnimation(
               player.direction || 'down',
-              isMoving ? 'walk' : 'idle'
+              player.animState || 'idle'
             );
           });
           this.detachCallbacks.push(detachChange);
@@ -219,8 +215,11 @@ export class PlayerManager {
           sprite.setTarget(bot.worldX, bot.worldY);
 
           // Derive animation state from bot.state schema field
-          // Server sends 'walking', client animation key expects 'walk'
-          const animState = bot.state === 'walking' ? 'walk' : 'idle';
+          // Server sends 'walking'/'sitting', client animation keys are 'walk'/'sit'
+          const animState =
+            bot.state === 'walking' ? 'walk' :
+            bot.state === 'sitting' ? 'sit' :
+            'idle';
           sprite.updateAnimation(bot.direction || 'down', animState);
         });
         this.detachCallbacks.push(detachChange);
