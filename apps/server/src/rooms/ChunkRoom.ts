@@ -260,6 +260,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       if (!chunkPlayer) return;
 
       if (!VALID_ANIM_STATES.has(animState)) {
+        // eslint-disable-next-line no-control-regex
         const safe = animState.slice(0, 50).replace(/[\x00-\x1f]/g, '');
         console.warn(
           `[ChunkRoom] Invalid animState "${safe}" from session ${client.sessionId} — ignoring`
