@@ -3,6 +3,7 @@ import { StateMachine, type State } from '../../src/game/entities/StateMachine';
 import { InputController } from '../../src/game/input/InputController';
 import { IdleState } from '../../src/game/entities/states/IdleState';
 import { WalkState } from '../../src/game/entities/states/WalkState';
+import { SitState } from '../../src/game/entities/states/SitState';
 import { getActiveSkin } from '../../src/game/characters/skin-registry';
 import {
   PLAYER_SPEED,
@@ -51,15 +52,33 @@ jest.mock('phaser', () => {
     preUpdate(...args: unknown[]) { return phaserMocks.preUpdate(...args); }
   }
 
+  class MockEventEmitter {
+    on() { return this; }
+    off() { return this; }
+    emit() { return this; }
+  }
+
   return {
     __esModule: true,
     default: {
       GameObjects: {
         Sprite: MockSprite,
       },
+      Events: {
+        EventEmitter: MockEventEmitter,
+      },
+      Input: {
+        Keyboard: { JustDown: jest.fn(() => false) },
+      },
     },
     GameObjects: {
       Sprite: MockSprite,
+    },
+    Events: {
+      EventEmitter: MockEventEmitter,
+    },
+    Input: {
+      Keyboard: { JustDown: jest.fn(() => false) },
     },
   };
 });
@@ -112,6 +131,18 @@ jest.mock('../../src/game/entities/states/WalkState', () => ({
   })),
 }));
 
+jest.mock('../../src/game/entities/states/SitState', () => ({
+  SitState: jest.fn().mockImplementation(() => ({
+    name: 'sit',
+    enter: jest.fn(),
+    update: jest.fn(),
+  })),
+}));
+
+jest.mock('../../src/services/colyseus', () => ({
+  getRoom: jest.fn(() => null),
+}));
+
 jest.mock('../../src/game/characters/skin-registry', () => ({
   getDefaultSkin: jest.fn().mockReturnValue({
     key: 'scout',
@@ -142,6 +173,7 @@ function createMockScene(): Phaser.Scene {
       keyboard: {
         createCursorKeys: jest.fn(),
         addKeys: jest.fn(),
+        addKey: jest.fn(() => ({ isDown: false })),
       },
     },
   } as unknown as Phaser.Scene;
@@ -305,6 +337,16 @@ describe('Player', () => {
       expect((WalkState as jest.Mock).mock.calls[0][0]).toBe(player);
     });
 
+    it('should use SitState instance for the sit state', () => {
+      new Player(scene, 100, 200, mapData);
+      expect(SitState).toHaveBeenCalledTimes(1);
+    });
+
+    it('should pass the player as context to SitState', () => {
+      const player = new Player(scene, 100, 200, mapData);
+      expect((SitState as jest.Mock).mock.calls[0][0]).toBe(player);
+    });
+
     it('should expose the stateMachine as a public property', () => {
       const player = new Player(scene, 100, 200, mapData);
       expect(player.stateMachine).toBeDefined();
@@ -315,7 +357,7 @@ describe('Player', () => {
   // Placeholder states
   // -----------------------------------------------------------
   describe('placeholder states', () => {
-    const placeholderNames = ['waiting', 'sit', 'hit', 'punch', 'hurt'];
+    const placeholderNames = ['waiting', 'hit', 'punch', 'hurt'];
 
     it.each(placeholderNames)(
       'should register "%s" as a placeholder state with correct name',

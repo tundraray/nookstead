@@ -41,6 +41,13 @@ describe('bot-types', () => {
       expect(bot.inventoryId).toBeNull();
     });
 
+    it('should initialize sitTicks to 0', () => {
+      const record = makeBotRecord();
+      const bot = createServerBot(record);
+
+      expect(bot.sitTicks).toBe(0);
+    });
+
     it('should allow inventoryId to be set to a UUID string', () => {
       const record = makeBotRecord();
       const bot = createServerBot(record);

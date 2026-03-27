@@ -13,6 +13,7 @@ import { PlayerManager } from '../multiplayer/PlayerManager';
 import { Player } from '../entities/Player';
 import { ObjectRenderer } from '../objects/ObjectRenderer';
 import { isMovementLocked, setupMovementLock, teardownMovementLock } from '../systems/dialogue-lock';
+import { isTextInputFocused } from '../input/InputController';
 import { createClickPathfindingSystem, type ClickPathfindingSystem } from '../systems/click-pathfinding';
 import { GameClockClient } from '../systems/GameClockClient';
 import type { GameObjectCache } from '../services/game-object-cache';
@@ -34,6 +35,11 @@ export class Game extends Scene {
   private disconnectHandler?: () => void;
   private hardResetHandler?: () => void;
   private gameClock: GameClockClient | null = null;
+
+  /**
+   * X key for toggling the sit action from idle state.
+   */
+  private xKey: Phaser.Input.Keyboard.Key | null = null;
 
   constructor() {
     super('Game');
@@ -236,6 +242,11 @@ export class Game extends Scene {
       cam.setSize(gameSize.width, gameSize.height);
     });
 
+    // Register X key for sit toggle
+    if (this.input.keyboard) {
+      this.xKey = this.input.keyboard.addKey('X');
+    }
+
     // Multiplayer — reuse existing room from LoadingScene to avoid duplicate connection
     this.playerManager = new PlayerManager(this);
     this.playerManager.setLocalPlayer(this.player);
@@ -277,6 +288,17 @@ export class Game extends Scene {
   override update(_time: number, delta: number): void {
     // Drive interpolation on all remote player sprites
     this.playerManager.update(delta);
+
+    // Sit toggle: X key (idle -> sit only; sit -> idle is handled by SitState)
+    if (
+      this.xKey &&
+      Phaser.Input.Keyboard.JustDown(this.xKey) &&
+      !isTextInputFocused() &&
+      !isMovementLocked() &&
+      this.player.stateMachine.currentState === 'idle'
+    ) {
+      this.player.stateMachine.setState('sit');
+    }
   }
 
   shutdown(): void {

@@ -142,6 +142,19 @@ export const BOT_NAMES: readonly string[] = [
   'Willow',
 ];
 
+// ─── Bot Sit Timing ─────────────────────────────────────────────────────────
+
+/** Probability of a bot sitting on any eligible idle tick check (0.0 -- 1.0). */
+export const BOT_SIT_CHANCE = 0.15;
+/** Minimum idle ticks before a bot becomes eligible to sit. */
+export const BOT_SIT_MIN_IDLE_TICKS = 50;
+/** Maximum idle ticks before sit eligibility is checked. */
+export const BOT_SIT_MAX_IDLE_TICKS = 150;
+/** Minimum number of ticks a bot stays seated before auto-standing. */
+export const BOT_SIT_MIN_DURATION_TICKS = 60;
+/** Maximum number of ticks a bot stays seated before auto-standing. */
+export const BOT_SIT_MAX_DURATION_TICKS = 180;
+
 // ─── A* Pathfinding Configuration ───────────────────────────────────────────
 
 /**

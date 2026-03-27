@@ -112,7 +112,7 @@ describe('ChunkPlayer', () => {
   });
 
   describe('schema field count', () => {
-    it('should have exactly 7 top-level fields (6 existing + 1 hotbar)', () => {
+    it('should have exactly 8 top-level fields (7 existing + 1 hotbar)', () => {
       const player = new ChunkPlayer();
 
       // Colyseus v4 stores field metadata on the ChangeTree
@@ -122,9 +122,9 @@ describe('ChunkPlayer', () => {
         (entry: unknown) => (entry as { name: string }).name
       );
 
-      expect(fieldNames).toHaveLength(7);
+      expect(fieldNames).toHaveLength(8);
       expect([...fieldNames].sort()).toEqual(
-        ['direction', 'hotbar', 'id', 'name', 'skin', 'worldX', 'worldY'].sort()
+        ['animState', 'direction', 'hotbar', 'id', 'name', 'skin', 'worldX', 'worldY'].sort()
       );
     });
   });

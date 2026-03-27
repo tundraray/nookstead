@@ -12,6 +12,7 @@ export type {
   ClientMessageType,
   ChunkTransitionPayload,
   ToolActionPayload,
+  AnimStatePayload,
 } from './types/messages';
 export {
   COLYSEUS_PORT,
@@ -189,6 +190,11 @@ export {
   BOT_EXTENDED_IDLE_TICKS,
   PLAYER_MAX_PATH_LENGTH,
   PLAYER_WAYPOINT_THRESHOLD,
+  BOT_SIT_CHANCE,
+  BOT_SIT_MIN_IDLE_TICKS,
+  BOT_SIT_MAX_IDLE_TICKS,
+  BOT_SIT_MIN_DURATION_TICKS,
+  BOT_SIT_MAX_DURATION_TICKS,
   DEFAULT_PLAYER_INVENTORY_SIZE,
   HOTBAR_SLOT_COUNT,
   DEFAULT_NPC_INVENTORY_SIZE,

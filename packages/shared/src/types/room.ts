@@ -14,6 +14,7 @@ export interface PlayerState {
   direction: string;
   skin: string;
   name: string;
+  animState: string;
 }
 
 export interface AuthData {

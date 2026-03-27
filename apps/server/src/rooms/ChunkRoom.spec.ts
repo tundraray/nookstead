@@ -1434,4 +1434,146 @@ describe('ChunkRoom', () => {
       expect(messageHandlers.has(ClientMessage.DIALOGUE_END)).toBe(true);
     });
   });
+
+  /* ================================================================ */
+  /*  ANIM_STATE message handler                                       */
+  /* ================================================================ */
+  describe('ANIM_STATE message handler', () => {
+    async function joinPlayerForAnimState(
+      testRoom: ChunkRoom,
+      client: MockClient,
+      mapId: string,
+      userId: string
+    ): Promise<void> {
+      const mapRecord = buildMapRecord({ id: mapId, userId });
+      mockLoadPosition.mockResolvedValue({
+        worldX: 100,
+        worldY: 200,
+        chunkId: `map:${mapId}`,
+        direction: 'down',
+      });
+      mockLoadMap.mockResolvedValue(mapRecord);
+      mockWorld.getPlayer.mockReturnValue({
+        id: client.sessionId,
+        sessionId: client.sessionId,
+        userId,
+        worldX: 100,
+        worldY: 200,
+        chunkId: `map:${mapId}`,
+        direction: 'down',
+        skin: 'scout_1',
+        name: userId,
+      });
+
+      const authData: AuthData = { userId, email: `${userId}@test.com` };
+      await testRoom.onJoin(client as never, {}, authData);
+    }
+
+    it('should register ANIM_STATE message handler in onCreate', () => {
+      // Arrange + Act
+      room.onCreate({ chunkId: 'map:test-map' });
+
+      // Assert
+      expect(messageHandlers.has(ClientMessage.ANIM_STATE)).toBe(true);
+    });
+
+    it('should update chunkPlayer.animState for valid animState "sit"', async () => {
+      // Arrange
+      const mapId = 'anim-sit-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForAnimState(room, mockClient, mapId, 'user-anim-sit');
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.ANIM_STATE);
+      handler!(mockClient, { animState: 'sit' });
+
+      // Assert
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer?.animState).toBe('sit');
+    });
+
+    it('should update chunkPlayer.animState for valid animState "walk"', async () => {
+      // Arrange
+      const mapId = 'anim-walk-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForAnimState(room, mockClient, mapId, 'user-anim-walk');
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.ANIM_STATE);
+      handler!(mockClient, { animState: 'walk' });
+
+      // Assert
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer?.animState).toBe('walk');
+    });
+
+    it('should update chunkPlayer.animState for valid animState "idle"', async () => {
+      // Arrange
+      const mapId = 'anim-idle-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForAnimState(room, mockClient, mapId, 'user-anim-idle');
+
+      // First set to 'sit' to verify it changes back to 'idle'
+      const handler = messageHandlers.get(ClientMessage.ANIM_STATE);
+      handler!(mockClient, { animState: 'sit' });
+
+      // Act
+      handler!(mockClient, { animState: 'idle' });
+
+      // Assert
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer?.animState).toBe('idle');
+    });
+
+    it('should not update schema for invalid animState and log a warning', async () => {
+      // Arrange
+      const mapId = 'anim-invalid-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+      await joinPlayerForAnimState(room, mockClient, mapId, 'user-anim-invalid');
+
+      const consoleWarnSpy = jest
+        .spyOn(console, 'warn')
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        .mockImplementation(() => {});
+
+      // Act
+      const handler = messageHandlers.get(ClientMessage.ANIM_STATE);
+      handler!(mockClient, { animState: 'dance' });
+
+      // Assert: animState remains 'idle' (set during join)
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer?.animState).toBe('idle');
+
+      // Assert: warning was logged
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid animState')
+      );
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should silently return if client session not found in players', () => {
+      // Arrange
+      room.onCreate({ chunkId: 'map:test-map' });
+      const unknownClient = { sessionId: 'unknown-session', send: jest.fn() };
+
+      // Act — should not throw
+      const handler = messageHandlers.get(ClientMessage.ANIM_STATE);
+      expect(() => handler!(unknownClient, { animState: 'sit' })).not.toThrow();
+    });
+
+    it('should set animState to idle on player join', async () => {
+      // Arrange
+      const mapId = 'anim-join-map';
+      room.onCreate({ chunkId: `map:${mapId}` });
+
+      // Act
+      await joinPlayerForAnimState(room, mockClient, mapId, 'user-anim-join');
+
+      // Assert
+      const chunkPlayer = room.state.players.get(mockClient.sessionId);
+      expect(chunkPlayer).toBeDefined();
+      expect(chunkPlayer?.animState).toBe('idle');
+    });
+  });
 });

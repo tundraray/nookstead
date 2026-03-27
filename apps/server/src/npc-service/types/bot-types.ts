@@ -20,6 +20,8 @@ export interface ServerBot {
   targetY: number | null;
   /** Tick counter for IDLE -> WALKING transition. */
   idleTicks: number;
+  /** Tick counter for SITTING state duration tracking. */
+  sitTicks: number;
   /** Timestamp when current WALKING state started (for stuck detection). */
   walkStartTime: number | null;
   /** Position at walkStartTime (for stuck detection). */
@@ -121,6 +123,7 @@ export function createServerBot(record: NpcBot): ServerBot {
     targetX: null,
     targetY: null,
     idleTicks: 0,
+    sitTicks: 0,
     walkStartTime: null,
     lastKnownX: record.worldX,
     lastKnownY: record.worldY,

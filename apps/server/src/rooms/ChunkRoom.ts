@@ -72,6 +72,7 @@ import {
   type InventoryMovePayload,
   type InventoryAddPayload,
   type InventoryDropPayload,
+  type AnimStatePayload,
 } from '@nookstead/shared';
 import { applyObjectCollisionZones } from '@nookstead/map-lib';
 import { DialogueService } from '../npc-service/ai/DialogueService';
@@ -80,6 +81,9 @@ import { generateNpcCharacter } from '@nookstead/ai';
 import { type ToolContext, createNpcTools } from '../npc-service/ai/tools/index.js';
 
 const POSITION_SAVE_INTERVAL_MS = 30_000;
+
+/** Whitelist of valid animation states accepted from clients. */
+const VALID_ANIM_STATES = new Set(['idle', 'walk', 'sit']);
 
 // ---------------------------------------------------------------------------
 // ChunkId parsing helpers
@@ -239,6 +243,32 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     this.onMessage(ClientMessage.TOOL_ACTION, (_client, payload: unknown) => {
       const p = payload as { action?: string; x?: number; y?: number };
       console.log(`[ChunkRoom] TOOL_ACTION received: ${p.action} at (${p.x},${p.y})`)
+    });
+
+    // Animation state sync (sit, idle, walk)
+    this.onMessage(ClientMessage.ANIM_STATE, (client, payload: unknown) => {
+      if (
+        !payload ||
+        typeof payload !== 'object' ||
+        typeof (payload as AnimStatePayload).animState !== 'string'
+      ) {
+        return;
+      }
+
+      const { animState } = payload as AnimStatePayload;
+      const chunkPlayer = this.state.players.get(client.sessionId);
+      if (!chunkPlayer) return;
+
+      if (!VALID_ANIM_STATES.has(animState)) {
+        // eslint-disable-next-line no-control-regex
+        const safe = animState.slice(0, 50).replace(/[\x00-\x1f]/g, '');
+        console.warn(
+          `[ChunkRoom] Invalid animState "${safe}" from session ${client.sessionId} — ignoring`
+        );
+        return;
+      }
+
+      chunkPlayer.animState = animState;
     });
 
     // Bot simulation tick (100ms interval, matching PATCH_RATE_MS)
@@ -609,6 +639,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     chunkPlayer.direction = direction;
     chunkPlayer.skin = serverPlayer.skin;
     chunkPlayer.name = serverPlayer.name;
+    chunkPlayer.animState = 'idle';
     this.state.players.set(client.sessionId, chunkPlayer);
 
     // Register session for duplicate detection

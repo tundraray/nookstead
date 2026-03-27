@@ -11,8 +11,8 @@
  * game objects based on vertical screen position.
  *
  * Seven states are registered in the FSM:
- * - **idle** and **walk** are fully implemented MVP states
- * - **waiting**, **sit**, **hit**, **punch**, **hurt** are placeholder
+ * - **idle**, **walk**, and **sit** are fully implemented states
+ * - **waiting**, **hit**, **punch**, **hurt** are placeholder
  *   states that play the corresponding animation on entry
  */
 
@@ -20,6 +20,7 @@ import Phaser from 'phaser';
 import { StateMachine, type State } from './StateMachine';
 import { InputController } from '../input/InputController';
 import { IdleState, WalkState } from './states';
+import { SitState } from './states/SitState';
 import { type Direction, animKey } from '../characters/frame-map';
 import { getActiveSkin } from '../characters/skin-registry';
 import type { GeneratedMap } from '@nookstead/shared';
@@ -80,16 +81,20 @@ export class Player extends Phaser.GameObjects.Sprite {
     // Create input controller
     this.inputController = new InputController(scene);
 
+    // Register X key for sit state toggle
+    const xKey = scene.input.keyboard?.addKey('X') ?? null;
+
     // Create MVP states
     const idleState = new IdleState(this);
     const walkState = new WalkState(this);
+    const sitState = new SitState(this, xKey);
 
     // Create state machine (starts in 'idle')
     this.stateMachine = new StateMachine(this, 'idle', {
       idle: idleState,
       walk: walkState,
       waiting: this.createPlaceholderState('waiting'),
-      sit: this.createPlaceholderState('sit'),
+      sit: sitState,
       hit: this.createPlaceholderState('hit'),
       punch: this.createPlaceholderState('punch'),
       hurt: this.createPlaceholderState('hurt'),
@@ -196,6 +201,17 @@ export class Player extends Phaser.GameObjects.Sprite {
   clearWaypoints(): void {
     this.waypoints = [];
     this.currentWaypointIndex = 0;
+  }
+
+  /**
+   * Send an animation state message to the server.
+   *
+   * Provides a consistent API for states (and external callers) to notify
+   * the server of animation state changes rather than calling
+   * `getRoom()?.send()` directly.
+   */
+  sendAnimState(state: string): void {
+    getRoom()?.send(ClientMessage.ANIM_STATE, { animState: state });
   }
 
   /**

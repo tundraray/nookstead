@@ -109,6 +109,7 @@ function createMockScene(): any {
           S: { ...mockKey },
           D: { ...mockKey },
         })),
+        addKey: jest.fn(() => ({ ...mockKey })),
       },
     },
   };

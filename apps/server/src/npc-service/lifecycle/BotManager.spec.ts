@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import {
   BOT_WANDER_INTERVAL_TICKS,
   BOT_INTERACTION_RADIUS,
@@ -7,6 +7,8 @@ import {
   MAX_BOTS_PER_HOMESTEAD,
   TILE_SIZE,
   DEFAULT_NPC_INVENTORY_SIZE,
+  BOT_SIT_MIN_DURATION_TICKS,
+  BOT_SIT_MAX_DURATION_TICKS,
 } from '@nookstead/shared';
 import { BotManager } from './BotManager.js';
 import type { BotManagerConfig } from '../types/bot-types.js';
@@ -422,6 +424,11 @@ describe('BotManager', () => {
     });
 
     it('should enter extended idle after BOT_MAX_PATHFIND_FAILURES consecutive failures', () => {
+      // Mock Math.random to return 0.7 so:
+      //  - sit chance check always fails (0.7 >= BOT_SIT_CHANCE 0.15)
+      //  - pickRandomWalkableTile selects tiles across the wall (unreachable)
+      const rngSpy = jest.spyOn(Math, 'random').mockReturnValue(0.7);
+
       // Create a grid where the bot's tile is walkable, and many nearby tiles
       // are also walkable BUT unreachable (separated by a wall of non-walkable tiles).
       // This ensures pickRandomWalkableTile finds targets, but findPath returns [].
@@ -470,6 +477,8 @@ describe('BotManager', () => {
           ticksSinceLastUpdate++;
         }
       }
+
+      rngSpy.mockRestore();
 
       // Bot should have experienced an extended idle period
       expect(sawExtendedIdlePeriod).toBe(true);
@@ -1206,6 +1215,330 @@ describe('BotManager', () => {
         expect(mockInventoryManager.saveInventory).toHaveBeenCalledTimes(2);
         expect(mockInventoryManager.unloadInventory).toHaveBeenCalledTimes(2);
       });
+    });
+  });
+
+  // --- Sitting state behavior -----------------------------------------------
+
+  describe('sitting state behavior', () => {
+    let randomSpy: jest.SpiedFunction<typeof Math.random>;
+
+    beforeEach(() => {
+      randomSpy = jest.spyOn(Math, 'random');
+    });
+
+    afterEach(() => {
+      randomSpy.mockRestore();
+    });
+
+    it('should transition bot from idle to sitting when sitTicks reaches threshold and random check passes', () => {
+      // Use a single-tile grid so the bot can only fail to wander,
+      // which keeps it idle while sitTicks accumulates across wander cycles.
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      // Return 0 for all random calls:
+      // - sit threshold = BOT_SIT_MIN_IDLE_TICKS (minimum)
+      // - sit chance = 0 (passes: 0 < BOT_SIT_CHANCE)
+      // - wander tile picking returns same tile (no path)
+      randomSpy.mockReturnValue(0);
+
+      // sitTicks accumulates each idle tick (even across wander cycle resets).
+      // After BOT_SIT_MIN_IDLE_TICKS cumulative idle ticks, the sit check fires.
+      let sawSitting = false;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-bot' && u.state === 'sitting') {
+            sawSitting = true;
+          }
+        }
+        if (sawSitting) break;
+      }
+
+      expect(sawSitting).toBe(true);
+    });
+
+    it('should set bot.state to sitting and reset sitTicks to 0 on transition', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-state-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      let sittingUpdate: { id: string; state: string } | null = null;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-state-bot' && u.state === 'sitting') {
+            sittingUpdate = u;
+          }
+        }
+        if (sittingUpdate) break;
+      }
+
+      expect(sittingUpdate).not.toBeNull();
+      expect(sittingUpdate!.state).toBe('sitting');
+    });
+
+    it('should preserve bot direction during sit transition (AC-17)', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-dir-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+          direction: 'left',
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      let sittingUpdate: { direction: string } | null = null;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-dir-bot' && u.state === 'sitting') {
+            sittingUpdate = u;
+          }
+        }
+        if (sittingUpdate) break;
+      }
+
+      expect(sittingUpdate).not.toBeNull();
+      expect(sittingUpdate!.direction).toBe('left');
+    });
+
+    it('should increment sitTicks each tick while sitting', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-tick-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      // Tick until the bot enters sitting
+      let enteredSitting = false;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-tick-bot' && u.state === 'sitting') {
+            enteredSitting = true;
+          }
+        }
+        if (enteredSitting) break;
+      }
+      expect(enteredSitting).toBe(true);
+
+      // Now continue ticking. With random=0, duration threshold = BOT_SIT_MIN_DURATION_TICKS.
+      // The bot should stay sitting for exactly BOT_SIT_MIN_DURATION_TICKS ticks
+      // before transitioning back to idle.
+      let ticksInSitting = 0;
+      let returnedToIdle = false;
+      for (let i = 0; i < BOT_SIT_MAX_DURATION_TICKS + 10; i++) {
+        const updates = manager.tick(100);
+        ticksInSitting++;
+        for (const u of updates) {
+          if (u.id === 'sit-tick-bot' && u.state === 'idle') {
+            returnedToIdle = true;
+          }
+        }
+        if (returnedToIdle) break;
+      }
+
+      expect(returnedToIdle).toBe(true);
+      // With random=0, duration threshold = BOT_SIT_MIN_DURATION_TICKS.
+      // tickSitting is called exactly BOT_SIT_MIN_DURATION_TICKS times:
+      // sitTicks increments from 1 to BOT_SIT_MIN_DURATION_TICKS, then
+      // the bot transitions to idle on the last tick.
+      expect(ticksInSitting).toBe(BOT_SIT_MIN_DURATION_TICKS);
+    });
+
+    it('should transition from sitting to idle when sitTicks exceeds duration threshold', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-dur-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      let sawSitting = false;
+      let sawIdleAfterSitting = false;
+
+      for (let i = 0; i < 1000; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-dur-bot') {
+            if (u.state === 'sitting') sawSitting = true;
+            if (sawSitting && u.state === 'idle') sawIdleAfterSitting = true;
+          }
+        }
+        if (sawIdleAfterSitting) break;
+      }
+
+      expect(sawSitting).toBe(true);
+      expect(sawIdleAfterSitting).toBe(true);
+    });
+
+    it('should reset sitTicks to 0 when transitioning from sitting to idle', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'sit-reset-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      // Cycle through sitting -> idle -> sitting to verify sitTicks resets.
+      // If sitTicks didn't reset, the second sit would start with a non-zero
+      // value and the duration would be wrong.
+      let sittingCount = 0;
+      let idleAfterSitCount = 0;
+
+      for (let i = 0; i < 2000; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'sit-reset-bot') {
+            if (u.state === 'sitting') sittingCount++;
+            if (sittingCount > 0 && u.state === 'idle') idleAfterSitCount++;
+          }
+        }
+        // Wait for two full sit cycles
+        if (sittingCount >= 2 && idleAfterSitCount >= 2) break;
+      }
+
+      // Bot should have completed at least two sit cycles (sit->idle->sit->idle)
+      expect(sittingCount).toBeGreaterThanOrEqual(2);
+      expect(idleAfterSitCount).toBeGreaterThanOrEqual(2);
+    });
+
+    it('should not transition to sitting when random check fails', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'no-sit-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      // Return 1.0 for all random calls:
+      // - sit threshold = BOT_SIT_MAX_IDLE_TICKS (maximum, since floor(1.0 * range) rounds down)
+      // - sit chance = 1.0, which fails (1.0 >= BOT_SIT_CHANCE = 0.15)
+      randomSpy.mockReturnValue(1.0);
+
+      let sawSitting = false;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'no-sit-bot' && u.state === 'sitting') {
+            sawSitting = true;
+          }
+        }
+      }
+
+      expect(sawSitting).toBe(false);
+    });
+
+    it('should not allow sitting during interacting state (AC-16)', () => {
+      manager.init(config, [
+        makeBotRecord({ id: 'interact-sit-bot', worldX: 80, worldY: 80 }),
+      ]);
+
+      manager.startInteraction('interact-sit-bot', 'player-1');
+
+      randomSpy.mockReturnValue(0);
+
+      let sawSitting = false;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'interact-sit-bot' && u.state === 'sitting') {
+            sawSitting = true;
+          }
+        }
+      }
+
+      expect(sawSitting).toBe(false);
+    });
+
+    it('should dispatch sitting state in tickBot and handle tick correctly', () => {
+      const grid = makeSelectiveGrid(16, 16, [{ x: 5, y: 5 }]);
+      const singleTileConfig = makeConfig({ mapWalkable: grid });
+
+      manager.init(singleTileConfig, [
+        makeBotRecord({
+          id: 'dispatch-bot',
+          worldX: 5 * TILE_SIZE + TILE_SIZE / 2,
+          worldY: 5 * TILE_SIZE + TILE_SIZE / 2,
+        }),
+      ]);
+
+      randomSpy.mockReturnValue(0);
+
+      // Tick until sitting
+      let enteredSitting = false;
+      for (let i = 0; i < 500; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'dispatch-bot' && u.state === 'sitting') {
+            enteredSitting = true;
+          }
+        }
+        if (enteredSitting) break;
+      }
+      expect(enteredSitting).toBe(true);
+
+      // Continue ticking while sitting - should not crash
+      // and should eventually return to idle
+      let returnedToIdle = false;
+      for (let i = 0; i < BOT_SIT_MAX_DURATION_TICKS + 10; i++) {
+        const updates = manager.tick(100);
+        for (const u of updates) {
+          if (u.id === 'dispatch-bot' && u.state === 'idle') {
+            returnedToIdle = true;
+          }
+        }
+        if (returnedToIdle) break;
+      }
+
+      expect(returnedToIdle).toBe(true);
     });
   });
 });
