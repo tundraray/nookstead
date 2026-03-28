@@ -82,16 +82,17 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/google": "^3.0.53",
     "@ai-sdk/openai": "^3.0.39",
     "@nookstead/ai": "workspace:*",
     "@nookstead/db": "workspace:*",
     "@nookstead/map-lib": "workspace:*",
     "@nookstead/pathfinding": "workspace:*",
     "@nookstead/shared": "workspace:*",
+    "@qdrant/js-client-rest": "^1.17.0",
     "ai": "^6.0.105",
     "alea": "^1.0.1",
     "simplex-noise": "^4.0.3",
     "zod": "^4.3.6"
-  },
-  "devDependencies": {}
+  }
 }

@@ -19,7 +19,6 @@ export const npcMemories = pgTable(
       .notNull()
       .references(() => npcBots.id, { onDelete: 'cascade' }),
     userId: uuid('user_id')
-      .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     type: varchar('type', { length: 32 }).notNull().default('interaction'),
     content: text('content').notNull(),

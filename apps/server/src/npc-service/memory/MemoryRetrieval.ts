@@ -1,11 +1,14 @@
 import type { NpcMemoryRow } from '@nookstead/db';
 import { estimateTokens } from '../ai/SystemPromptBuilder';
 
+export const SEMANTIC_TOP_K = 20;
+
 export interface RetrievalConfig {
   topK: number;
   halfLifeHours: number;
   recencyWeight: number;
   importanceWeight: number;
+  semanticWeight: number;
   tokenBudget: number;
 }
 
@@ -13,6 +16,7 @@ export interface ScoredMemory {
   memory: NpcMemoryRow;
   recencyScore: number;
   importanceScore: number;
+  semanticScore: number;
   totalScore: number;
 }
 
@@ -43,15 +47,19 @@ function normalizeImportance(importance: number): number {
 
 /**
  * Retrieve and score memories for a bot-user pair.
- * 1. Score each memory by recency + importance
+ * 1. Score each memory by recency + importance + semantic similarity
  * 2. Sort by total score descending
  * 3. Take top-K
  * 4. Trim to fit within token budget
+ *
+ * When semanticScores is undefined or semanticWeight is 0, behavior is
+ * identical to Phase 0 (two-dimensional scoring).
  */
 export function scoreAndRankMemories(
   memories: NpcMemoryRow[],
   config: RetrievalConfig,
-  now?: Date
+  now?: Date,
+  semanticScores?: Map<string, number>
 ): ScoredMemory[] {
   const currentTime = now ?? new Date();
 
@@ -63,11 +71,13 @@ export function scoreAndRankMemories(
       config.halfLifeHours
     );
     const importanceScore = normalizeImportance(memory.importance);
+    const semanticScore = semanticScores?.get(memory.id) ?? 0.0;
     const totalScore =
       config.recencyWeight * recencyScore +
-      config.importanceWeight * importanceScore;
+      config.importanceWeight * importanceScore +
+      config.semanticWeight * semanticScore;
 
-    return { memory, recencyScore, importanceScore, totalScore };
+    return { memory, recencyScore, importanceScore, semanticScore, totalScore };
   });
 
   // Sort by total score descending

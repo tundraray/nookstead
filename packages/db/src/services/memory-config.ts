@@ -12,6 +12,7 @@ export interface MemoryConfigValues {
   halfLifeHours: number;
   recencyWeight: number;
   importanceWeight: number;
+  semanticWeight: number;
   maxMemoriesPerNpc: number;
   tokenBudget: number;
   importanceFirstMeeting: number;
@@ -27,6 +28,7 @@ function rowToConfig(row: MemoryStreamConfigRow): MemoryConfigValues {
     halfLifeHours: row.halfLifeHours,
     recencyWeight: row.recencyWeight,
     importanceWeight: row.importanceWeight,
+    semanticWeight: row.semanticWeight,
     maxMemoriesPerNpc: row.maxMemoriesPerNpc,
     tokenBudget: row.tokenBudget,
     importanceFirstMeeting: row.importanceFirstMeeting,
@@ -144,6 +146,7 @@ export async function getEffectiveConfig(
     halfLifeHours: override.halfLifeHours ?? global.halfLifeHours,
     recencyWeight: override.recencyWeight ?? global.recencyWeight,
     importanceWeight: override.importanceWeight ?? global.importanceWeight,
+    semanticWeight: override.semanticWeight ?? global.semanticWeight,
     maxMemoriesPerNpc:
       override.maxMemoriesPerNpc ?? global.maxMemoriesPerNpc,
     tokenBudget: override.tokenBudget ?? global.tokenBudget,

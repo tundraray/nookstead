@@ -1,0 +1,1 @@
+ALTER TABLE "npc_memories" ALTER COLUMN "user_id" DROP NOT NULL;

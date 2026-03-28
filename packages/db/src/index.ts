@@ -134,9 +134,16 @@ export {
   deleteOldestMemories,
   deleteMemory,
   listMemoriesAdmin,
+  getAllMemoriesForBackfill,
   type CreateMemoryData,
   type ListMemoriesAdminParams,
 } from './services/npc-memory';
+export {
+  getRecentMemoriesForBot,
+  getReflectionMemories,
+  getBotsNeedingReflection,
+  createReflectionMemory,
+} from './services/npc-reflection';
 export {
   getGlobalConfig,
   updateGlobalConfig,

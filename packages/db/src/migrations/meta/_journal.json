@@ -155,6 +155,20 @@
       "when": 1773694802055,
       "tag": "0021_outstanding_zemo",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1774651247290,
+      "tag": "0022_omniscient_spirit",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1774715974741,
+      "tag": "0023_smart_ender_wiggin",
+      "breakpoints": true
     }
   ]
 }
