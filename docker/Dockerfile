@@ -1,6 +1,6 @@
 # =============================================================
 # Unified multi-stage Dockerfile
-# Build: docker build --target <server|game|genmap> .
+# Build: docker build --target <server|game|steward|genmap> .
 # =============================================================
 
 # ── Stage 1: Install dependencies (shared, cached by lockfile) ──
@@ -13,6 +13,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/server/package.json apps/server/
 COPY apps/game/package.json apps/game/
 COPY apps/genmap/package.json apps/genmap/
+COPY apps/steward/package.json apps/steward/
 COPY packages/db/package.json packages/db/
 COPY packages/map-lib/package.json packages/map-lib/
 COPY packages/map-renderer/package.json packages/map-renderer/
@@ -34,7 +35,8 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm nx sync
 RUN pnpm nx build server --configuration=production --skip-nx-cache && \
     pnpm nx build game --skip-nx-cache && \
-    pnpm nx build genmap --skip-nx-cache
+    pnpm nx build genmap --skip-nx-cache && \
+    pnpm nx build steward --skip-nx-cache
 
 # ── Target: server (Colyseus game server) ──
 FROM node:20-alpine AS server
@@ -79,6 +81,21 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
 
 CMD ["node", "apps/game/server.js"]
+
+# ── Target: steward (background worker — NPC reflections, scheduled tasks) ──
+FROM node:20-alpine AS steward
+
+RUN addgroup --system --gid 1001 nookstead && \
+    adduser --system --uid 1001 nookstead
+WORKDIR /app
+
+COPY --from=builder --chown=nookstead:nookstead /app/apps/steward/dist ./
+
+USER nookstead
+
+ENV NODE_ENV=production
+
+CMD ["node", "main.js"]
 
 # ── Target: genmap (map generation service) ──
 FROM node:20-alpine AS genmap

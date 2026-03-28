@@ -34,6 +34,14 @@ services:
       - '3000:3000'
     env_file: .env
 
+  steward:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: steward
+    env_file: .env
+    restart: unless-stopped
+
   genmap:
     build:
       context: .
