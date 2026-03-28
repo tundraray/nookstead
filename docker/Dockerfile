@@ -36,8 +36,8 @@ RUN pnpm nx sync
 RUN pnpm nx build server --configuration=production --skip-nx-cache && \
     pnpm nx build game --skip-nx-cache && \
     pnpm nx build genmap --skip-nx-cache && \
-    pnpm nx build steward --skip-nx-cache
-RUN pnpm nx prune steward --skip-nx-cache
+    pnpm nx build steward --skip-nx-cache && \
+    pnpm nx prune steward --skip-nx-cache
 RUN cd apps/steward/dist && pnpm install --frozen-lockfile --prod
 
 # ── Target: server (Colyseus game server) ──
@@ -87,13 +87,16 @@ CMD ["node", "apps/game/server.js"]
 # ── Target: steward (background worker — NPC reflections, scheduled tasks) ──
 FROM node:20-alpine AS steward
 
+RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 RUN addgroup --system --gid 1001 nookstead && \
     adduser --system --uid 1001 nookstead
 WORKDIR /app
 
-# Copy built bundle + installed node_modules from builder
-COPY --from=builder --chown=nookstead:nookstead /app/apps/steward/dist ./
-COPY --from=builder --chown=nookstead:nookstead /app/apps/steward/dist/node_modules ./node_modules
+# Copy pruned dist (main.js + package.json + pnpm-lock.yaml + workspace_modules)
+COPY --from=builder /app/apps/steward/dist ./
+# Install production deps in isolation (no parent workspace)
+RUN pnpm install --frozen-lockfile --prod
+RUN chown -R nookstead:nookstead /app
 
 USER nookstead
 
