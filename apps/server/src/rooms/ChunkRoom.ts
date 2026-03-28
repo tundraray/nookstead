@@ -189,7 +189,7 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     // Initialize semantic memory services (only when both API key and Qdrant URL are configured)
     if (config.googleApiKey && config.qdrantUrl) {
       this.embeddingService = new EmbeddingService({ googleApiKey: config.googleApiKey });
-      this.vectorStore = new VectorStore({ qdrantUrl: config.qdrantUrl });
+      this.vectorStore = new VectorStore({ qdrantUrl: config.qdrantUrl, qdrantApiKey: config.qdrantApiKey });
       this.vectorStore.ensureCollection().catch((err: unknown) => {
         console.error('[ChunkRoom] Failed to ensure Qdrant collection:', { error: err });
       });

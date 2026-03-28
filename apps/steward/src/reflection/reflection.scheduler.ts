@@ -146,6 +146,8 @@ export class ReflectionScheduler {
       this.configService.get<string>('GOOGLE_GENERATIVE_AI_API_KEY') ?? '';
     const qdrantUrl =
       this.configService.get<string>('QDRANT_URL') ?? '';
+    const qdrantApiKey =
+      this.configService.get<string>('QDRANT_API_KEY');
 
     if (!googleApiKey || !qdrantUrl) {
       this.logger.warn(
@@ -155,7 +157,7 @@ export class ReflectionScheduler {
     }
 
     const embeddingService = new EmbeddingService({ googleApiKey });
-    const vectorStore = new VectorStore({ qdrantUrl });
+    const vectorStore = new VectorStore({ qdrantUrl, qdrantApiKey });
 
     embeddingService
       .embedText(content)

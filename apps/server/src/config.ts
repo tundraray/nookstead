@@ -15,6 +15,7 @@ export interface ServerConfig {
   corsOrigin: string;
   openaiApiKey: string;
   qdrantUrl?: string;
+  qdrantApiKey?: string;
   googleApiKey?: string;
   gameEpoch: number;
   dayDurationSeconds: number;
@@ -71,7 +72,8 @@ export function loadConfig(): ServerConfig {
   );
 
   const qdrantUrl = process.env['QDRANT_URL'] ?? 'http://localhost:6333';
+  const qdrantApiKey = process.env['QDRANT_API_KEY'];
   const googleApiKey = process.env['GOOGLE_GENERATIVE_AI_API_KEY'];
 
-  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey, qdrantUrl, googleApiKey, gameEpoch, dayDurationSeconds, seasonDurationDays };
+  return { port, authSecret, databaseUrl, corsOrigin, openaiApiKey, qdrantUrl, qdrantApiKey, googleApiKey, gameEpoch, dayDurationSeconds, seasonDurationDays };
 }

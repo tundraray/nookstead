@@ -16,8 +16,11 @@ export interface VectorPayload {
 export class VectorStore {
   private readonly client: QdrantClient;
 
-  constructor(options: { qdrantUrl: string }) {
-    this.client = new QdrantClient({ url: options.qdrantUrl });
+  constructor(options: { qdrantUrl: string; qdrantApiKey?: string }) {
+    this.client = new QdrantClient({
+      url: options.qdrantUrl,
+      ...(options.qdrantApiKey && { apiKey: options.qdrantApiKey }),
+    });
   }
 
   async upsertMemoryVector(

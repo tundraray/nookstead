@@ -11,6 +11,7 @@
  * - `QDRANT_URL`             -- Qdrant vector DB endpoint
  *
  * Optional env vars:
+ * - `QDRANT_API_KEY`          -- Qdrant API key (if auth enabled)
  * - `REFLECTION_CRON`        -- Cron expression (default: '0 4 * * *')
  */
 
