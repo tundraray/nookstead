@@ -27,6 +27,7 @@ import {
   getRecentDialogueHistory,
   getSessionCountForPair,
   getMemoriesForBot,
+  getReflectionMemories,
   getEffectiveConfig,
   updateBot,
   getOrCreateRelationship,
@@ -36,8 +37,16 @@ import {
   createInventory,
   loadInventory,
   saveSlots,
+  type NpcMemoryRow,
 } from '@nookstead/db';
-import { MemoryStream, scoreAndRankMemories, type ScoredMemory } from '../npc-service/memory';
+import {
+  MemoryStream,
+  scoreAndRankMemories,
+  EmbeddingService,
+  VectorStore,
+  SEMANTIC_TOP_K,
+  type ScoredMemory,
+} from '../npc-service/memory';
 import {
   processAction,
   evaluateProgression,
@@ -150,6 +159,8 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
   private serverEpoch!: number;
   private clockConfig!: { dayDurationSeconds: number; seasonDurationDays: number };
   private memoryStream: MemoryStream | null = null;
+  private embeddingService: EmbeddingService | null = null;
+  private vectorStore: VectorStore | null = null;
 
   override onCreate(options: Record<string, unknown>): void {
     this.chunkId =
@@ -175,9 +186,20 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
       seasonDurationDays: config.seasonDurationDays,
     };
 
+    // Initialize semantic memory services (only when both API key and Qdrant URL are configured)
+    if (config.googleApiKey && config.qdrantUrl) {
+      this.embeddingService = new EmbeddingService({ googleApiKey: config.googleApiKey });
+      this.vectorStore = new VectorStore({ qdrantUrl: config.qdrantUrl });
+      this.vectorStore.ensureCollection().catch((err: unknown) => {
+        console.error('[ChunkRoom] Failed to ensure Qdrant collection:', { error: err });
+      });
+    }
+
     // Initialize MemoryStream for NPC memory creation
     this.memoryStream = new MemoryStream({
       apiKey: config.openaiApiKey,
+      embeddingService: this.embeddingService,
+      vectorStore: this.vectorStore,
     });
 
     // Register with ChunkManager
@@ -1492,13 +1514,36 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
           const db = getGameDb();
           const effectiveConfig = await getEffectiveConfig(db, botId);
           const rawMemories = await getMemoriesForBot(db, botId, userId);
-          memories = scoreAndRankMemories(rawMemories, {
+
+          // Fetch reflection memories (best-effort -- failure must not break dialogue)
+          let reflectionMemories: NpcMemoryRow[] = [];
+          try {
+            reflectionMemories = await getReflectionMemories(db, botId, 3);
+          } catch (err) {
+            console.warn(
+              `[ChunkRoom] Reflection memory fetch failed (continuing without): botId=${botId}`,
+              err
+            );
+          }
+
+          const allMemories = [...rawMemories, ...reflectionMemories];
+
+          // Semantic retrieval: embed conversation context and search Qdrant
+          const semanticScores = await this.fetchSemanticScores(
+            '', // No player text available at dialogue start; embedding returns null, gracefully skipping Qdrant
+            botId,
+            userId,
+            effectiveConfig.semanticWeight
+          );
+
+          memories = scoreAndRankMemories(allMemories, {
             topK: effectiveConfig.topK,
             halfLifeHours: effectiveConfig.halfLifeHours,
             recencyWeight: effectiveConfig.recencyWeight,
             importanceWeight: effectiveConfig.importanceWeight,
+            semanticWeight: effectiveConfig.semanticWeight,
             tokenBudget: effectiveConfig.tokenBudget,
-          });
+          }, undefined, semanticScores);
         } catch (err) {
           console.warn(
             `[ChunkRoom] Memory retrieval failed (continuing without memories): botId=${botId}`,
@@ -1836,6 +1881,58 @@ export class ChunkRoom extends Room<{ state: ChunkRoomState }> {
     schema.direction = bot.direction;
     schema.state = 'idle';
     this.state.bots.set(bot.id, schema);
+  }
+
+  /**
+   * Fetch semantic similarity scores from Qdrant for memory retrieval.
+   * Returns a Map of memoryId -> similarity score.
+   * On ANY failure (timeout, network error, empty text), returns an empty map
+   * so that scoring falls back to recency + importance only (Phase 0 behavior).
+   */
+  private async fetchSemanticScores(
+    playerText: string,
+    botId: string,
+    userId: string,
+    semanticWeight: number
+  ): Promise<Map<string, number>> {
+    if (
+      semanticWeight <= 0 ||
+      !this.embeddingService ||
+      !this.vectorStore
+    ) {
+      return new Map();
+    }
+
+    try {
+      // 500ms timeout for embedding
+      const embedTimeout = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 500)
+      );
+      const vector = await Promise.race([
+        this.embeddingService.embedText(playerText),
+        embedTimeout,
+      ]);
+      if (vector === null) {
+        return new Map();
+      }
+
+      // 500ms timeout for Qdrant search
+      const searchTimeout = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 500)
+      );
+      const results = await Promise.race([
+        this.vectorStore.searchSimilar(vector, botId, userId, SEMANTIC_TOP_K),
+        searchTimeout,
+      ]);
+      if (results === null) {
+        return new Map();
+      }
+
+      return new Map(results.map(({ id, score }) => [id, score]));
+    } catch (err: unknown) {
+      console.warn('[ChunkRoom] Semantic retrieval failed, falling back to Phase 0:', { error: err });
+      return new Map();
+    }
   }
 
   // When object placement/removal changes tile walkability, notify BotManager:

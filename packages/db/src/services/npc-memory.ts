@@ -7,7 +7,7 @@ import {
 
 export interface CreateMemoryData {
   botId: string;
-  userId: string;
+  userId?: string;
   type: string;
   content: string;
   importance: number;
@@ -100,6 +100,17 @@ export async function deleteOldestMemories(
         )
       );
   }
+}
+
+/**
+ * Fetch all memories across all bots and users.
+ * Used by the backfill function to identify memories that need embedding.
+ * Returns memories ordered by createdAt ascending (oldest first).
+ */
+export async function getAllMemoriesForBackfill(
+  db: DrizzleClient
+): Promise<NpcMemoryRow[]> {
+  return db.select().from(npcMemories);
 }
 
 /**

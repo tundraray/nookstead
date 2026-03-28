@@ -1,6 +1,6 @@
 import { generateText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
-import type { DrizzleClient } from '@nookstead/db';
+import type { DrizzleClient, NpcMemoryRow } from '@nookstead/db';
 import {
   createMemory,
   getDialogueSessionMessages,
@@ -9,6 +9,8 @@ import {
 } from '@nookstead/db';
 import type { MemoryConfigValues } from '@nookstead/db';
 import { scoreImportance, type ImportanceScorerConfig } from './ImportanceScorer';
+import type { EmbeddingService } from './EmbeddingService';
+import type { VectorStore } from './VectorStore';
 
 const DEFAULT_MODEL = 'gpt-5-mini';
 const SUMMARY_MAX_TOKENS = 150;
@@ -18,6 +20,8 @@ const SUMMARY_TIMEOUT_MS = 15_000;
 export interface MemoryStreamOptions {
   apiKey: string;
   model?: string;
+  embeddingService?: EmbeddingService | null;
+  vectorStore?: VectorStore | null;
 }
 
 export interface CreateDialogueMemoryParams {
@@ -44,10 +48,14 @@ export interface CreateActionMemoryParams {
 export class MemoryStream {
   private readonly openai: ReturnType<typeof createOpenAI>;
   private readonly model: string;
+  private readonly embeddingService: EmbeddingService | null;
+  private readonly vectorStore: VectorStore | null;
 
   constructor(options: MemoryStreamOptions) {
     this.openai = createOpenAI({ apiKey: options.apiKey });
     this.model = options.model ?? DEFAULT_MODEL;
+    this.embeddingService = options.embeddingService ?? null;
+    this.vectorStore = options.vectorStore ?? null;
   }
 
   /**
@@ -95,7 +103,7 @@ export class MemoryStream {
     const importance = scoreImportance(importanceConfig, { isFirstMeeting });
 
     // 4. Store memory
-    await createMemory(db, {
+    const memory = await createMemory(db, {
       botId,
       userId,
       type: 'interaction',
@@ -103,6 +111,9 @@ export class MemoryStream {
       importance,
       dialogueSessionId,
     });
+
+    // Fire-and-forget: embed and upsert to vector store
+    this._fireAndForgetEmbed(memory, botId, userId, importance);
 
     console.log(
       `[MemoryStream] Created memory for bot=${botId}, user=${userId}, importance=${importance}`
@@ -135,7 +146,7 @@ export class MemoryStream {
 
     const content = memoryTemplate.replace('{player}', playerName);
 
-    await createMemory(db, {
+    const memory = await createMemory(db, {
       botId,
       userId,
       type: 'gift',
@@ -144,9 +155,45 @@ export class MemoryStream {
       dialogueSessionId,
     });
 
+    // Fire-and-forget: embed and upsert to vector store
+    this._fireAndForgetEmbed(memory, botId, userId, importance);
+
     console.log(
       `[MemoryStream] Created action memory for bot=${botId}, importance=${importance}`
     );
+  }
+
+  /**
+   * Fire-and-forget: generate embedding and upsert to vector store.
+   * Runs detached from the caller's async context -- errors are logged
+   * but never propagate to the memory creation flow.
+   */
+  private _fireAndForgetEmbed(
+    memory: NpcMemoryRow,
+    botId: string,
+    userId: string,
+    importance: number
+  ): void {
+    if (!this.embeddingService || !this.vectorStore) return;
+
+    const { embeddingService, vectorStore } = this;
+    embeddingService
+      .embedText(memory.content)
+      .then((vector) => {
+        if (vector === null) return;
+        return vectorStore.upsertMemoryVector(memory.id, vector, {
+          botId,
+          userId,
+          importance,
+          createdAt: memory.createdAt.toISOString(),
+        });
+      })
+      .catch((err: unknown) => {
+        console.error('[MemoryStream] Failed to embed memory:', {
+          memoryId: memory.id,
+          error: err,
+        });
+      });
   }
 
   private async generateSummary(

@@ -10,6 +10,7 @@ const baseConfig: RetrievalConfig = {
   halfLifeHours: 48,
   recencyWeight: 1.0,
   importanceWeight: 1.0,
+  semanticWeight: 0.0,
   tokenBudget: 400,
 };
 

@@ -111,6 +111,8 @@ describe('config', () => {
         authSecret: 'test-secret-32-chars-minimum!!',
         databaseUrl: 'postgresql://localhost/test',
         openaiApiKey: 'sk-test-key',
+        qdrantUrl: 'http://localhost:6333',
+        googleApiKey: undefined,
         port: 2567,
         corsOrigin: 'http://localhost:3000',
         gameEpoch: 0,

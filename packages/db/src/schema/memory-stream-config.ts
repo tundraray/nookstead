@@ -30,6 +30,7 @@ export const memoryStreamConfig = pgTable('memory_stream_config', {
   importanceQuestRelated: smallint('importance_quest_related')
     .notNull()
     .default(8),
+  semanticWeight: real('semantic_weight').notNull().default(0.0),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -49,6 +50,7 @@ export const npcMemoryOverrides = pgTable('npc_memory_overrides', {
   importanceWeight: real('importance_weight'),
   maxMemoriesPerNpc: smallint('max_memories_per_npc'),
   tokenBudget: smallint('token_budget'),
+  semanticWeight: real('semantic_weight'),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
