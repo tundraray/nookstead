@@ -3,6 +3,7 @@
   "enableAllProjectMcpServers": true,
   "enabledPlugins": {
     "ajtbd@izmailovilya": true,
-    "gamedev-overture@overture": true
+    "gamedev-overture@overture": true,
+    "strategy-overture@overture": true
   }
 }
