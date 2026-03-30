@@ -104,7 +104,7 @@ RUN addgroup --system --gid 1001 nookstead && \
 WORKDIR /app
 
 COPY --from=build-steward /app/apps/steward/dist ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --prod --no-frozen-lockfile
 RUN chown -R nookstead:nookstead /app
 
 USER nookstead
