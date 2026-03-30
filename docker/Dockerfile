@@ -22,8 +22,8 @@ COPY packages/shared/package.json packages/shared/
 
 RUN pnpm install --frozen-lockfile
 
-# ── Stage 2: Build all projects (shared across targets) ──
-FROM node:20-alpine AS builder
+# ── Stage 2: Source (shared — copy source + deps, run nx sync) ──
+FROM node:20-alpine AS source
 
 RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /app
@@ -33,12 +33,23 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm nx sync
-RUN pnpm nx build server --configuration=production --skip-nx-cache && \
-    pnpm nx build game --skip-nx-cache && \
-    pnpm nx build genmap --skip-nx-cache && \
-    pnpm nx build steward --skip-nx-cache && \
+
+# ── Builder: server ──
+FROM source AS build-server
+RUN pnpm nx build server --configuration=production --skip-nx-cache
+
+# ── Builder: game ──
+FROM source AS build-game
+RUN pnpm nx build game --skip-nx-cache
+
+# ── Builder: genmap ──
+FROM source AS build-genmap
+RUN pnpm nx build genmap --skip-nx-cache
+
+# ── Builder: steward (build + prune) ──
+FROM source AS build-steward
+RUN pnpm nx build steward --skip-nx-cache && \
     pnpm nx prune steward --skip-nx-cache
-RUN cd apps/steward/dist && pnpm install --frozen-lockfile --prod
 
 # ── Target: server (Colyseus game server) ──
 FROM node:20-alpine AS server
@@ -47,7 +58,7 @@ RUN addgroup --system --gid 1001 nookstead && \
     adduser --system --uid 1001 nookstead
 WORKDIR /app
 
-COPY --from=builder --chown=nookstead:nookstead /app/dist/apps/server ./
+COPY --from=build-server --chown=nookstead:nookstead /app/dist/apps/server ./
 
 USER nookstead
 
@@ -69,9 +80,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=builder /app/apps/game/public ./apps/game/public
-COPY --from=builder --chown=nookstead:nookstead /app/apps/game/.next/standalone ./
-COPY --from=builder --chown=nookstead:nookstead /app/apps/game/.next/static ./apps/game/.next/static
+COPY --from=build-game /app/apps/game/public ./apps/game/public
+COPY --from=build-game --chown=nookstead:nookstead /app/apps/game/.next/standalone ./
+COPY --from=build-game --chown=nookstead:nookstead /app/apps/game/.next/static ./apps/game/.next/static
 
 USER nookstead
 
@@ -92,9 +103,7 @@ RUN addgroup --system --gid 1001 nookstead && \
     adduser --system --uid 1001 nookstead
 WORKDIR /app
 
-# Copy pruned dist (main.js + package.json + pnpm-lock.yaml + workspace_modules)
-COPY --from=builder /app/apps/steward/dist ./
-# Install production deps in isolation (no parent workspace)
+COPY --from=build-steward /app/apps/steward/dist ./
 RUN pnpm install --frozen-lockfile --prod
 RUN chown -R nookstead:nookstead /app
 
@@ -114,9 +123,9 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-COPY --from=builder /app/apps/genmap/public ./apps/genmap/public
-COPY --from=builder --chown=nookstead:nookstead /app/apps/genmap/.next/standalone ./
-COPY --from=builder --chown=nookstead:nookstead /app/apps/genmap/.next/static ./apps/genmap/.next/static
+COPY --from=build-genmap /app/apps/genmap/public ./apps/genmap/public
+COPY --from=build-genmap --chown=nookstead:nookstead /app/apps/genmap/.next/standalone ./
+COPY --from=build-genmap --chown=nookstead:nookstead /app/apps/genmap/.next/static ./apps/genmap/.next/static
 
 USER nookstead
 
